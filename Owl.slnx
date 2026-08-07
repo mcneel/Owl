@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="owl/Owl.csproj" />
+  <Project Path="owl-gen/Owl.Gen.csproj" />
+</Solution>

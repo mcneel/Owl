@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Captures the real compiler inputs for a project so docgen can build an equivalent Roslyn
+  CSharpCompilation without taking on MSBuildLocator / MSBuildWorkspace. Letting MSBuild
+  answer the question means every conditional property in this tree is honored for free:
+  net48;net8.0, WINDOWS;WPF / MACOS;XAMMAC2, and the per-project stanzas in
+  src4/DotNetSDK/RhinoCode.props.
+
+  Invoked per project by docgen (see Load/MSBuildInputCapture.cs):
+
+    dotnet msbuild <proj> -t:Restore;WriteDocGenInputs \
+      -p:TargetFramework=net8.0 \
+      -p:DocGenInputsFile=<out.txt> \
+      -p:CustomAfterMicrosoftCSharpTargets=<this file>
+
+  Output is a line-based key=value format, NOT JSON. File paths need no escaping here and
+  cannot contain newlines, whereas MSBuild cannot escape Windows backslashes for JSON
+  without contortions. Only the first '=' on a line separates key from value; repeated keys
+  accumulate into a list. Values are never split on ';' because each list item gets its own
+  line, which matters for DefineConstants: a naive Include= would silently split
+  "TRACE;DEBUG;MACOS" into three bogus lines.
+-->
+<Project>
+
+  <Target Name="WriteDocGenInputs" DependsOnTargets="ResolveReferences">
+
+    <PropertyGroup>
+      <DocGenInputsFile Condition="'$(DocGenInputsFile)' == ''">$(MSBuildProjectDirectory)\$(MSBuildProjectName).docgen-inputs.txt</DocGenInputsFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- Include= splits on ';', which is exactly what we want: one item per constant. -->
+      <_DocGenDefine Include="$(DefineConstants)" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_DocGenLine Include="projectFile=$(MSBuildProjectFullPath)" />
+      <_DocGenLine Include="projectDir=$(MSBuildProjectDirectory)" />
+      <_DocGenLine Include="assemblyName=$(AssemblyName)" />
+      <_DocGenLine Include="rootNamespace=$(RootNamespace)" />
+      <_DocGenLine Include="targetFramework=$(TargetFramework)" />
+      <_DocGenLine Include="langVersion=$(LangVersion)" />
+      <_DocGenLine Include="allowUnsafe=$(AllowUnsafeBlocks)" />
+      <_DocGenLine Include="nullable=$(Nullable)" />
+      <_DocGenLine Include="outputType=$(OutputType)" />
+      <_DocGenLine Include="assemblyVersion=$(Version)" />
+      <_DocGenLine Include="@(_DocGenDefine->'define=%(Identity)')" />
+      <_DocGenLine Include="@(Compile->'compile=%(FullPath)')" />
+      <!-- ReferencePath, not ReferencePathWithRefAssemblies: the latter is populated by
+           FindReferenceAssembliesForReferences (part of the CoreCompile chain), not by
+           ResolveReferences, so it is empty here. ReferencePath is also the better choice
+           for docgen because it points at implementation assemblies, which is where the
+           sibling .xml doc files live, which is what lets inheritdoc resolve against
+           external bases such as the BCL, Eto and RhinoCommon. -->
+      <_DocGenLine Include="@(ReferencePath->'reference=%(FullPath)')" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(DocGenInputsFile)"
+                      Lines="@(_DocGenLine)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="false"
+                      Encoding="UTF-8" />
+
+    <Message Importance="high"
+             Text="docgen: captured $(AssemblyName) ($(TargetFramework)) -> $(DocGenInputsFile)" />
+
+  </Target>
+
+</Project>

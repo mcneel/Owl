@@ -1,0 +1,16 @@
+{
+  "name": "owl-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serves and exports the API documentation website from a model written by owl-gen",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "serve": "node serve.js",
+    "build": "node build.js",
+    "check": "node check.js"
+  },
+  "//": "No dependencies, by design. A docs site generator that needs an npm install before it can render anything is harder to adopt than one that does not. Everything used here is in the Node standard library."
+}

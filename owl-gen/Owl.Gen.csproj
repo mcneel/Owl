@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>owl-gen</AssemblyName>
+    <RootNamespace>Owl.Gen</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);IDE0290</NoWarn>
+    <!-- Keeps a .pdb for this library out of owl's publish output, which ships as one file. -->
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embedded rather than copied beside the binary, so owl ships as one file with nothing to
+         install alongside it. It is written back out at run time, because MSBuild can only be
+         handed a real path. LogicalName pins the manifest name so it does not follow RootNamespace.
+
+         Note this resource lives in owl-gen's assembly, so the lookup in MSBuildInputCapture asks
+         that assembly rather than the entry one, and keeps working once bundled inside owl. -->
+    <EmbeddedResource Include="owl.targets" LogicalName="owl.targets" />
+  </ItemGroup>
+
+</Project>

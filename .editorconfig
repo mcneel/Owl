@@ -1,0 +1,138 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 120
+
+# Trailing double-space is a hard line break in Markdown, so it cannot be trimmed.
+[*.md]
+max_line_length = 80
+trim_trailing_whitespace = false
+
+[*.{csproj,props,targets,config,xml}]
+indent_size = 2
+
+[*.{js,json,css,html}]
+indent_size = 2
+
+[*.cs]
+indent_size = 2
+
+# Braces on their own line, and always present even for a single statement.
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_between_query_expression_clauses = true
+csharp_prefer_braces = true:warning
+
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_case_contents_when_block = false
+
+csharp_using_directive_placement = outside_namespace:warning
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+
+# Off: these want an if/else collapsed into a ternary, which contradicts the
+# always-braces rule above and, for IDE0046, buries a throw inside a return.
+dotnet_diagnostic.IDE0045.severity = none
+dotnet_diagnostic.IDE0046.severity = none
+
+# Off: methods get braces unless the body reads like a lambda, which is a judgment
+# call the analyzer cannot make. Properties and accessors above are unaffected.
+dotnet_diagnostic.IDE0022.severity = none
+
+# Off: collection expressions are for initialization, not for replacing a LINQ
+# .ToList()/.ToArray() with a spread, which reads worse over several lines.
+dotnet_diagnostic.IDE0305.severity = none
+
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_event = false:warning
+
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_prefer_conditional_expression_over_return = true:suggestion
+
+# Constants are ALL_CAPS_SNAKE_CASE. First, because a const is also a field and would
+# otherwise be caught by the private-field rule below.
+dotnet_naming_rule.const_fields_caps.severity = warning
+dotnet_naming_rule.const_fields_caps.symbols = const_fields
+dotnet_naming_rule.const_fields_caps.style = all_caps
+
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.applicable_accessibilities = *
+dotnet_naming_symbols.const_fields.required_modifiers = const
+
+dotnet_naming_style.all_caps.capitalization = all_upper
+dotnet_naming_style.all_caps.word_separator = _
+
+# Field prefixes, most specific first, because every rule below also matches "field"
+# and the first match wins: s_ for non-public statics, m_ for public or protected
+# fields, _ for private instance fields.
+dotnet_naming_rule.static_fields_s.severity = warning
+dotnet_naming_rule.static_fields_s.symbols = non_public_static_fields
+dotnet_naming_rule.static_fields_s.style = s_camel
+
+dotnet_naming_symbols.non_public_static_fields.applicable_kinds = field
+dotnet_naming_symbols.non_public_static_fields.applicable_accessibilities = private, internal, protected, protected_internal, private_protected
+dotnet_naming_symbols.non_public_static_fields.required_modifiers = static
+
+dotnet_naming_style.s_camel.required_prefix = s_
+dotnet_naming_style.s_camel.capitalization = camel_case
+
+dotnet_naming_rule.exposed_fields_m.severity = warning
+dotnet_naming_rule.exposed_fields_m.symbols = exposed_fields
+dotnet_naming_rule.exposed_fields_m.style = m_camel
+
+dotnet_naming_symbols.exposed_fields.applicable_kinds = field
+dotnet_naming_symbols.exposed_fields.applicable_accessibilities = protected, protected_internal
+
+dotnet_naming_style.m_camel.required_prefix = m_
+dotnet_naming_style.m_camel.capitalization = camel_case
+
+# Non-public fields are _short and prefixed; everything public is PascalCase.
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, internal
+
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+dotnet_naming_rule.public_members_pascal.severity = warning
+dotnet_naming_rule.public_members_pascal.symbols = public_members
+dotnet_naming_rule.public_members_pascal.style = pascal
+
+dotnet_naming_symbols.public_members.applicable_kinds = property, method, event, class, struct, interface, enum, delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities = public, protected, protected_internal
+
+dotnet_naming_style.pascal.capitalization = pascal_case

@@ -1,0 +1,1244 @@
+using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Owl.Gen.Load;
+using Owl.Gen.Model;
+
+namespace Owl.Gen.Parse;
+
+/// <summary>
+/// Builds an <see cref="ApiAssembly"/> from a compiled project.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The walker harvests doc comments and source spans from syntax; this class
+/// drives off <em>symbols</em>. That split is deliberate. Symbol enumeration is
+/// authoritative about what a type actually contains, so no declaration form
+/// can be missed, and partial types need no merge heuristics: one
+/// <see cref="INamedTypeSymbol"/> already represents every declaration.
+/// </para>
+/// </remarks>
+sealed class ApiBuilder
+{
+  /// <summary>
+  /// Attributes that describe compiler plumbing rather than API contract.
+  /// </summary>
+  static readonly HashSet<string> s_hiddenAttributes = new(StringComparer.Ordinal)
+  {
+      "System.Runtime.CompilerServices.CompilerGeneratedAttribute",
+      "System.Runtime.CompilerServices.IsReadOnlyAttribute",
+      "System.Runtime.CompilerServices.IsByRefLikeAttribute",
+      "System.Runtime.CompilerServices.ExtensionAttribute",
+      "System.Runtime.CompilerServices.NullableAttribute",
+      "System.Runtime.CompilerServices.NullableContextAttribute",
+      "System.Runtime.CompilerServices.AsyncStateMachineAttribute",
+      "System.Runtime.CompilerServices.IteratorStateMachineAttribute",
+      "System.Runtime.CompilerServices.TupleElementNamesAttribute",
+      "System.Runtime.CompilerServices.DynamicAttribute",
+      "System.Diagnostics.DebuggerHiddenAttribute",
+      "System.Diagnostics.DebuggerNonUserCodeAttribute",
+      "System.Diagnostics.DebuggerStepThroughAttribute",
+  };
+
+  readonly CSharpCompilation _compilation;
+  readonly ProjectInputs _inputs;
+  readonly string _repoRoot;
+  readonly DocCommentParser _docParser;
+  readonly DocFindings _findings;
+
+  readonly Dictionary<ISymbol, DeclaredSymbol> _declarations =
+      new(SymbolEqualityComparer.Default);
+
+  readonly Dictionary<ISymbol, DocBlock> _docs =
+      new(SymbolEqualityComparer.Default);
+
+  readonly HashSet<ISymbol> _inheritInProgress = new(SymbolEqualityComparer.Default);
+
+  /// <summary>
+  /// Creates a builder for one project's compilation.
+  /// </summary>
+  /// <param name="cmpl">The project, already compiled.</param>
+  /// <param name="inputs">Its captured MSBuild inputs.</param>
+  /// <param name="root">
+  /// Root that source paths are made relative to.
+  /// </param>
+  /// <param name="apis">
+  /// Every assembly in the documented set, which is what makes a cref internal
+  /// rather than external.
+  /// </param>
+  /// <param name="findings">Findings accumulate here across all projects.</param>
+  public ApiBuilder(CSharpCompilation cmpl, ProjectInputs inputs, string root, IEnumerable<string> apis, DocFindings findings)
+  {
+    _compilation = cmpl;
+    _inputs = inputs;
+    _repoRoot = root;
+    _findings = findings;
+    _docParser = new DocCommentParser(apis, findings.UnresolvedCrefs);
+  }
+
+  /// <summary>
+  /// Builds the assembly model. Documentation for every symbol is parsed
+  /// before any &lt;inheritdoc/&gt; is resolved, so a tag pointing at another
+  /// type in this same assembly finds real content.
+  /// </summary>
+  public ApiAssembly Build()
+  {
+    HarvestDeclarations();
+
+    var assembly = new ApiAssembly
+    {
+      Name = _inputs.AssemblyName,
+      Version = _inputs.AssemblyVersion,
+      TargetFramework = _inputs.TargetFramework,
+    };
+
+    var types = new List<INamedTypeSymbol>();
+    CollectTypes(_compilation.Assembly.GlobalNamespace, types);
+
+    // Documentation is parsed for every symbol before any inheritdoc is resolved, so that
+    // an <inheritdoc/> pointing at another type in this same assembly finds real content
+    // instead of an empty block.
+    foreach (INamedTypeSymbol type in types)
+    {
+      _docs[type] = ParseDocs(type);
+
+      foreach (ISymbol member in DocumentableMembers(type))
+      {
+        _docs[member] = ParseDocs(member);
+      }
+    }
+
+    foreach (INamedTypeSymbol type in types)
+    {
+      assembly.Types.Add(BuildType(type));
+    }
+
+    assembly.Types.Sort((a, b) => string.CompareOrdinal(a.FullName, b.FullName));
+    assembly.Namespaces = BuildNamespaces(assembly.Types);
+
+    return assembly;
+  }
+
+  // ------------------------------------------------------------------
+  // Harvesting
+  // ------------------------------------------------------------------
+
+  void HarvestDeclarations()
+  {
+    foreach (SyntaxTree tree in _compilation.SyntaxTrees)
+    {
+      SemanticModel model = _compilation.GetSemanticModel(tree);
+
+      foreach (DeclaredSymbol declaration in SourceFileWalker.Walk(model))
+      {
+        // Partial types and partial methods declare the same symbol more than once.
+        // Prefer whichever declaration actually carries documentation; fall back to the
+        // first one seen so there is always a source location.
+        if (_declarations.TryGetValue(declaration.Symbol, out DeclaredSymbol? existing))
+        {
+          if (existing.Doc is null && declaration.Doc is not null)
+          {
+            _declarations[declaration.Symbol] = declaration;
+          }
+        }
+        else
+        {
+          _declarations[declaration.Symbol] = declaration;
+        }
+      }
+    }
+  }
+
+  void CollectTypes(INamespaceSymbol ns, List<INamedTypeSymbol> output)
+  {
+    foreach (INamespaceOrTypeSymbol member in ns.GetMembers())
+    {
+      switch (member)
+      {
+        case INamespaceSymbol nested:
+          CollectTypes(nested, output);
+          break;
+
+        case INamedTypeSymbol type:
+          CollectTypeTree(type, output);
+          break;
+      }
+    }
+  }
+
+  void CollectTypeTree(INamedTypeSymbol type, List<INamedTypeSymbol> output)
+  {
+    if (!IsDocumentableType(type))
+    {
+      return;
+    }
+
+    output.Add(type);
+
+    foreach (INamedTypeSymbol nested in type.GetTypeMembers())
+    {
+      CollectTypeTree(nested, output);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Filtering
+  // ------------------------------------------------------------------
+
+  static bool IsVisibleAccessibility(Accessibility accessibility)
+  {
+    return accessibility
+        is Accessibility.Public
+        or Accessibility.Protected
+        or Accessibility.ProtectedOrInternal;
+  }
+
+  bool IsDocumentableType(INamedTypeSymbol type)
+  {
+    if (!IsVisibleAccessibility(type.DeclaredAccessibility))
+    {
+      return false;
+    }
+
+    // Compiler-generated helpers and <PrivateImplementationDetails>.
+    if (type.IsImplicitlyDeclared || type.Name.Length == 0 || type.Name.Contains('<'))
+    {
+      return false;
+    }
+
+    // Only what this assembly declares in source.
+    if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
+    {
+      return false;
+    }
+
+    if (type.ContainingType is not null && !IsDocumentableType(type.ContainingType))
+    {
+      return false;
+    }
+
+    return true;
+  }
+
+  static IEnumerable<ISymbol> DocumentableMembers(INamedTypeSymbol type)
+  {
+    foreach (ISymbol member in type.GetMembers())
+    {
+      if (member is INamedTypeSymbol)
+      {
+        continue; // nested types are emitted as types in their own right
+      }
+
+      if (!IsDocumentableMember(member, type))
+      {
+        continue;
+      }
+
+      yield return member;
+    }
+  }
+
+  static bool IsDocumentableMember(ISymbol member, INamedTypeSymbol containingType)
+  {
+    // Explicit interface implementations report as private but are part of the contract.
+    bool isExplicitImpl = member switch
+    {
+      IMethodSymbol m => m.ExplicitInterfaceImplementations.Length > 0,
+      IPropertySymbol p => p.ExplicitInterfaceImplementations.Length > 0,
+      IEventSymbol e => e.ExplicitInterfaceImplementations.Length > 0,
+      _ => false,
+    };
+
+    if (!isExplicitImpl && !IsVisibleAccessibility(member.DeclaredAccessibility))
+    {
+      return false;
+    }
+
+    if (member.Name.Length > 0 && member.Name[0] == '<')
+    {
+      return false;
+    }
+
+    if (member is IMethodSymbol method)
+    {
+      switch (method.MethodKind)
+      {
+        // Accessors surface through AccessorInfo on their property or event.
+        case MethodKind.PropertyGet:
+        case MethodKind.PropertySet:
+        case MethodKind.EventAdd:
+        case MethodKind.EventRemove:
+        case MethodKind.EventRaise:
+        case MethodKind.StaticConstructor:
+          return false;
+      }
+
+      // A record's synthesized Equals/GetHashCode/Deconstruct/copy-ctor is noise; its
+      // positional properties are not, and those are handled below.
+      if (method.IsImplicitlyDeclared)
+      {
+        return false;
+      }
+    }
+
+    if (member.IsImplicitlyDeclared)
+    {
+      // Keep the positional properties a record declares through its parameter list:
+      // they are real API with no syntax of their own.
+      bool isRecordProperty = member is IPropertySymbol && containingType.IsRecord;
+      if (!isRecordProperty)
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // ------------------------------------------------------------------
+  // Types
+  // ------------------------------------------------------------------
+
+  ApiType BuildType(INamedTypeSymbol type)
+  {
+    string docId = DocIds.Of(type) ?? "T:" + type.ToDisplayString(DisplayFormats.TypeFullName);
+    DocBlock docs = ResolveInheritDoc(type, _docs[type]);
+
+    var apiType = new ApiType
+    {
+      DocId = docId,
+      Slug = Slug.ForType(docId),
+      Namespace = type.ContainingNamespace.IsGlobalNamespace
+            ? ""
+            : type.ContainingNamespace.ToDisplayString(),
+      Name = type.ToDisplayString(DisplayFormats.TypeShortName),
+      FullName = type.ToDisplayString(DisplayFormats.TypeFullName),
+      Kind = TypeKindOf(type),
+      ContainingType = DocIds.Of(type.ContainingType),
+      Accessibility = AccessibilityOf(type.DeclaredAccessibility),
+      Category = docs.Category,
+      IsStatic = type.IsStatic,
+      IsAbstract = type.IsAbstract && type.TypeKind != TypeKind.Interface,
+      IsSealed = type.IsSealed && type.TypeKind is not (TypeKind.Struct or TypeKind.Enum),
+      IsReadOnly = type.IsReadOnly,
+      IsRefLikeType = type.IsRefLikeType,
+      TypeParameters = BuildTypeParameters(type.TypeParameters, docs),
+      Attributes = BuildAttributes(type),
+      Obsolete = BuildObsolete(type),
+      Source = BuildSource(type),
+      Docs = docs,
+    };
+
+    if (type.TypeKind == TypeKind.Delegate)
+    {
+      IMethodSymbol? invoke = type.DelegateInvokeMethod;
+      if (invoke is not null)
+      {
+        apiType.ReturnType = BuildTypeRef(invoke.ReturnType);
+        apiType.Parameters = BuildParameters(invoke.Parameters, docs);
+        string parameters = string.Join(
+            ", ",
+            invoke.Parameters.Select(p => p.ToDisplayString(DisplayFormats.MemberNameAndParameters)));
+
+        apiType.Signature =
+            $"{apiType.ReturnType.Display} {type.ToDisplayString(DisplayFormats.TypeShortName)}({parameters})";
+      }
+    }
+    else
+    {
+      apiType.BaseType = type.BaseType is null || type.BaseType.SpecialType == SpecialType.System_Object
+          ? null
+          : BuildTypeRef(type.BaseType);
+
+      apiType.InheritanceChain = BuildInheritanceChain(type);
+      apiType.Interfaces = type.Interfaces.Length == 0
+          ? null
+          : type.Interfaces.Select(BuildTypeRef).ToList();
+
+      apiType.AllInterfaces = type.AllInterfaces.Length == 0
+          ? null
+          : type.AllInterfaces
+              .Select(DocIds.Of)
+              .Where(id => id is not null)
+              .Select(id => id!)
+              .Distinct()
+              .ToList();
+    }
+
+    foreach (ISymbol member in DocumentableMembers(type))
+    {
+      apiType.Members.Add(BuildMember(member, docId));
+    }
+
+    SortMembers(apiType.Members);
+    DedupeAnchors(apiType.Members);
+
+    if (docs.Summary is not { Count: > 0 })
+    {
+      docs.Undocumented = true;
+      _findings.Undocumented.Add(docId);
+    }
+
+    return apiType;
+  }
+
+  List<TypeRef>? BuildInheritanceChain(INamedTypeSymbol type)
+  {
+    var chain = new List<TypeRef>();
+
+    for (INamedTypeSymbol? current = type.BaseType;
+         current is not null && current.SpecialType != SpecialType.System_Object;
+         current = current.BaseType)
+    {
+      chain.Add(BuildTypeRef(current));
+    }
+
+    return chain.Count == 0 ? null : chain;
+  }
+
+  static string TypeKindOf(INamedTypeSymbol type)
+  {
+    if (type.IsRecord)
+    {
+      return "record";
+    }
+
+    return type.TypeKind switch
+    {
+      TypeKind.Class => "class",
+      TypeKind.Struct => "struct",
+      TypeKind.Interface => "interface",
+      TypeKind.Enum => "enum",
+      TypeKind.Delegate => "delegate",
+      _ => type.TypeKind.ToString().ToLowerInvariant(),
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // Members
+  // ------------------------------------------------------------------
+
+  ApiMember BuildMember(ISymbol member, string declaringTypeDocId)
+  {
+    string docId = DocIds.Of(member) ?? declaringTypeDocId + "." + member.Name;
+    DocBlock docs = ResolveInheritDoc(member, _docs.TryGetValue(member, out DocBlock? d) ? d : new DocBlock());
+
+    var apiMember = new ApiMember
+    {
+      DocId = docId,
+      Anchor = Slug.ForMember(docId, declaringTypeDocId),
+      Kind = MemberKindOf(member),
+      Name = member.Name,
+      Accessibility = AccessibilityOf(EffectiveAccessibility(member)),
+      IsStatic = member.IsStatic,
+      IsVirtual = member.IsVirtual,
+      IsOverride = member.IsOverride,
+      IsAbstract = member.IsAbstract,
+      IsSealed = member.IsSealed,
+      Attributes = BuildAttributes(member),
+      Obsolete = BuildObsolete(member),
+      Source = BuildSource(member),
+      Docs = docs,
+    };
+
+    switch (member)
+    {
+      case IMethodSymbol method:
+        BuildMethod(method, apiMember, docs);
+        break;
+
+      case IPropertySymbol property:
+        BuildProperty(property, apiMember, docs);
+        break;
+
+      case IFieldSymbol field:
+        BuildField(field, apiMember);
+        break;
+
+      case IEventSymbol evt:
+        BuildEvent(evt, apiMember);
+        break;
+    }
+
+    if (docs.Summary is not { Count: > 0 })
+    {
+      docs.Undocumented = true;
+      _findings.Undocumented.Add(docId);
+    }
+
+    return apiMember;
+  }
+
+  void BuildMethod(IMethodSymbol method, ApiMember target, DocBlock docs)
+  {
+    target.IsExtensionMethod = method.IsExtensionMethod;
+    target.Parameters = BuildParameters(method.Parameters, docs);
+    target.TypeParameters = BuildTypeParameters(method.TypeParameters, docs);
+
+    string nameAndParameters = method.ToDisplayString(DisplayFormats.MemberNameAndParameters);
+
+    if (method.MethodKind is MethodKind.Constructor)
+    {
+      target.Name = method.ContainingType.Name;
+      target.Signature = nameAndParameters;
+    }
+    else if (method.MethodKind is MethodKind.Destructor)
+    {
+      target.Name = "~" + method.ContainingType.Name;
+      target.Signature = target.Name + "()";
+    }
+    else if (method.MethodKind is MethodKind.Conversion)
+    {
+      target.ReturnType = BuildTypeRef(method.ReturnType);
+      target.Signature = nameAndParameters;
+    }
+    else
+    {
+      target.ReturnType = BuildTypeRef(method.ReturnType);
+      target.Signature = method.ReturnsVoid
+          ? "void " + nameAndParameters
+          : $"{target.ReturnType.Display} {nameAndParameters}";
+    }
+
+    // Straight from the symbol, so no '#'-separator parsing is needed.
+    if (method.ExplicitInterfaceImplementations.Length > 0)
+    {
+      IMethodSymbol first = method.ExplicitInterfaceImplementations[0];
+      target.ExplicitInterface = BuildTypeRef(first.ContainingType);
+    }
+
+    target.Implements = CollectImplements(method);
+    target.Overrides = DocIds.Of(method.OverriddenMethod);
+  }
+
+  void BuildProperty(IPropertySymbol property, ApiMember target, DocBlock docs)
+  {
+    target.ReturnType = BuildTypeRef(property.Type);
+    target.Parameters = property.Parameters.Length == 0 ? null : BuildParameters(property.Parameters, docs);
+
+    string nameAndParameters = property.ToDisplayString(DisplayFormats.MemberNameAndParameters);
+    target.Signature = $"{target.ReturnType.Display} {nameAndParameters}";
+
+    target.Accessors = new AccessorInfo
+    {
+      Get = property.GetMethod is { } get && IsVisibleAccessibility(get.DeclaredAccessibility)
+            ? AccessibilityOf(get.DeclaredAccessibility)
+            : null,
+      Set = property.SetMethod is { } set && IsVisibleAccessibility(set.DeclaredAccessibility)
+            ? AccessibilityOf(set.DeclaredAccessibility)
+            : null,
+      InitOnly = property.SetMethod?.IsInitOnly ?? false,
+    };
+
+    target.IsReadOnly = property.IsReadOnly;
+
+    if (property.ExplicitInterfaceImplementations.Length > 0)
+    {
+      target.ExplicitInterface = BuildTypeRef(property.ExplicitInterfaceImplementations[0].ContainingType);
+    }
+
+    target.Implements = CollectImplements(property);
+    target.Overrides = DocIds.Of(property.OverriddenProperty);
+  }
+
+  void BuildField(IFieldSymbol field, ApiMember target)
+  {
+    target.ReturnType = BuildTypeRef(field.Type);
+    target.IsConst = field.IsConst;
+    target.IsReadOnly = field.IsReadOnly;
+
+    if (field.HasConstantValue)
+    {
+      target.ConstantValue = FormatConstant(field.ConstantValue);
+    }
+
+    target.Signature = field.ContainingType.TypeKind == TypeKind.Enum
+        ? (target.ConstantValue is null ? field.Name : $"{field.Name} = {target.ConstantValue}")
+        : $"{target.ReturnType.Display} {field.Name}";
+  }
+
+  void BuildEvent(IEventSymbol evt, ApiMember target)
+  {
+    target.ReturnType = BuildTypeRef(evt.Type);
+    target.Signature = $"{target.ReturnType.Display} {evt.Name}";
+
+    if (evt.ExplicitInterfaceImplementations.Length > 0)
+    {
+      target.ExplicitInterface = BuildTypeRef(evt.ExplicitInterfaceImplementations[0].ContainingType);
+    }
+
+    target.Implements = CollectImplements(evt);
+    target.Overrides = DocIds.Of(evt.OverriddenEvent);
+  }
+
+  /// <summary>
+  /// Interface members this member satisfies, whether explicitly or
+  /// implicitly. The implicit case is invisible in the compiler's doc XML, so
+  /// it is genuinely new information.
+  /// </summary>
+  static List<string>? CollectImplements(ISymbol member)
+  {
+    var ids = new List<string>();
+
+    IEnumerable<ISymbol> explicitImpls = member switch
+    {
+      IMethodSymbol m => m.ExplicitInterfaceImplementations,
+      IPropertySymbol p => p.ExplicitInterfaceImplementations,
+      IEventSymbol e => e.ExplicitInterfaceImplementations,
+      _ => [],
+    };
+
+    foreach (ISymbol impl in explicitImpls)
+    {
+      string? id = DocIds.Of(impl);
+      if (id is not null)
+      {
+        ids.Add(id);
+      }
+    }
+
+    INamedTypeSymbol containing = member.ContainingType;
+    foreach (INamedTypeSymbol iface in containing.AllInterfaces)
+    {
+      foreach (ISymbol ifaceMember in iface.GetMembers())
+      {
+        ISymbol? implementation = containing.FindImplementationForInterfaceMember(ifaceMember);
+        if (implementation is null || !SymbolEqualityComparer.Default.Equals(implementation, member))
+        {
+          continue;
+        }
+
+        string? id = DocIds.Of(ifaceMember);
+        if (id is not null && !ids.Contains(id))
+        {
+          ids.Add(id);
+        }
+      }
+    }
+
+    return ids.Count == 0 ? null : ids;
+  }
+
+  static string MemberKindOf(ISymbol member) => member switch
+  {
+    IMethodSymbol { MethodKind: MethodKind.Constructor } => "constructor",
+    IMethodSymbol { MethodKind: MethodKind.Destructor } => "destructor",
+    IMethodSymbol { MethodKind: MethodKind.Conversion } => "conversion",
+    IMethodSymbol { MethodKind: MethodKind.UserDefinedOperator or MethodKind.BuiltinOperator } => "operator",
+    IMethodSymbol => "method",
+    IPropertySymbol { IsIndexer: true } => "indexer",
+    IPropertySymbol => "property",
+    IFieldSymbol field => field.ContainingType.TypeKind == TypeKind.Enum ? "enumvalue" : "field",
+    IEventSymbol => "event",
+    _ => "member",
+  };
+
+  /// <summary>
+  /// Explicit interface implementations are private at the symbol level but
+  /// public in effect; report them as public so the site does not hide them.
+  /// </summary>
+  static Accessibility EffectiveAccessibility(ISymbol member)
+  {
+    bool isExplicitImpl = member switch
+    {
+      IMethodSymbol m => m.ExplicitInterfaceImplementations.Length > 0,
+      IPropertySymbol p => p.ExplicitInterfaceImplementations.Length > 0,
+      IEventSymbol e => e.ExplicitInterfaceImplementations.Length > 0,
+      _ => false,
+    };
+
+    return isExplicitImpl ? Accessibility.Public : member.DeclaredAccessibility;
+  }
+
+  /// <summary>
+  /// Enum values, fields, properties, events, constructors, then methods: data
+  /// before behaviour, which reads better than the alphabetical order symbols
+  /// arrive in.
+  /// </summary>
+  static readonly Dictionary<string, int> s_memberKindOrder = new(StringComparer.Ordinal)
+  {
+    ["enumvalue"] = 0,
+    ["field"] = 1,
+    ["property"] = 2,
+    ["indexer"] = 3,
+    ["event"] = 4,
+    ["constructor"] = 5,
+    ["destructor"] = 6,
+    ["method"] = 7,
+    ["operator"] = 8,
+    ["conversion"] = 9,
+  };
+
+  static void SortMembers(List<ApiMember> members)
+  {
+    members.Sort((a, b) =>
+    {
+      int orderA = s_memberKindOrder.TryGetValue(a.Kind, out int oa) ? oa : 99;
+      int orderB = s_memberKindOrder.TryGetValue(b.Kind, out int ob) ? ob : 99;
+
+      if (orderA != orderB)
+      {
+        return orderA - orderB;
+      }
+
+      // Enum members read best in declaration order, which is their constant order.
+      int byName = string.CompareOrdinal(a.Name, b.Name);
+      return byName != 0 ? byName : string.CompareOrdinal(a.Signature, b.Signature);
+    });
+  }
+
+  /// <summary>
+  /// Guarantees anchors are unique within a page. Overloads normally differ by
+  /// parameter types, which the slug keeps, but generic arity collisions are
+  /// still possible.
+  /// </summary>
+  static void DedupeAnchors(List<ApiMember> members)
+  {
+    var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+
+    foreach (ApiMember member in members)
+    {
+      string anchor = member.Anchor;
+
+      if (seen.TryGetValue(anchor, out int count))
+      {
+        seen[anchor] = count + 1;
+        member.Anchor = $"{anchor}-{count + 1}";
+      }
+      else
+      {
+        seen[anchor] = 1;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Shared pieces
+  // ------------------------------------------------------------------
+
+  TypeRef BuildTypeRef(ITypeSymbol type)
+  {
+    // OfType unwraps arrays and pointers, and resolves to the original definition, so a
+    // constructed generic links to the open type where the documentation actually lives.
+    string? docId = DocIds.OfType(type);
+
+    bool external = type.ContainingAssembly is null
+        || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly);
+
+    return new TypeRef
+    {
+      DocId = docId,
+      Display = type.ToDisplayString(DisplayFormats.TypeReference),
+      External = external,
+    };
+  }
+
+  List<ApiParameter>? BuildParameters(ImmutableArray<IParameterSymbol> parameters, DocBlock docs)
+  {
+    if (parameters.Length == 0)
+    {
+      return null;
+    }
+
+    var result = new List<ApiParameter>(parameters.Length);
+
+    foreach (IParameterSymbol parameter in parameters)
+    {
+      List<DocNode>? paramDoc = null;
+      docs.Params?.TryGetValue(parameter.Name, out paramDoc);
+
+      result.Add(new ApiParameter
+      {
+        Name = parameter.Name,
+        Type = BuildTypeRef(parameter.Type),
+        RefKind = parameter.RefKind switch
+        {
+          Microsoft.CodeAnalysis.RefKind.Ref => "ref",
+          Microsoft.CodeAnalysis.RefKind.Out => "out",
+          Microsoft.CodeAnalysis.RefKind.In => "in",
+          Microsoft.CodeAnalysis.RefKind.RefReadOnlyParameter => "ref readonly",
+          _ => null,
+        },
+        IsParams = parameter.IsParams,
+        IsOptional = parameter.HasExplicitDefaultValue,
+        DefaultValue = parameter.HasExplicitDefaultValue
+              ? FormatConstant(parameter.ExplicitDefaultValue)
+              : null,
+        Doc = paramDoc,
+      });
+    }
+
+    return result;
+  }
+
+  static List<ApiTypeParam>? BuildTypeParameters(ImmutableArray<ITypeParameterSymbol> typeParameters, DocBlock docs)
+  {
+    if (typeParameters.Length == 0)
+    {
+      return null;
+    }
+
+    var result = new List<ApiTypeParam>(typeParameters.Length);
+
+    foreach (ITypeParameterSymbol parameter in typeParameters)
+    {
+      var constraints = new List<string>();
+
+      if (parameter.HasReferenceTypeConstraint)
+      {
+        constraints.Add("class");
+      }
+
+      if (parameter.HasValueTypeConstraint)
+      {
+        constraints.Add("struct");
+      }
+
+      if (parameter.HasNotNullConstraint)
+      {
+        constraints.Add("notnull");
+      }
+
+      if (parameter.HasUnmanagedTypeConstraint)
+      {
+        constraints.Add("unmanaged");
+      }
+
+      foreach (ITypeSymbol constraintType in parameter.ConstraintTypes)
+      {
+        constraints.Add(constraintType.ToDisplayString(DisplayFormats.TypeReference));
+      }
+
+      if (parameter.HasConstructorConstraint)
+      {
+        constraints.Add("new()");
+      }
+
+      List<DocNode>? doc = null;
+      docs.TypeParams?.TryGetValue(parameter.Name, out doc);
+
+      result.Add(new ApiTypeParam
+      {
+        Name = parameter.Name,
+        Variance = parameter.Variance switch
+        {
+          VarianceKind.In => "in",
+          VarianceKind.Out => "out",
+          _ => null,
+        },
+        Constraints = constraints.Count == 0 ? null : constraints,
+        Doc = doc,
+      });
+    }
+
+    return result;
+  }
+
+  static List<ApiAttribute>? BuildAttributes(ISymbol symbol)
+  {
+    var result = new List<ApiAttribute>();
+
+    foreach (AttributeData attribute in symbol.GetAttributes())
+    {
+      INamedTypeSymbol? attributeClass = attribute.AttributeClass;
+      if (attributeClass is null)
+      {
+        continue;
+      }
+
+      string fullName = attributeClass.ToDisplayString(DisplayFormats.TypeFullName);
+      if (s_hiddenAttributes.Contains(fullName))
+      {
+        continue;
+      }
+
+      var arguments = new List<string>();
+      foreach (TypedConstant argument in attribute.ConstructorArguments)
+      {
+        arguments.Add(FormatTypedConstant(argument));
+      }
+
+      foreach (KeyValuePair<string, TypedConstant> named in attribute.NamedArguments)
+      {
+        arguments.Add($"{named.Key} = {FormatTypedConstant(named.Value)}");
+      }
+
+      string display = attributeClass.Name;
+      if (display.EndsWith("Attribute", StringComparison.Ordinal) && display.Length > "Attribute".Length)
+      {
+        display = display[..^"Attribute".Length];
+      }
+
+      result.Add(new ApiAttribute
+      {
+        DocId = DocIds.Of(attributeClass),
+        Display = display,
+        Arguments = arguments.Count == 0 ? null : arguments,
+      });
+    }
+
+    return result.Count == 0 ? null : result;
+  }
+
+  static ObsoleteInfo? BuildObsolete(ISymbol symbol)
+  {
+    foreach (AttributeData attribute in symbol.GetAttributes())
+    {
+      if (attribute.AttributeClass?.ToDisplayString() != "System.ObsoleteAttribute")
+      {
+        continue;
+      }
+
+      string? message = attribute.ConstructorArguments.Length > 0
+          ? attribute.ConstructorArguments[0].Value as string
+          : null;
+
+      bool isError = attribute.ConstructorArguments.Length > 1
+          && attribute.ConstructorArguments[1].Value is true;
+
+      return new ObsoleteInfo { Message = message, IsError = isError };
+    }
+
+    return null;
+  }
+
+  /// <summary>
+  /// Repo-relative source location. The compiler's doc XML has no equivalent,
+  /// so this is the one piece of the model that only a compilation can supply.
+  /// </summary>
+  SourceRef? BuildSource(ISymbol symbol)
+  {
+    if (!_declarations.TryGetValue(symbol, out DeclaredSymbol? declaration))
+    {
+      return null;
+    }
+
+    string path = declaration.Tree.FilePath;
+    if (path.Length == 0)
+    {
+      return null;
+    }
+
+    string relative = path;
+    if (_repoRoot.Length > 0)
+    {
+      try
+      {
+        relative = Path.GetRelativePath(_repoRoot, path);
+      }
+      catch (ArgumentException)
+      {
+        relative = path;
+      }
+    }
+
+    return new SourceRef
+    {
+      File = relative.Replace('\\', '/'),
+      Line = declaration.Line,
+    };
+  }
+
+  DocBlock ParseDocs(ISymbol symbol)
+  {
+    if (!_declarations.TryGetValue(symbol, out DeclaredSymbol? declaration))
+    {
+      return new DocBlock();
+    }
+
+    return _docParser.Parse(declaration.Doc, declaration.Model, symbol);
+  }
+
+  // ------------------------------------------------------------------
+  // inheritdoc
+  // ------------------------------------------------------------------
+
+  /// <summary>
+  /// Fills a block that asked for &lt;inheritdoc/&gt; from the member or type
+  /// it inherits from.
+  /// </summary>
+  /// <remarks>
+  /// Symbols inside the documented set resolve against this run's own parsed
+  /// blocks, which is higher fidelity than the compiler's XML: crefs are still
+  /// structured rather than flattened to strings. Only genuinely external bases
+  /// fall back to <c>GetDocumentationCommentXml()</c>, which is why owl does
+  /// not need the project's own build-produced doc files.
+  /// </remarks>
+  DocBlock ResolveInheritDoc(ISymbol symbol, DocBlock block, int depth = 0)
+  {
+    if (!block.WantsInheritDoc || depth > 8)
+    {
+      return block;
+    }
+
+    // Cycles are possible through mutually-referencing interfaces.
+    if (!_inheritInProgress.Add(symbol))
+    {
+      return block;
+    }
+
+    try
+    {
+      foreach (ISymbol source in InheritDocSources(symbol))
+      {
+        DocBlock inherited;
+
+        if (_docs.TryGetValue(source, out DocBlock? own))
+        {
+          inherited = ResolveInheritDoc(source, own, depth + 1);
+        }
+        else
+        {
+          inherited = _docParser.ParseMetadataXml(DocIds.DocumentationXml(source));
+        }
+
+        if (inherited.IsEmpty)
+        {
+          continue;
+        }
+
+        Fill(block, inherited);
+        block.InheritedFrom = DocIds.Of(source);
+        break;
+      }
+    }
+    finally
+    {
+      _inheritInProgress.Remove(symbol);
+    }
+
+    return block;
+  }
+
+  static IEnumerable<ISymbol> InheritDocSources(ISymbol symbol)
+  {
+    switch (symbol)
+    {
+      case INamedTypeSymbol type:
+        if (type.BaseType is { } baseType && baseType.SpecialType != SpecialType.System_Object)
+        {
+          yield return baseType;
+        }
+
+        foreach (INamedTypeSymbol iface in type.Interfaces)
+        {
+          yield return iface;
+        }
+
+        yield break;
+
+      case IMethodSymbol method:
+        if (method.OverriddenMethod is { } overriddenMethod)
+        {
+          yield return overriddenMethod;
+        }
+
+        foreach (IMethodSymbol impl in method.ExplicitInterfaceImplementations)
+        {
+          yield return impl;
+        }
+
+        foreach (ISymbol implicitImpl in ImplicitInterfaceMembers(method))
+        {
+          yield return implicitImpl;
+        }
+
+        yield break;
+
+      case IPropertySymbol property:
+        if (property.OverriddenProperty is { } overriddenProperty)
+        {
+          yield return overriddenProperty;
+        }
+
+        foreach (IPropertySymbol impl in property.ExplicitInterfaceImplementations)
+        {
+          yield return impl;
+        }
+
+        foreach (ISymbol implicitImpl in ImplicitInterfaceMembers(property))
+        {
+          yield return implicitImpl;
+        }
+
+        yield break;
+
+      case IEventSymbol evt:
+        if (evt.OverriddenEvent is { } overriddenEvent)
+        {
+          yield return overriddenEvent;
+        }
+
+        foreach (IEventSymbol impl in evt.ExplicitInterfaceImplementations)
+        {
+          yield return impl;
+        }
+
+        foreach (ISymbol implicitImpl in ImplicitInterfaceMembers(evt))
+        {
+          yield return implicitImpl;
+        }
+
+        yield break;
+    }
+  }
+
+  static IEnumerable<ISymbol> ImplicitInterfaceMembers(ISymbol member)
+  {
+    INamedTypeSymbol containing = member.ContainingType;
+
+    foreach (INamedTypeSymbol iface in containing.AllInterfaces)
+    {
+      foreach (ISymbol ifaceMember in iface.GetMembers())
+      {
+        ISymbol? implementation = containing.FindImplementationForInterfaceMember(ifaceMember);
+        if (implementation is not null && SymbolEqualityComparer.Default.Equals(implementation, member))
+        {
+          yield return ifaceMember;
+        }
+      }
+    }
+  }
+
+  static void Fill(DocBlock target, DocBlock source)
+  {
+    target.Summary ??= source.Summary;
+    target.Remarks ??= source.Remarks;
+    target.Returns ??= source.Returns;
+    target.Value ??= source.Value;
+    target.Example ??= source.Example;
+    target.Exceptions ??= source.Exceptions;
+    target.SeeAlso ??= source.SeeAlso;
+    target.Category ??= source.Category;
+    target.Since ??= source.Since;
+    target.Deprecated ??= source.Deprecated;
+
+    if (source.Params is not null)
+    {
+      target.Params ??= [];
+      foreach (KeyValuePair<string, List<DocNode>> entry in source.Params)
+      {
+        if (!target.Params.ContainsKey(entry.Key))
+        {
+          target.Params[entry.Key] = entry.Value;
+        }
+      }
+    }
+
+    if (source.TypeParams is not null)
+    {
+      target.TypeParams ??= [];
+      foreach (KeyValuePair<string, List<DocNode>> entry in source.TypeParams)
+      {
+        if (!target.TypeParams.ContainsKey(entry.Key))
+        {
+          target.TypeParams[entry.Key] = entry.Value;
+        }
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Namespaces
+  // ------------------------------------------------------------------
+
+  /// <summary>
+  /// Collects the namespaces the documented types live in, picking up docs
+  /// from a <c>NamespaceDoc</c> class or a documented namespace declaration
+  /// when present.
+  /// </summary>
+  List<ApiNamespace> BuildNamespaces(List<ApiType> types)
+  {
+    var namespaceDocs = new Dictionary<string, DocBlock>(StringComparer.Ordinal);
+
+    foreach (KeyValuePair<ISymbol, DeclaredSymbol> entry in _declarations)
+    {
+      if (entry.Key is INamespaceSymbol ns && entry.Value.Doc is not null)
+      {
+        DocBlock block = _docParser.Parse(entry.Value.Doc, entry.Value.Model, entry.Key);
+        if (!block.IsEmpty)
+        {
+          namespaceDocs[ns.ToDisplayString()] = block;
+        }
+      }
+    }
+
+    // The NamespaceDoc convention: a type of that name carries its namespace's docs.
+    foreach (ApiType type in types)
+    {
+      if (type.Name != "NamespaceDoc" || type.Docs.IsEmpty)
+      {
+        continue;
+      }
+
+      if (!namespaceDocs.ContainsKey(type.Namespace))
+      {
+        namespaceDocs[type.Namespace] = type.Docs;
+      }
+    }
+
+    var result = types
+        .Select(t => t.Namespace)
+        .Distinct(StringComparer.Ordinal)
+        .OrderBy(n => n, StringComparer.Ordinal)
+        .Select(name => new ApiNamespace
+        {
+          Name = name,
+          Docs = namespaceDocs.TryGetValue(name, out DocBlock? docs) ? docs : null,
+        })
+        .ToList();
+
+    return result;
+  }
+
+  // ------------------------------------------------------------------
+  // Formatting
+  // ------------------------------------------------------------------
+
+  static string AccessibilityOf(Accessibility accessibility) => accessibility switch
+  {
+    Accessibility.Public => "public",
+    Accessibility.Protected => "protected",
+    Accessibility.ProtectedOrInternal => "protected internal",
+    Accessibility.ProtectedAndInternal => "private protected",
+    Accessibility.Internal => "internal",
+    Accessibility.Private => "private",
+    _ => "",
+  };
+
+  static string FormatConstant(object? value) => value switch
+  {
+    null => "null",
+    string s => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"",
+    char c => "'" + c + "'",
+    bool b => b ? "true" : "false",
+    _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "",
+  };
+
+  static string FormatTypedConstant(TypedConstant constant)
+  {
+    if (constant.IsNull)
+    {
+      return "null";
+    }
+
+    if (constant.Kind == TypedConstantKind.Array)
+    {
+      return "[" + string.Join(", ", constant.Values.Select(FormatTypedConstant)) + "]";
+    }
+
+    if (constant.Kind == TypedConstantKind.Type)
+    {
+      return constant.Value is ITypeSymbol type
+          ? type.ToDisplayString(DisplayFormats.TypeReference)
+          : "null";
+    }
+
+    if (constant.Kind == TypedConstantKind.Enum && constant.Type is not null)
+    {
+      return $"{constant.Type.Name}.{constant.Value}";
+    }
+
+    return FormatConstant(constant.Value);
+  }
+}

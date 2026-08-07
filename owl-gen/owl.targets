@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Captures the real compiler inputs for a project so owl can build an equivalent Roslyn
+  CSharpCompilation without taking on MSBuildLocator / MSBuildWorkspace. Letting MSBuild answer the
+  question means every conditional property in the consuming project is honored for free: whatever
+  it does with multi-targeting, platform defines and per-configuration property sheets.
+
+  Invoked per project by owl-gen (see Load/MSBuildInputCapture.cs):
+
+    dotnet msbuild <proj> -t:Restore;WriteOwlInputs \
+      -p:TargetFramework=net8.0 \
+      -p:OwlInputsFile=<out.txt> \
+      -p:CustomAfterMicrosoftCSharpTargets=<this file>
+
+  Output is a line-based key=value format, NOT JSON. File paths need no escaping here and cannot
+  contain newlines, whereas MSBuild cannot escape Windows backslashes for JSON without contortions.
+  Only the first '=' on a line separates key from value; repeated keys accumulate into a list.
+  Values are never split on ';' because each list item gets its own line, which matters for
+  DefineConstants: a naive Include= would silently split "TRACE;DEBUG;MACOS" into three bogus lines.
+-->
+<Project>
+
+  <Target Name="WriteOwlInputs" DependsOnTargets="ResolveReferences">
+
+    <PropertyGroup>
+      <OwlInputsFile Condition="'$(OwlInputsFile)' == ''">$(MSBuildProjectDirectory)\$(MSBuildProjectName).owl-inputs.txt</OwlInputsFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- Include= splits on ';', which is exactly what we want: one item per constant. -->
+      <_OwlDefine Include="$(DefineConstants)" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_OwlLine Include="projectFile=$(MSBuildProjectFullPath)" />
+      <_OwlLine Include="projectDir=$(MSBuildProjectDirectory)" />
+      <_OwlLine Include="assemblyName=$(AssemblyName)" />
+      <_OwlLine Include="rootNamespace=$(RootNamespace)" />
+      <_OwlLine Include="targetFramework=$(TargetFramework)" />
+      <_OwlLine Include="langVersion=$(LangVersion)" />
+      <_OwlLine Include="allowUnsafe=$(AllowUnsafeBlocks)" />
+      <_OwlLine Include="nullable=$(Nullable)" />
+      <_OwlLine Include="outputType=$(OutputType)" />
+      <_OwlLine Include="assemblyVersion=$(Version)" />
+      <_OwlLine Include="@(_OwlDefine->'define=%(Identity)')" />
+      <_OwlLine Include="@(Compile->'compile=%(FullPath)')" />
+      <!-- ReferencePath, not ReferencePathWithRefAssemblies: the latter is populated by
+           FindReferenceAssembliesForReferences (part of the CoreCompile chain), not by
+           ResolveReferences, so it is empty here. ReferencePath is also the better choice because
+           it points at implementation assemblies, which is where the sibling .xml doc files live,
+           which is what lets inheritdoc resolve against bases outside the documented set. -->
+      <_OwlLine Include="@(ReferencePath->'reference=%(FullPath)')" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(OwlInputsFile)"
+                      Lines="@(_OwlLine)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="false"
+                      Encoding="UTF-8" />
+
+    <Message Importance="high"
+             Text="owl: captured $(AssemblyName) ($(TargetFramework)) -> $(OwlInputsFile)" />
+
+  </Target>
+
+</Project>

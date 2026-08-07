@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>owl</AssemblyName>
+    <RootNamespace>Owl</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- owl-gen is linked, not spawned: it is a .NET library, so a second process would mean a
+         second copy of the runtime in the shipped binary for nothing. -->
+    <ProjectReference Include="../owl-gen/Owl.Gen.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- owl-site is embedded because it is JavaScript that node has to require from real files.
+         Tools.cs writes these back out at run time. LogicalName always uses forward slashes; the
+         RecursiveDir metadata does not, so Tools.cs normalizes before matching. -->
+    <EmbeddedResource Include="../owl-site/**/*.js;../owl-site/package.json"
+                      Exclude="../owl-site/node_modules/**;../owl-site/dist/**"
+                      LogicalName="site/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!--
+    Publish produces one file in dist/ that an installer copies on its own: no runtime to install,
+    nothing to keep beside it. See docs/NOTES.md for the command.
+
+    Not trimmed. Roslyn resolves plenty by reflection and the model is written by the reflection
+    based JsonSerializer, so trimming risks a smaller binary that quietly writes a wrong model.
+
+    Not compressed either, which is not a size preference. EnableCompressionInSingleFile made owl
+    die with a fatal AccessViolationException inside Roslyn's parallel symbol completion on roughly
+    two runs in three over a large project set; uncompressed is clean over the same runs. It halves
+    the file, so someone will be tempted: measure a real run before turning it back on.
+
+    RuntimeIdentifier and SelfContained belong on the publish command, not here: as plain
+    properties they make an ordinary build emit RID-specific output.
+  -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <RuntimeIdentifiers>osx-arm64;osx-x64;win-x64;linux-x64</RuntimeIdentifiers>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildThisFileDirectory)../dist/</PublishDir>
+  </PropertyGroup>
+
+</Project>
