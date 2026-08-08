@@ -74,17 +74,19 @@ sealed class Command
           command.Port = Next(args, ref i, arg);
           break;
 
-        // Means the model directory for gen, and the site directory for build.
+        // The site directory for build, which writes one, and the model directory for gen and
+        // serve, which do not. Naming the model is the only reading serve has: it generates into
+        // that directory and then renders it, so -o pointing anywhere else would name nothing.
         case "-o":
         case "--out":
-          if (name == "gen")
-          {
-            command.ModelDir = Next(args, ref i, arg);
-          }
-          else
+          if (name == "build")
           {
             command.OutDir = Next(args, ref i, arg);
             outSet = true;
+          }
+          else
+          {
+            command.ModelDir = Next(args, ref i, arg);
           }
           break;
 

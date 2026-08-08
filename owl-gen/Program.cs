@@ -252,10 +252,15 @@ sealed class CommandLineOptions
   public bool ShowHelp { get; private set; }
 
   /// <summary>
-  /// The captured MSBuild inputs, kept beside the model rather than inside it.
+  /// The captured MSBuild inputs, kept under the model directory.
   /// </summary>
-  public string InputsDirectory =>
-    Path.Combine(Path.GetDirectoryName(OutputDirectory.TrimEnd(Path.DirectorySeparatorChar)) ?? ".", "inputs");
+  /// <remarks>
+  /// Inside rather than beside: a sibling is tidier when the model sits at the default .owl/json,
+  /// and is somewhere the caller never named for every other --out. Writing outside the one
+  /// directory a caller asked for is worse than sharing it, and nothing here reads the model
+  /// directory by listing it, so a subdirectory in there is invisible to the site.
+  /// </remarks>
+  public string InputsDirectory => Path.Combine(OutputDirectory, "inputs");
 
   /// <summary>
   /// Reads the command line, applying defaults and validating paths.

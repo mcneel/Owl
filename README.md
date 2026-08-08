@@ -58,6 +58,7 @@ owl gen <project.csproj...>
   -v, --verbose       Full diagnostics
 
 owl serve <project.csproj...>
+  -o, --out <dir>     Where to write the model (default .owl/json)
   --port <n>          Port to listen on (default 8080)
   --docs <dir>        Your hand-written pages (default docs/api)
 

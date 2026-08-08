@@ -50,7 +50,7 @@ static void PrintUsage()
     derived types are found across the whole set.
 
     Options:
-      -o, --out <dir>     Model directory for gen (default .owl/json)
+      -o, --out <dir>     Model directory for gen and serve (default .owl/json)
                           Site directory for build (default .owl/site)
       --json <dir>        Reuse an existing model instead of generating one
       --docs <dir>        Authored markdown pages (default docs/api)
