@@ -131,6 +131,63 @@ function typeArgumentCount(html) {
 /** Kinds that take a parameter list, and so can be overloaded on it. */
 const CALLABLE_KINDS = new Set(['method', 'constructor', 'destructor', 'operator', 'conversion']);
 
+/** The two kinds the compiler spells `op_`, listed as symbols rather than under those names. */
+const OPERATOR_KINDS = new Set(['operator', 'conversion']);
+
+/**
+ * The symbol a C# operator method stands for, keyed by the name the compiler gave it.
+ *
+ * Nobody looking for `==` knows to look for `op_Equality`, and a dozen `op_` names sort together
+ * into a block that says nothing where a column of symbols says everything.
+ */
+const OPERATOR_SYMBOLS = {
+  op_Addition: '+',
+  op_Subtraction: '-',
+  op_Multiply: '*',
+  op_Division: '/',
+  op_Modulus: '%',
+  op_BitwiseAnd: '&',
+  op_BitwiseOr: '|',
+  op_ExclusiveOr: '^',
+  op_LeftShift: '<<',
+  op_RightShift: '>>',
+  op_UnsignedRightShift: '>>>',
+  op_Equality: '==',
+  op_Inequality: '!=',
+  op_LessThan: '<',
+  op_GreaterThan: '>',
+  op_LessThanOrEqual: '<=',
+  op_GreaterThanOrEqual: '>=',
+  op_LogicalNot: '!',
+  op_OnesComplement: '~',
+  op_UnaryPlus: '+',
+  op_UnaryNegation: '-',
+  op_Increment: '++',
+  op_Decrement: '--',
+  op_True: 'true',
+  op_False: 'false',
+  op_Implicit: 'implicit',
+  op_Explicit: 'explicit',
+};
+
+/**
+ * What the operator column prints for a member.
+ *
+ * A checked operator is the unchecked symbol under another name, so it is derived rather than
+ * listed twice. Anything the map has not heard of falls back to the symbol owl-gen already wrote
+ * into the signature, and to the metadata name only if that fails too: an `op_` name read badly
+ * beats a blank cell.
+ */
+function operatorSymbol(member) {
+  const name = String(member.name || '');
+  const checked = name.startsWith('op_Checked');
+  const symbol = OPERATOR_SYMBOLS[checked ? name.replace('op_Checked', 'op_') : name];
+  if (symbol) return checked ? `checked ${symbol}` : symbol;
+
+  const match = /\boperator\s+(checked\s+)?(\S+?)\s*\(/.exec(member.signature || '');
+  return match ? `${match[1] || ''}${match[2]}` : name;
+}
+
 /** Member display order: data before behaviour, rather than the order symbols arrive in. */
 const MEMBER_ORDER = [
   'enumvalue',
@@ -484,7 +541,7 @@ class Renderer {
       '<div class="member-header">' +
       this.badgeHtml(type.kind) +
       heading +
-      (type.obsolete ? '<span class="explicit-badge">obsolete</span>' : '') +
+      (type.obsolete ? '<span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
       // Chipped only when it is not public, the way a member card does it: nested types are
       // commonly protected or internal, and the card is otherwise silent about it.
       (type.accessibility && type.accessibility !== 'public'
@@ -617,7 +674,7 @@ class Renderer {
       .map(
         (ns) =>
           `<li><a href="${attr(this.routes.namespace(ns.name))}">` +
-          `<span class="tree-badge" style="background:${theme.KIND_COLORS.T}">N</span>` +
+          `<span class="tree-badge" style="background:${theme.kindVar('T')}">N</span>` +
           `${escape(ns.name || '(global)')}</a></li>`
       )
       .join('');
@@ -1148,6 +1205,11 @@ ${this.seeAlsoHtml(type.docs)}
       const group = groups.get(kind);
       if (!group) continue;
 
+      if (OPERATOR_KINDS.has(kind)) {
+        out += this.operatorsHtml(group, kind);
+        continue;
+      }
+
       out +=
         `<section class="ns-section type-section" id="${attr(kind)}">` +
         `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
@@ -1157,6 +1219,45 @@ ${this.seeAlsoHtml(type.docs)}
     }
 
     return out;
+  }
+
+  /**
+   * Operators and conversions as a table: symbol, operands, result, description.
+   *
+   * The enum table's shape, for the enum table's reason. A card is worth its space for a member
+   * whose parameters have names and meanings worth a paragraph each; an operator's operands are
+   * its types and nothing else, and a dozen of them read as a table where they read as a dozen
+   * near-empty panels. The result column is what makes a conversion legible at all, since which
+   * type it converts to is the whole of what it does.
+   */
+  operatorsHtml(members, kind) {
+    const rows = members
+      .map((member) => {
+        const operands = (member.parameters || [])
+          .map((p) => this.typeRefHtml(p.type))
+          .join(', ');
+
+        return (
+          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
+          `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
+          `<td class="op-symbol">${escape(operatorSymbol(member))}` +
+          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
+          '</td>' +
+          `<td class="op-types">${operands}</td>` +
+          `<td class="op-types">${this.typeRefHtml(member.returnType)}</td>` +
+          `<td>${this.summaryHtml(member.docs)}</td>` +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    return (
+      `<section class="ns-section type-section" id="${attr(kind)}">` +
+      `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
+      '<div class="table-scroll"><table class="op-table">' +
+      '<thead><tr><th>Operator</th><th>Operands</th><th>Result</th><th>Description</th></tr></thead>' +
+      `<tbody>${rows}</tbody></table></div></section>`
+    );
   }
 
   /**
@@ -1173,7 +1274,7 @@ ${this.seeAlsoHtml(type.docs)}
           `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           `<td class="enum-name">${escape(member.name)}` +
-          (member.obsolete ? ' <span class="explicit-badge">obsolete</span>' : '') +
+          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
           '</td>' +
           `<td class="enum-value">${escape(member.constantValue || '')}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
@@ -1288,7 +1389,7 @@ ${this.seeAlsoHtml(type.docs)}
       this.accessBadgeHtml(member) +
       this.badgeHtml(member.kind) +
       `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(member.name)}</h3>` +
-      (member.obsolete ? '<span class="explicit-badge">obsolete</span>' : '') +
+      (member.obsolete ? '<span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
       chips.map((c) => `<span class="chip">${escape(c)}</span>`).join('') +
       `<a class="member-anchor" href="#${attr(member.anchor)}" ` +
       // Named as the heading beside it is, so the two do not read as different members.
@@ -1308,6 +1409,45 @@ ${this.seeAlsoHtml(type.docs)}
   // ------------------------------------------------------------------
   // Sidebar trees
   // ------------------------------------------------------------------
+
+  /**
+   * A type's members under it in the tree, with its operators behind a single row.
+   *
+   * A type that overloads a dozen operators otherwise spends a dozen rows on `op_` names that all
+   * sort together and none of which anyone is looking for, pushing the members they are looking
+   * for off the visible tree. The row points at the section, which is one click either way.
+   */
+  treeMemberLinksHtml(type) {
+    const members = this.sortedMembers(type);
+
+    let out = members
+      .filter((m) => !OPERATOR_KINDS.has(m.kind))
+      .map(
+        (m) =>
+          `<a class="tree-child-link" href="#${attr(m.anchor)}"${this.sinceAttr(m.docs)}` +
+          // The row truncates, and the part that tells overloads apart is at the end, so the full
+          // signature is on the title where it can still be read.
+          ` title="${attr(m.signature || m.name)}">` +
+          this.treeBadgeHtml(m.kind) +
+          this.treeMemberLabelHtml(m) +
+          '</a>'
+      )
+      .join('');
+
+    // Ordered by MEMBER_ORDER rather than by the set, so the rows land where their sections do.
+    for (const kind of MEMBER_ORDER) {
+      if (!OPERATOR_KINDS.has(kind)) continue;
+      if (!members.some((m) => m.kind === kind)) continue;
+
+      const label = theme.kindPlural(kind);
+      out +=
+        `<a class="tree-child-link" href="#${attr(kind)}" title="${attr(label)}">` +
+        this.treeBadgeHtml(kind) +
+        `<span class="tree-label">${escape(label)}</span></a>`;
+    }
+
+    return out;
+  }
 
   /**
    * The disclosure triangle. Drawn rather than typed, so it centres on its own geometry instead of
@@ -1415,21 +1555,7 @@ ${this.seeAlsoHtml(type.docs)}
           const active = activeType !== null && type.docId === activeType.docId;
 
           // Only the current type lists its members, so a large category stays readable.
-          const children = active
-            ? this.sortedMembers(type)
-                .map(
-                  (m) =>
-                    `<a class="tree-child-link" href="#${attr(m.anchor)}"${this.sinceAttr(m.docs)}` +
-                    // The row truncates, and the part that tells overloads apart is at the end,
-                    // so the full signature is on the title where it can still be read.
-                    ` title="${attr(m.signature || m.name)}">` +
-                    this.treeBadgeHtml(m.kind) +
-                    this.treeMemberLabelHtml(m) +
-                    (m.explicitInterface ? '<span class="tree-explicit">~</span>' : '') +
-                    '</a>'
-                )
-                .join('')
-            : '';
+          const children = active ? this.treeMemberLinksHtml(type) : '';
 
           return this.treeTypeRow(type, { active, children, childrenId: `tc_${type.slug}` });
         })
@@ -1491,7 +1617,7 @@ ${this.seeAlsoHtml(type.docs)}
         .map((c) =>
           row(
             `<a class="tree-link" href="${attr(this.routes.category(c.assembly, c.category))}">` +
-              `<span class="tree-badge" style="background:${theme.KIND_COLORS.T}">C</span>` +
+              `<span class="tree-badge" style="background:${theme.kindVar('T')}">C</span>` +
               `${escape(c.category)}</a>`
           )
         )
@@ -1524,7 +1650,7 @@ ${this.seeAlsoHtml(type.docs)}
           '<div class="tree-type"><div class="tree-type-label">' +
           '<span class="tree-arrow-spacer"></span>' +
           `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.namespace(name))}">` +
-          `<span class="tree-badge" style="background:${theme.KIND_COLORS.T}">N</span>` +
+          `<span class="tree-badge" style="background:${theme.kindVar('T')}">N</span>` +
           `${escape(name || '(global)')}</a></div></div>`
         );
       })

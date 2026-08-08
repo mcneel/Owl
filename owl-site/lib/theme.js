@@ -8,36 +8,62 @@
  */
 
 /**
- * Badge colours, keyed by letter. F is Open Color pink 6, I grape 6, S lime 8.
+ * Badge colours, keyed by letter, named from the Open Color scales.
  *
- * S is a lime rather than the teal it wants to be: teal lands within a few units of the property
- * green, which reads as the same colour beside it in a tree.
+ * The pairs carry the meaning: types and interfaces are one blue at two weights, fields and
+ * constructors one grey, so each pair reads as a family before its letter is read.
  */
 const KIND_COLORS = {
-  T: '#6366f1',
-  M: '#0ea5e9',
-  P: '#10b981',
-  F: '#e64980',
-  E: '#ef4444',
-  I: '#be4bdb',
-  S: '#66a80f',
+  T: 'var(--oc-blue-8)',
+  M: 'var(--oc-cyan-6)',
+  P: 'var(--oc-teal-6)',
+  F: 'var(--oc-gray-6)',
+  E: 'var(--oc-orange-5)',
+  I: 'var(--oc-blue-4)',
+  S: 'var(--oc-lime-6)',
 };
 
-// Constructors sit apart from the coloured kinds, in grey.
-KIND_COLORS.C = '#6b7280';
+// Constructors sit apart from the coloured kinds, on the field grey a step darker.
+KIND_COLORS.C = 'var(--oc-gray-7)';
 
-/** The amber an enum and its values carry, which is no letter's colour since F went pink. */
-const ENUM_COLOR = '#f59e0b';
+/** The one colour an enum and its values carry, which is no letter's own. */
+const ENUM_COLOR = 'var(--oc-yellow-6)';
 
 /**
- * Kinds whose badge takes a colour of its own rather than its letter's.
+ * Kinds whose badge takes a colour of its own rather than its letter's, named by the slot they are
+ * painted from rather than by the paint itself, so both stay one colour when that slot is retuned.
  *
- * An enum keeps the T badge and an enum value keeps F, but both are amber, so an enum and the
- * values inside it read as one family and neither is mistaken for a field.
+ * An enum keeps the T badge and an enum value keeps F, but both take the enum colour, so an enum
+ * and the values inside it read as one family and neither is mistaken for a field.
  */
-const KIND_COLOR_OVERRIDES = {
-  enum: ENUM_COLOR,
-  enumvalue: ENUM_COLOR,
+const KIND_COLOR_SLOTS = {
+  enum: 'enum',
+  enumvalue: 'enum',
+};
+
+/**
+ * Every slot a badge can be painted from, as slot -> colour.
+ *
+ * The stylesheet writes one custom property per entry and everything that draws a badge references
+ * the property, so the palette can be retuned in one place — a browser's element inspector
+ * included, where editing `--kind-M` on :root repaints every method badge on the page at once.
+ */
+const KIND_PAINTS = Object.assign({}, KIND_COLORS, { enum: ENUM_COLOR });
+
+/**
+ * Badge colours that say something other than what kind a member is, tunable the same way.
+ *
+ * Readonly and SetOnly share `mod`: they are one fact about a property told from either end, only
+ * ever one of them is on a member, and neither is a kind, so they read as one marker.
+ *
+ * `explicit` paints the badge and the card's border together, since the border is there to make the
+ * badge's point at a glance. `obsolete` has a slot of its own only so that retuning either of them
+ * cannot move the other: the two wear the same pill and would otherwise be impossible to separate.
+ */
+const BADGE_PAINTS = {
+  mod: 'var(--oc-red-6)',
+  explicit: 'var(--oc-blue-4)',
+  obsolete: 'var(--oc-green-8)',
 };
 
 /** Model kind -> [badge letter, human label]. */
@@ -116,14 +142,25 @@ function kindPlural(kind) {
   return label + 's';
 }
 
-function kindColor(kind) {
+/** The custom property a slot is read from. */
+function kindVar(slot) {
+  return `var(--kind-${slot})`;
+}
+
+/** Which slot paints this kind's badge. Anything unrecognised falls in with the constructors. */
+function kindSlot(kind) {
   // hasOwnProperty, not a plain lookup: one of the kinds is called 'constructor', and a plain
   // lookup on an object literal finds Object.prototype.constructor and takes it for an override.
-  const override = Object.prototype.hasOwnProperty.call(KIND_COLOR_OVERRIDES, kind)
-    ? KIND_COLOR_OVERRIDES[kind]
-    : null;
+  const slot = Object.prototype.hasOwnProperty.call(KIND_COLOR_SLOTS, kind)
+    ? KIND_COLOR_SLOTS[kind]
+    : badgeLetter(kind);
 
-  return override || KIND_COLORS[badgeLetter(kind)] || '#6b7280';
+  return Object.prototype.hasOwnProperty.call(KIND_PAINTS, slot) ? slot : 'C';
+}
+
+/** What a badge of this kind is painted with — a reference to the palette, never a colour. */
+function kindColor(kind) {
+  return kindVar(kindSlot(kind));
 }
 
 /** Assigns each assembly a colour by position, so it stays the same across pages. */
@@ -140,13 +177,17 @@ function assemblyColor(palette, assemblyName) {
 
 module.exports = {
   KIND_COLORS,
-  KIND_COLOR_OVERRIDES,
+  KIND_COLOR_SLOTS,
+  KIND_PAINTS,
+  BADGE_PAINTS,
   KIND_MAP,
   FILTER_KINDS,
   ASSEMBLY_PALETTE,
   badgeLetter,
   kindLabel,
   kindPlural,
+  kindVar,
+  kindSlot,
   kindColor,
   assemblyPalette,
   assemblyColor,

@@ -11,7 +11,18 @@
  * Syntax highlighting is done when the page is rendered, not in the browser.
  */
 
-const { KIND_COLORS } = require('./theme');
+const { KIND_COLORS, KIND_PAINTS, BADGE_PAINTS, kindVar } = require('./theme');
+
+/** A palette from lib/theme.js, written out as one custom property per slot. */
+function paintCss(prefix, paints) {
+  return Object.keys(paints)
+    .map((slot) => `  --${prefix}-${slot}: ${paints[slot]};`)
+    .join('\n');
+}
+
+/** What the client script paints a badge letter with. The properties above, not the colours. */
+const KIND_VARS = {};
+for (const letter of Object.keys(KIND_COLORS)) KIND_VARS[letter] = kindVar(letter);
 
 const CSS = `
 /* ---- Open Color (yeun.github.io/open-color) ----
@@ -38,35 +49,35 @@ const CSS = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ---- Theme variables: the only place a colour is chosen ---- */
+/* The greys are docify's dark palette: its page is #1d1d1d and its surfaces, borders and muted text
+   come from Tailwind's neutral ramp, which has no hue in it at all. */
 :root[data-theme="dark"] {
-  --bg:          #0f172a;
-  --bg-home:     #0f172a;
-  --bg2:         #1e293b;
-  --bg3:         #334155;
-  --bg4:         #273549;
-  --border:      #334155;
-  --border2:     #475569;
-  --text:        #e2e8f0;
-  --text2:       #cbd5e1;
-  --text3:       #94a3b8;
-  --text4:       #64748b;
-  --card-bg:     #1e293b;
-  --card-border: #334155;
-  --card-hover:  #253347;
-  --fullname:    #64748b;
-  --flash:       #38bdf8;
-  --scrollbar:   #475569;
-  --explicit-border: #2d6a4f;
-  --explicit-badge-bg: #2d6a4f;
+  --bg:          #1d1d1d;
+  --bg-home:     #1d1d1d;
+  --bg2:         #262626;
+  --bg3:         #333333;
+  --bg4:         #3d3d3d;
+  --border:      #333333;
+  --border2:     #404040;
+  --text:        #e6e6e6;
+  --text2:       #d4d4d4;
+  --text3:       #a3a3a3;
+  --text4:       #737373;
+  --card-bg:     #262626;
+  --card-border: #333333;
+  --card-hover:  #2e2e2e;
+  --fullname:    #737373;
+  --flash:       #2196f3;
+  --scrollbar:   #404040;
   --tok-keyword: #c4a7fd;
   --tok-string:  #7ee2b0;
-  --tok-comment: #64748b;
+  --tok-comment: #8a8a8a;
   --tok-number:  #fbbf77;
   --tok-meta:    #d8b4fe;
   --tok-type:    #7dd3fc;
   --tok-func:    #dcdcaa;
-  --tok-punct:   #8b9cb3;
-  --ext-ref:     #90a4bd;
+  --tok-punct:   #9e9e9e;
+  --ext-ref:     #9a9a9a;
   --mark-bg:     var(--oc-yellow-4);
   --mark-fg:     var(--oc-gray-9);
   --accent:      #2196f3;
@@ -89,8 +100,6 @@ const CSS = `
   --fullname:    #94a3b8;
   --flash:       #0ea5e9;
   --scrollbar:   #cbd5e1;
-  --explicit-border: #86efac;
-  --explicit-badge-bg: #16a34a;
   --tok-keyword: #7c3aed;
   --tok-string:  #0a7c52;
   --tok-comment: #64748b;
@@ -103,6 +112,15 @@ const CSS = `
   --mark-bg:     var(--oc-yellow-2);
   --mark-fg:     var(--oc-gray-9);
   --accent:      #1364c4;
+}
+
+/* ---- Badge colours ----
+   Written from lib/theme.js, so the palette is stated once and every badge, filter pill and search
+   row reads it from here rather than carrying a colour of its own. Outside the two theme blocks
+   because a badge means the same thing under either one; move a line into both to split them. */
+:root {
+${paintCss('kind', KIND_PAINTS)}
+${paintCss('badge', BADGE_PAINTS)}
 }
 
 /* The header keeps one colour under both themes: it is chrome rather than content, and holding it
@@ -232,7 +250,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 /* A shade back from the name, so an overload's parameters read as the tiebreaker they are, with
    a hair of space in front - the row's own 0.35rem gap was far too much. */
 .tree-child-link .tree-sig { color: var(--text4); margin-left: 0.12rem; }
-.tree-explicit { font-size: 0.6rem; color: var(--text4); font-style: italic; }
 .tree-toggle { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: inline-flex; align-items: center; }
 
 /* ---- Main content ---- */
@@ -286,7 +303,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); background: var(--bg3); border-radius: 3px; padding: 0.1rem 0.55rem; text-decoration: none; }
 a.chip:hover { color: var(--flash); }
-.chip-warn { color: var(--explicit-badge-bg); }
 
 /* ---- Category overview doc ---- */
 .cat-doc { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; line-height: 1.7; font-size: 0.88rem; color: var(--text2); scroll-margin-top: 1rem; }
@@ -313,12 +329,15 @@ a.chip:hover { color: var(--flash); }
 .member { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.6rem; transition: box-shadow 0.15s; scroll-margin-top: var(--anchor-offset, 1rem); }
 .member:target { box-shadow: 0 0 0 3px var(--flash); }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
-.member.explicit-impl { border-color: var(--explicit-badge-bg); }
+.member.explicit-impl { border-color: var(--badge-explicit); }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
 .badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; color: white; letter-spacing: 0.03em; }
-/* A modifier rather than a kind, so it is grey and stays out of the kind palette. */
-.badge-mod { background: var(--oc-gray-6); }
-.explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--explicit-badge-bg); letter-spacing: 0.02em; }
+/* A modifier rather than a kind, so it stays out of the kind palette. */
+.badge-mod { background: var(--badge-mod); }
+/* The small pill, worn by Explicit and by obsolete. Its own slot each, so retuning one leaves the
+   other where it was; the shape and typography are all they actually share. */
+.explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
+.badge-obsolete { background: var(--badge-obsolete); }
 .asm-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; color: white; margin-left: auto; opacity: 0.85; white-space: nowrap; text-decoration: none; }
 .member-name { font-size: 0.97rem; font-weight: 600; color: var(--text); }
 /* The interface an explicit implementation came from is a link, but it is also part of a heading. */
@@ -378,14 +397,17 @@ code { font-family: monospace; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .table-scroll th, .table-scroll td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
 
-/* ---- Enum values ---- */
-.enum-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-.enum-table td { padding: 0.45rem 0.5rem; vertical-align: top; }
-.enum-table .enum-name { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
+/* ---- Enum values and operators ----
+   Two tables of members that a card would have padded out rather than filled. */
+.enum-table th, .op-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.enum-table td, .op-table td { padding: 0.45rem 0.5rem; vertical-align: top; }
+.enum-table .enum-name, .op-table .op-symbol { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
 .enum-table .enum-value { font-family: monospace; color: var(--tok-number); white-space: nowrap; text-align: right; }
+/* The operand and result columns are types, and read as the signatures they came out of. */
+.op-table .op-types { font-family: monospace; font-size: 0.8rem; color: var(--text2); }
 /* Rows are what the sidebar links at, so a jumped-to value marks itself the way a card does. */
-.enum-table tbody tr { scroll-margin-top: var(--anchor-offset, 1rem); }
-.enum-table tbody tr:target { background: var(--bg3); }
+.enum-table tbody tr, .op-table tbody tr { scroll-margin-top: var(--anchor-offset, 1rem); }
+.enum-table tbody tr:target, .op-table tbody tr:target { background: var(--bg3); }
 .summary ul, .summary ol, .remarks ul, .remarks ol, .section ul, .section ol { margin: 0.3rem 0 0.3rem 1.25rem; }
 dl { margin: 0.3rem 0; }
 dt { font-weight: 650; color: var(--text2); margin-top: 0.35rem; }
@@ -488,9 +510,9 @@ const JS = `
   }
 
   // ---- Filter bar ----
-  // Interpolated from lib/theme.js rather than written out again, so the button a kind filters by
-  // cannot end up a different colour from the badges it is filtering.
-  var COLORS = ${JSON.stringify(KIND_COLORS)};
+  // Custom properties rather than colours, so the button a kind filters by cannot end up a
+  // different colour from the badges it is filtering, and both follow a retuned palette live.
+  var COLORS = ${JSON.stringify(KIND_VARS)};
   var filterButtons = document.querySelectorAll('.filter-btn');
   var activeKind = 'all';
 
@@ -498,9 +520,16 @@ const JS = `
     return activeKind === 'all' || el.getAttribute('data-badge') === activeKind;
   }
 
-  // An enum lists its values as table rows rather than cards, so the two shapes are filtered and
-  // counted together - counting only cards would empty an enum section and hide the whole table.
-  var LISTED = '.member, .enum-table tbody tr';
+  // Enum values and operators are listed as table rows rather than cards, so every shape is
+  // filtered and counted together - counting only cards would empty those sections and hide the
+  // whole table.
+  var LISTED = '.member, .enum-table tbody tr, .op-table tbody tr';
+
+  // The same shapes, scoped to the content column. Derived rather than written out again, so a new
+  // listed shape cannot be filtered in one place and forgotten in the other.
+  var MAIN_LISTED = LISTED.split(', ')
+    .map(function (part) { return '.main-content ' + part; })
+    .join(', ');
 
   function anyVisible(root) {
     return [].slice.call(root.querySelectorAll(LISTED)).some(function (el) {
@@ -510,7 +539,7 @@ const JS = `
 
   function applyFilter() {
     // Kind and version both hide entries, so they resolve to one class rather than fighting.
-    document.querySelectorAll('.main-content .member, .main-content .enum-table tbody tr')
+    document.querySelectorAll(MAIN_LISTED)
       .forEach(function (el) {
         el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
       });
@@ -971,7 +1000,7 @@ const JS = `
       results.innerHTML = shown.map(function (m) {
         var e = m[2];
         // The row carries its own colour, because an enum wears a T badge in the F colour.
-        var colour = e[7] || COLORS[e[4]] || '#6b7280';
+        var colour = e[7] || COLORS[e[4]] || 'var(--kind-C)';
         var ns = (index.namespaces || [])[e[6]] || '';
         return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
           '<div class="r-head">' +
