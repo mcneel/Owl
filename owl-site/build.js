@@ -183,10 +183,16 @@ for (const url of urls) {
 }
 
 // The search page is deliberately absent from the sitemap (it is noindex), but the site still
-// needs the file.
+// needs the file. So is the root of a single-assembly site, which is only a redirect to it.
 const searchResult = site.resolve(site.routes.search(), null, false);
 write(site.routes.search().replace(/\?.*$/, ''), searchResult.body);
 pages++;
+
+if (!urls.includes(site.routes.home())) {
+  const rootResult = site.resolve(site.routes.home(), null, false);
+  write(site.routes.home(), rootResult.body);
+  pages++;
+}
 
 for (const asset of ['app.css', 'app.js', 'search.json']) {
   const result = site.asset(asset);

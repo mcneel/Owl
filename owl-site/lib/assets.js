@@ -171,6 +171,20 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 #search::-webkit-search-cancel-button, #search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
 .nav-search-icon { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); width: 0.95rem; height: 0.95rem; pointer-events: none; fill: none; stroke: var(--nav-dim); stroke-width: 2; stroke-linecap: round; }
 
+/* ---- Header search results ----
+   Hangs off the form, which is the positioned element, and takes the page's colours rather than
+   the header's: it is content the header happens to be pointing at, not part of the bar. */
+.nav-results { position: absolute; top: calc(100% + 0.35rem); left: 0; width: 30rem; max-width: 80vw; max-height: 70vh; overflow-y: auto; z-index: 40; background: var(--bg2); border: 1px solid var(--border2); border-radius: 5px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); padding: 0.25rem; }
+.nav-results[hidden] { display: none; }
+.nav-result { display: flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.82rem; color: var(--text); text-decoration: none; }
+.nav-result:hover, .nav-result.active { background: var(--bg3); }
+.nav-result-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Pushed to the far end and allowed to shrink first, so a long namespace never crowds the name. */
+.nav-result-ns { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 0.7rem; color: var(--text4); }
+.nav-results-more { display: block; margin-top: 0.15rem; padding: 0.4rem 0.5rem; border-top: 1px solid var(--border); font-size: 0.76rem; color: var(--text3); text-decoration: none; }
+.nav-results-more:hover { color: var(--flash); }
+.nav-empty { padding: 0.5rem; font-size: 0.82rem; color: var(--text3); }
+
 /* ---- Header selects ---- */
 /* appearance:none drops the platform arrow so both selects can carry the same chevron; the popup
    itself is still drawn by the OS, which is the one part of docify's menu a <select> cannot copy. */
@@ -192,8 +206,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 
 /* ---- Filter bar ---- */
 /* Lives in the content column, so it takes that column's width and none of the header's padding. */
-.filter-bar { border-bottom: 1px solid var(--border); padding-bottom: 0.6rem; margin-bottom: 1.1rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-.filter-bar > span { font-size: 0.82rem; color: var(--text3); }
+.filter-bar { margin-bottom: 1.1rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .filter-btn { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; font-size: 0.78rem; font-weight: 500; transition: all 0.15s; }
 .filter-btn:hover { background: var(--bg3); }
 .filter-btn.active { color: white; border-color: transparent; }
@@ -216,7 +229,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 #collapse-all-btn { flex-shrink: 0; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); width: 1.8rem; height: 1.8rem; padding: 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 #collapse-all-btn:hover { background: var(--bg4); }
 #collapse-all-btn svg { display: block; width: 0.9rem; height: 0.9rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
-.resize-handle { width: 4px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+.resize-handle { width: 4px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; user-select: none; -webkit-user-select: none; }
 .resize-handle:hover, .resize-handle.dragging { background: var(--flash); }
 
 /* ---- Tree ---- */
@@ -258,6 +271,13 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    child instead, where it scrolls away like everything else. */
 .main-content { flex: 1; overflow-y: auto; padding: 0 1.5rem 1.5rem; }
 .main-content > :first-child { margin-top: 1.5rem; }
+/* The breadcrumbs and the filter bar, pinned while the page scrolls under them.
+
+   Spacing is padding rather than margin throughout: a margin on a sticky box is a transparent
+   strip that content shows through on its way past, and the negative side margins are what let the
+   background reach the edges of a column that is otherwise padded. */
+.main-content > .main-sticky { position: sticky; top: 0; z-index: 6; background: var(--bg); margin: 0 -1.5rem; padding: 1.5rem 1.5rem 0.7rem; }
+.main-sticky > :last-child { margin-bottom: 0; }
 .main-content::-webkit-scrollbar { width: 6px; }
 .main-content::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 .ns-section { margin-bottom: 2.5rem; }
@@ -299,7 +319,10 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .page-head { margin-bottom: 1.6rem; }
 /* The type's identity stays on screen while its members scroll under it. Bled out to the gutters,
    because .main-content is padded and content would otherwise scroll past either side of it. */
-.page-head.sticky-head { position: sticky; top: 0; z-index: 5; background: var(--bg); margin: 0 -1.5rem 1.2rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border2); }
+/* Sticks under the breadcrumbs and filter rather than at the top of the column, and below them in
+   the stack so it slides beneath rather than over. The offset is measured, not written here: the
+   block above is as tall as its filter bar wraps to. */
+.page-head.sticky-head { position: sticky; top: var(--sticky-top, 0px); z-index: 5; background: var(--bg); margin: 0 -1.5rem 1.2rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border2); }
 
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); background: var(--bg3); border-radius: 3px; padding: 0.1rem 0.55rem; text-decoration: none; }
 a.chip:hover { color: var(--flash); }
@@ -337,7 +360,9 @@ a.chip:hover { color: var(--flash); }
 /* The small pill, worn by Explicit and by obsolete. Its own slot each, so retuning one leaves the
    other where it was; the shape and typography are all they actually share. */
 .explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
-.badge-obsolete { background: var(--badge-obsolete); }
+/* Sized as a chip rather than as the Explicit badge it shares a class with: it sits in the chip
+   run, and a label a size smaller than the ones either side of it reads as an afterthought. */
+.badge-obsolete { background: var(--badge-obsolete); font-size: 0.75rem; padding: 0.1rem 0.55rem; }
 .asm-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; color: white; margin-left: auto; opacity: 0.85; white-space: nowrap; text-decoration: none; }
 .member-name { font-size: 0.97rem; font-weight: 600; color: var(--text); }
 /* The interface an explicit implementation came from is a link, but it is also part of a heading. */
@@ -346,8 +371,6 @@ a.chip:hover { color: var(--flash); }
 .member-name a { color: var(--text); text-decoration: none; }
 .member-name a:hover { color: var(--flash); }
 .member-fullname { font-size: 0.72rem; color: var(--fullname); font-family: monospace; margin-top: 0.4rem; margin-bottom: 0.45rem; word-break: break-all; }
-.member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; transition: opacity 0.12s; }
-.member:hover .member-anchor, .member-anchor:focus { opacity: 1; }
 .summary { color: var(--text2); line-height: 1.6; font-size: 0.88rem; }
 .remarks { color: var(--text3); font-size: 0.83rem; margin-top: 0.4rem; }
 .section { margin-top: 0.55rem; font-size: 0.83rem; color: var(--text2); }
@@ -376,7 +399,7 @@ a.see-ref:hover { text-decoration: underline; }
 [hidden] { display: none !important; }
 
 /* ---- Declarations and code ---- */
-.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); background: var(--bg3); border-radius: 3px; padding: 0.5rem 0.7rem; margin-top: 1.25rem; margin-bottom: 1rem; overflow-x: auto; white-space: pre; }
+.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); background: var(--bg3); border-radius: 3px; padding: 0.5rem 0.7rem; margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; }
 .member .declaration { font-size: 0.78rem; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
@@ -397,11 +420,65 @@ code { font-family: monospace; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .table-scroll th, .table-scroll td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
 
+/* ---- Examples ----
+   Tabs rather than one block after another: the same example in three languages is three ways of
+   saying one thing, and stacking them makes a reader scroll past two of them to reach theirs. */
+/* Pushed to the far end of the header row, away from the name and badges that identify the member
+   and out of the way of the chips that qualify it.
+
+   Painted and hovered as the header's own buttons are, because it is the same kind of thing: the
+   one control on a card otherwise made entirely of description. Set a size up from the chips it
+   sits among, which are labels rather than things to press. */
+.chip-action { background: var(--accent); color: var(--oc-white); font-size: 0.82rem; font-weight: 500; padding: 0.18rem 0.65rem; margin-left: auto; }
+a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter: brightness(1.1); }
+.example-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: 0.8rem 0 0; }
+.example-tab { appearance: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); padding: 0.4rem 0.8rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.example-tab:hover { color: var(--text); }
+.example-tab.active { color: var(--flash); border-bottom-color: var(--flash); }
+.example-panel { margin-top: 0.8rem; }
+
+/* ---- Examples dock ----
+   A column of the layout rather than a thing floating over it, so opening an example narrows the
+   member list instead of hiding it and the two can be read against each other. */
+/* Width comes from a custom property rather than an inline style, so dragging it cannot outrank
+   the narrow-screen rule below that turns the dock into a full-screen overlay. */
+.example-dock { position: relative; width: var(--example-dock-width, 42%); min-width: 320px; max-width: 900px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--bg2); border-left: 1px solid var(--border); overflow: hidden; }
+/* Straddles the dock's own left edge instead of taking a column of its own, so it appears and
+   disappears with the dock and costs the layout nothing while closed. */
+.example-resize { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; transition: background 0.15s; z-index: 1; user-select: none; -webkit-user-select: none; }
+.example-resize:hover, .example-resize.dragging { background: var(--flash); }
+.example-dock-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.example-dock-title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; font-size: 0.85rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.example-dock-title .badge { flex-shrink: 0; }
+/* The member the example is for, wherever the code calls it. */
+.example-panel mark { padding: 0 0.1rem; }
+.example-dock-open { margin-left: auto; font-size: 0.74rem; color: var(--text3); text-decoration: none; flex-shrink: 0; }
+.example-dock-open:hover { color: var(--flash); }
+.example-dock-close { appearance: none; border: none; background: none; cursor: pointer; font-size: 1.6rem; line-height: 1; color: var(--text3); padding: 0 0.3rem; flex-shrink: 0; }
+.example-dock-close:hover { color: var(--text); }
+.example-dock-body { overflow: auto; padding: 0 0.9rem 1.2rem; }
+.example-dock-body .ns-heading { display: none; }
+.example-dock-body .example-panel { margin-top: 0; }
+/* Too narrow to give away 42% of it, so the dock takes the width and the content waits behind. */
+@media (max-width: 900px) {
+  .example-dock { position: fixed; inset: 0; width: auto; min-width: 0; max-width: none; z-index: 30; border-left: none; }
+  /* Nothing to drag when it covers the window. */
+  .example-resize { display: none; }
+}
+.example-missing { font-size: 0.85rem; color: var(--text3); font-style: italic; }
+
 /* ---- Enum values and operators ----
    Two tables of members that a card would have padded out rather than filled. */
 .enum-table th, .op-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .enum-table td, .op-table td { padding: 0.45rem 0.5rem; vertical-align: top; }
-.enum-table .enum-name, .op-table .op-symbol { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
+.enum-table .enum-name { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
+/* The expression is the row's identity, so it carries the weight. It is split across three cells
+   and closed in on the symbol from both sides, which is what puts every symbol in the table on one
+   vertical line; the padding is tightened so the three still read as one expression. */
+.op-table .op-left, .op-table .op-mark, .op-table .op-right { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
+.op-table .op-left { text-align: right; padding-right: 0.1rem; }
+.op-table .op-mark { text-align: center; padding-left: 0.3rem; padding-right: 0.3rem; color: var(--tok-keyword); }
+.op-table .op-right { text-align: left; padding-left: 0.1rem; }
 .enum-table .enum-value { font-family: monospace; color: var(--tok-number); white-space: nowrap; text-align: right; }
 /* The operand and result columns are types, and read as the signatures they came out of. */
 .op-table .op-types { font-family: monospace; font-size: 0.8rem; color: var(--text2); }
@@ -509,6 +586,91 @@ const JS = `
     return majorOf(since) <= majorOf(activeVersion);
   }
 
+  // ---- Example tabs ----
+  // The panels are all in the page and all but one carry 'hidden', so the example is readable
+  // with no script at all - this only moves which one that is.
+  //
+  // Delegated rather than bound, because the dock below injects tabs long after this runs, and
+  // scoped to the clicked tab's own set so a docked example and a page showing one at the same
+  // time do not switch each other.
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest && e.target.closest('.example-tab');
+    if (!tab) return;
+
+    var set = tab.closest('.example-set') || document;
+    var chosen = tab.getAttribute('data-panel');
+
+    set.querySelectorAll('.example-tab').forEach(function (other) {
+      var on = other.getAttribute('data-panel') === chosen;
+      other.classList.toggle('active', on);
+      other.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    set.querySelectorAll('.example-panel').forEach(function (panel, i) {
+      panel.classList.toggle('hidden', String(i) !== chosen);
+    });
+  });
+
+  // ---- Examples dock ----
+  // The Examples chip is a link to a real page. This opens that page's examples in a column
+  // beside the member instead, so the two can be read together - and anything that stops it
+  // working falls back to following the link, which is the whole feature minus the convenience.
+  var dock = document.getElementById('example-dock');
+  var dockBody = document.getElementById('example-dock-body');
+  var dockTitle = document.getElementById('example-dock-title');
+  var dockOpen = document.getElementById('example-dock-open');
+
+  function closeDock() {
+    if (!dock) return;
+    dock.classList.add('hidden');
+    dockBody.innerHTML = '';
+  }
+
+  var dockClose = document.getElementById('example-dock-close');
+  if (dockClose) dockClose.addEventListener('click', closeDock);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && dock && !dock.classList.contains('hidden')) closeDock();
+  });
+
+  if (dock && window.fetch && window.DOMParser) {
+    document.addEventListener('click', function (e) {
+      // Anything that asks for a new tab or window is left alone to do that.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
+      var link = e.target.closest && e.target.closest('.chip-action');
+      if (!link) return;
+
+      var href = link.getAttribute('href');
+      e.preventDefault();
+
+      fetch(href)
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('status')); })
+        .then(function (text) {
+          var parsed = new DOMParser().parseFromString(text, 'text/html');
+          var set = parsed.querySelector('.example-set');
+          if (!set) throw new Error('no examples in that page');
+
+          // The heading's nodes rather than its text: its badge is an element whose own text is
+          // the kind, so reading textContent glues 'Method' onto the front of the name.
+          var heading = parsed.querySelector('.page-title');
+          dockBody.innerHTML = '';
+          dockBody.appendChild(set);
+          if (heading) {
+            dockTitle.replaceChildren.apply(dockTitle, heading.childNodes);
+          } else {
+            dockTitle.textContent = 'Examples';
+          }
+          dockOpen.setAttribute('href', href);
+          dock.classList.remove('hidden');
+          dockBody.scrollTop = 0;
+        })
+        .catch(function () {
+          window.location.href = href;
+        });
+    });
+  }
+
   // ---- Filter bar ----
   // Custom properties rather than colours, so the button a kind filters by cannot end up a
   // different colour from the badges it is filtering, and both follow a retuned palette live.
@@ -592,6 +754,31 @@ const JS = `
     });
   });
 
+  // Following a link to something the filter is hiding widens back to All.
+  //
+  // The filter narrows what the list shows; it was never meant to say what you are allowed to link
+  // to. Clicking a property in the tree while the page is filtered to Methods would otherwise jump
+  // to a card that is not being drawn, which reads as the page having gone blank.
+  function revealTarget() {
+    var hash = decodeURIComponent((location.hash || '').slice(1));
+    if (!hash) return;
+
+    var target = document.getElementById(hash);
+    if (!target || !target.classList.contains('hidden')) return;
+
+    var all = document.querySelector('.filter-btn[data-kind="all"]');
+    if (!all) return;
+
+    all.click();
+
+    // The browser already tried to scroll here and found nothing drawn, so ask again now that
+    // there is. scroll-margin-top puts it below whatever is pinned at the top.
+    if (target.scrollIntoView) target.scrollIntoView();
+  }
+
+  window.addEventListener('hashchange', revealTarget);
+  revealTarget();
+
   // ---- Assembly selector ----
   var assemblySelect = document.getElementById('asm-filter');
   if (assemblySelect) {
@@ -619,7 +806,13 @@ const JS = `
     try {
       sessionStorage.setItem(
         treeKey,
-        JSON.stringify({ open: open, scroll: treeRoot ? treeRoot.scrollTop : 0 })
+        JSON.stringify({
+          open: open,
+          scroll: treeRoot ? treeRoot.scrollTop : 0,
+          // What the tree was filtered to is as much a part of where you left it as which groups
+          // were open: filtering for something and clicking it should not hand back the whole tree.
+          q: treeSearch ? treeSearch.value : '',
+        })
       );
     } catch (e) {}
   }
@@ -743,7 +936,35 @@ const JS = `
     });
   }
 
-  if (treeSearch) treeSearch.addEventListener('input', applyTreeFilter);
+  if (treeSearch) {
+    var treeSearchTimer = null;
+    treeSearch.addEventListener('input', function () {
+      applyTreeFilter();
+      // Debounced: typing fires this on every keystroke, and only the last one matters.
+      if (treeSearchTimer) clearTimeout(treeSearchTimer);
+      treeSearchTimer = setTimeout(saveTreeState, 200);
+    });
+
+    // Put the filter back before anything measures the tree, so the open groups, the scroll
+    // position and the check for whether the active entry is on screen all see the filtered shape
+    // rather than the full one.
+    var filtered = readTreeState();
+    if (filtered && filtered.q) {
+      treeSearch.value = filtered.q;
+      applyTreeFilter();
+
+      // Unless it hides where you just arrived. A filter that excludes the page being read is
+      // worse than none: the tree cannot show you what you are looking at, and looks empty for no
+      // reason you can see. Following anything the filter does not match - a link in the page, a
+      // breadcrumb, a search result - drops it rather than leaving that.
+      var here = document.querySelector('.tree-link.active');
+      if (here && here.closest('.hidden')) {
+        treeSearch.value = '';
+        applyTreeFilter();
+        saveTreeState();
+      }
+    }
+  }
 
   if (versionSelect) {
     try {
@@ -766,30 +987,39 @@ const JS = `
     applyTreeFilter();
   }
 
-  // ---- Resizable sidebar ----
-  var sidebar = document.getElementById('sidebar');
-  var handle = document.getElementById('resize-handle');
-  if (sidebar && handle) {
+  // ---- Draggable columns ----
+  // One routine for the sidebar and the examples dock. They differ only in which way the drag
+  // grows them, what they clamp to, and where the width is written; the sidebar opens to the right
+  // of its handle and the dock to the left, which is the whole of the sign difference.
+  function makeResizable(panel, handle, options) {
+    if (!panel || !handle) return;
+
     var resizing = false, startX = 0, startWidth = 0;
 
     try {
-      var stored = localStorage.getItem('docs-sidebar-width');
-      if (stored) sidebar.style.width = stored + 'px';
+      var stored = parseInt(localStorage.getItem(options.key), 10);
+      if (stored) options.apply(stored);
     } catch (e) {}
 
     handle.addEventListener('mousedown', function (event) {
       resizing = true;
       startX = event.clientX;
-      startWidth = sidebar.offsetWidth;
+      startWidth = panel.offsetWidth;
       handle.classList.add('dragging');
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+
+      // Starting a selection is what a mousedown does by default, and user-select alone does not
+      // stop one already under way from extending as the pointer moves. Dragging a divider is not
+      // a text gesture, so the default is refused outright.
+      event.preventDefault();
     });
 
     document.addEventListener('mousemove', function (event) {
       if (!resizing) return;
-      var width = Math.max(150, Math.min(600, startWidth + event.clientX - startX));
-      sidebar.style.width = width + 'px';
+      var next = startWidth + (event.clientX - startX) * options.direction;
+      options.apply(Math.max(options.min, Math.min(options.max, next)));
     });
 
     document.addEventListener('mouseup', function () {
@@ -798,24 +1028,47 @@ const JS = `
       handle.classList.remove('dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      try { localStorage.setItem('docs-sidebar-width', String(sidebar.offsetWidth)); } catch (e) {}
+      document.body.style.webkitUserSelect = '';
+      try { localStorage.setItem(options.key, String(panel.offsetWidth)); } catch (e) {}
     });
   }
 
-  // ---- Sticky type header ----
-  // Jumping to a member must land it below the header rather than behind it, and the header is as
-  // tall as the summary makes it, so the offset is measured rather than guessed at in the css.
+  var sidebar = document.getElementById('sidebar');
+  makeResizable(sidebar, document.getElementById('resize-handle'), {
+    direction: 1,
+    min: 150,
+    max: 600,
+    key: 'docs-sidebar-width',
+    apply: function (px) { sidebar.style.width = px + 'px'; },
+  });
+
+  makeResizable(document.getElementById('example-dock'), document.getElementById('example-resize'), {
+    direction: -1,
+    min: 320,
+    max: 900,
+    key: 'docs-example-width',
+    apply: function (px) {
+      document.documentElement.style.setProperty('--example-dock-width', px + 'px');
+    },
+  });
+
+  // ---- Sticky top ----
+  // Two things pin themselves: the breadcrumbs and filter, then a type page's header under them.
+  // Both are as tall as their contents wrap to, so where the second one sits and where a jumped-to
+  // member has to land are measured rather than guessed at in the css.
+  var mainSticky = document.querySelector('.main-sticky');
   var stickyHead = document.querySelector('.page-head.sticky-head');
-  if (stickyHead) {
-    var measureHead = function () {
-      document.documentElement.style.setProperty(
-        '--anchor-offset',
-        stickyHead.offsetHeight + 16 + 'px'
-      );
+
+  if (mainSticky || stickyHead) {
+    var measureSticky = function () {
+      var top = mainSticky ? mainSticky.offsetHeight : 0;
+      var head = stickyHead ? stickyHead.offsetHeight : 0;
+      document.documentElement.style.setProperty('--sticky-top', top + 'px');
+      document.documentElement.style.setProperty('--anchor-offset', top + head + 16 + 'px');
     };
 
-    measureHead();
-    window.addEventListener('resize', measureHead);
+    measureSticky();
+    window.addEventListener('resize', measureSticky);
   }
 
   // ---- Tree: the member being read ----
@@ -833,18 +1086,47 @@ const JS = `
   markCurrentMember();
   window.addEventListener('hashchange', markCurrentMember);
 
-  // Keep the selected tree entry in view on load. With nothing selected - search, most obviously -
-  // put the tree back where it was left instead, so returning to it does not start from the top.
+  // Where the tree sits has to survive a click on it. Scrolling is what moves it, so scrolling is
+  // what has to be recorded - saving only on expand left the stored position stale by the time it
+  // was read back. Debounced, because a scroll fires continuously; saved again on the way out, so
+  // the last position before a navigation is the one that is kept.
+  if (treeRoot) {
+    var treeScrollTimer = null;
+    treeRoot.addEventListener('scroll', function () {
+      if (treeScrollTimer) clearTimeout(treeScrollTimer);
+      treeScrollTimer = setTimeout(saveTreeState, 120);
+    });
+    window.addEventListener('pagehide', saveTreeState);
+  }
+
+  // Put the tree back where it was left, then move it only if what it points at is off screen.
+  //
+  // Centring unconditionally is what made it jump: a link you just clicked is on screen by
+  // definition, so after a navigation there is nothing to scroll to and every reason not to.
+  // Arriving from a search or a deep link is the case that does need it, and there the entry
+  // really is somewhere else.
+  //
   // A member wins over its type: centring on the type would leave the highlight off-screen in a
   // long member list, which is the case the highlight exists for.
   var active =
     document.querySelector('.tree-child-link.active') ||
     document.querySelector('.tree-link.active');
-  if (active && active.scrollIntoView) {
-    active.scrollIntoView({ block: 'center' });
-  } else if (treeRoot) {
+
+  if (treeRoot) {
     var remembered = readTreeState();
     if (remembered && remembered.scroll) treeRoot.scrollTop = remembered.scroll;
+  }
+
+  if (active && active.scrollIntoView) {
+    var onScreen = false;
+
+    if (treeRoot && active.getBoundingClientRect) {
+      var entry = active.getBoundingClientRect();
+      var pane = treeRoot.getBoundingClientRect();
+      onScreen = entry.top >= pane.top && entry.bottom <= pane.bottom;
+    }
+
+    if (!onScreen) active.scrollIntoView({ block: 'center' });
   }
 
   // Scrolling is part of where you were, and cheap enough to record on a timer rather than a
@@ -857,20 +1139,29 @@ const JS = `
     });
   }
 
-  // ---- Search page ----
-  // Driven by the header's box, which is the only one now. On any other page there is no results
-  // list, so this returns and the box keeps its plain submit-to-/search/ behaviour.
+  // ---- Search ----
+  // One box in the header, answering in two places: the full list on the search page, and a
+  // dropdown of the first few anywhere else. Same index and same matcher behind both, so what the
+  // dropdown offers is the head of what the page would show.
   var input = document.getElementById('search');
   var results = document.getElementById('search-results');
   var status = document.getElementById('search-status');
-  if (!input || !results) return;
+  var navResults = document.getElementById('nav-results');
+  if (!input) return;
 
-  // The server put the scope on the status element, which is also where a no-JS render got it.
+  var onSearchPage = Boolean(results);
+
+  // The search page put the scope on its status element, where a no-JS render also got it. Every
+  // other page carries it on the box, as the assembly name the index is keyed by.
   function searchScope() {
-    return (status && status.getAttribute('data-scope')) || '';
+    return (
+      (status && status.getAttribute('data-scope')) || input.getAttribute('data-scope') || ''
+    );
   }
 
-  input.focus();
+  // Focus belongs to the search page's box alone: taking it on every page would pull the caret out
+  // of whatever the reader was doing and swallow their next keystroke.
+  if (onSearchPage) input.focus();
 
   var index = null;
   var loading = false;
@@ -883,7 +1174,7 @@ const JS = `
     loading = true;
     if (status) status.textContent = 'Loading search index\\u2026';
 
-    fetch(results.getAttribute('data-index-url'))
+    fetch(input.getAttribute('data-index-url') || results.getAttribute('data-index-url'))
       .then(function (r) { return r.json(); })
       .then(function (data) {
         index = data;
@@ -970,29 +1261,93 @@ const JS = `
     return out + escapeHtml(value.slice(at));
   }
 
+  function findMatches(q) {
+    // The assembly the header is scoped to, as an index into the table the asset carries. -1
+    // means no scope, or a name this build does not know, which searches everything.
+    var scope = (index.assemblies || []).indexOf(searchScope());
+
+    var matches = [];
+    for (var i = 0; i < index.entries.length; i++) {
+      var e = index.entries[i];
+      if (scope >= 0 && e[8] !== scope) continue;
+      var pos = e[2].indexOf(q);
+      if (pos < 0) continue;
+      var name = e[0].toLowerCase();
+      var rank = name === q ? 0 : (name.indexOf(q) === 0 ? 1 : (name.indexOf(q) >= 0 ? 2 : 3));
+      matches.push([rank, pos, e]);
+    }
+
+    matches.sort(function (a, b) {
+      return a[0] - b[0] || a[1] - b[1] || a[2][0].localeCompare(b[2][0]);
+    });
+
+    return matches;
+  }
+
+  function hideNav() {
+    if (!navResults) return;
+    navResults.hidden = true;
+    navResults.innerHTML = '';
+  }
+
+  // The url the form would go to, for the row that offers the rest of the results.
+  function searchUrl() {
+    var action = (input.form && input.form.getAttribute('action')) || '/search/';
+    var slug = input.form && input.form.querySelector('input[name="a"]');
+    var params = [];
+    if (input.value) params.push('q=' + encodeURIComponent(input.value));
+    if (slug && slug.value) params.push('a=' + encodeURIComponent(slug.value));
+    return action + (params.length ? '?' + params.join('&') : '');
+  }
+
+  var NAV_LIMIT = 8;
+
+  function renderNav(matches, q) {
+    if (!navResults) return;
+
+    if (matches.length === 0) {
+      navResults.innerHTML = '<div class="nav-empty">No matches</div>';
+      navResults.hidden = false;
+      return;
+    }
+
+    var rows = matches.slice(0, NAV_LIMIT).map(function (m) {
+      var e = m[2];
+      var colour = e[7] || COLORS[e[4]] || 'var(--kind-C)';
+      var ns = (index.namespaces || [])[e[6]] || '';
+      return '<a class="nav-result" href="' + escapeHtml(e[1]) + '" role="option">' +
+        '<span class="tree-badge" style="background:' + colour + '">' + escapeHtml(e[4] || '?') + '</span>' +
+        '<span class="nav-result-name">' + markMatch(e[0], q) + '</span>' +
+        '<span class="nav-result-ns">' + escapeHtml(ns) + '</span></a>';
+    });
+
+    if (matches.length > NAV_LIMIT) {
+      rows.push(
+        '<a class="nav-results-more" href="' + escapeHtml(searchUrl()) + '">' +
+          'All ' + matches.length + ' results' + '</a>'
+      );
+    }
+
+    navResults.innerHTML = rows.join('');
+    navResults.hidden = false;
+  }
+
   function run(query) {
     var q = query.trim().toLowerCase();
-    if (!q) { results.innerHTML = ''; if (status) status.textContent = ''; return; }
+    if (!q) {
+      if (results) results.innerHTML = '';
+      if (status) status.textContent = '';
+      hideNav();
+      return;
+    }
 
     ensureIndex(function () {
-      // The assembly the header is scoped to, as an index into the table the asset carries. -1
-      // means no scope, or a slug this build does not know, which searches everything.
-      var scope = (index.assemblies || []).indexOf(searchScope());
+      var matches = findMatches(q);
 
-      var matches = [];
-      for (var i = 0; i < index.entries.length; i++) {
-        var e = index.entries[i];
-        if (scope >= 0 && e[8] !== scope) continue;
-        var pos = e[2].indexOf(q);
-        if (pos < 0) continue;
-        var name = e[0].toLowerCase();
-        var rank = name === q ? 0 : (name.indexOf(q) === 0 ? 1 : (name.indexOf(q) >= 0 ? 2 : 3));
-        matches.push([rank, pos, e]);
+      if (!onSearchPage) {
+        renderNav(matches, q);
+        return;
       }
-
-      matches.sort(function (a, b) {
-        return a[0] - b[0] || a[1] - b[1] || a[2][0].localeCompare(b[2][0]);
-      });
 
       // Same shape the server builds in Renderer.searchResultHtml.
       // [name, url, haystack, summary, badgeLetter, signature, nsIndex, badgeColour]
@@ -1032,6 +1387,11 @@ const JS = `
     var value = input.value;
     timer = setTimeout(function () {
       run(value);
+
+      // Only the search page's url describes a query. Rewriting it anywhere else would leave a
+      // type page claiming to be a search for whatever was half-typed in the header.
+      if (!onSearchPage) return;
+
       // The scope rides along, so reloading or sharing the url keeps searching the same assembly.
       var params = [];
       if (value) params.push('q=' + encodeURIComponent(value));
@@ -1040,7 +1400,47 @@ const JS = `
     }, 130);
   });
 
-  if (input.value) run(input.value);
+  // ---- The header dropdown ----
+  if (navResults) {
+    // Coming back to a box that still has something in it should show what it found before.
+    input.addEventListener('focus', function () {
+      if (input.value.trim()) run(input.value);
+    });
+
+    document.addEventListener('click', function (event) {
+      if (input.form && !input.form.contains(event.target)) hideNav();
+    });
+
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        hideNav();
+        return;
+      }
+
+      var rows = navResults.hidden ? [] : navResults.querySelectorAll('.nav-result');
+      if (rows.length === 0) return;
+
+      var at = -1;
+      rows.forEach(function (row, i) {
+        if (row.classList.contains('active')) at = i;
+      });
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        var next = at + (event.key === 'ArrowDown' ? 1 : -1);
+        if (next < 0) next = rows.length - 1;
+        if (next >= rows.length) next = 0;
+        rows.forEach(function (row, i) { row.classList.toggle('active', i === next); });
+        rows[next].scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter' && at >= 0) {
+        // Enter with nothing picked submits the form, which is the whole result list.
+        event.preventDefault();
+        location.href = rows[at].getAttribute('href');
+      }
+    });
+  }
+
+  if (input.value && onSearchPage) run(input.value);
 })();
 `;
 

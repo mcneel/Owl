@@ -153,6 +153,11 @@ class Site {
         return html ? this.html(html) : this.notFound(pathname);
       }
 
+      case 'example': {
+        const html = this.renderer.example(route.slug, route.anchor);
+        return html ? this.html(html) : this.notFound(pathname);
+      }
+
       case 'assembly': {
         const assembly = this.assemblyBySlug(route.slug);
         return assembly ? this.html(this.renderer.assembly(assembly.name)) : this.notFound(pathname);

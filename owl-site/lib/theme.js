@@ -35,10 +35,14 @@ const ENUM_COLOR = 'var(--oc-yellow-6)';
  *
  * An enum keeps the T badge and an enum value keeps F, but both take the enum colour, so an enum
  * and the values inside it read as one family and neither is mistaken for a field.
+ *
+ * A finalizer wears F for the ~ it is written with, and takes the constructor's colour: the two
+ * are the ends of an object's life and neither is a field.
  */
 const KIND_COLOR_SLOTS = {
   enum: 'enum',
   enumvalue: 'enum',
+  destructor: 'C',
 };
 
 /**
@@ -80,7 +84,7 @@ const KIND_MAP = {
   // Members
   method: ['M', 'Method'],
   constructor: ['C', 'Constructor'],
-  destructor: ['M', 'Finalizer'],
+  destructor: ['F', 'Finalizer'],
   operator: ['M', 'Operator'],
   conversion: ['M', 'Conversion'],
   property: ['P', 'Property'],

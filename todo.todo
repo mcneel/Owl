@@ -1,3 +1,29 @@
-- choose better colors
-- operator overloads with their signatures, grouped.
-- test on rhinocommon for comparison
+- namespace/ ?
+- namespace mode when --api is not supplied
+- resizing tree or example panel makes tree items randomly look selecteds
+- use '.Name' to search for members in examples
+- toggle inherited, toggle card details
+- type title wraps when window is small
+- agent md files for each entry
+
+
+dotnet publish Ownl.slnx
+
+./dist/owl serve \
+   --name "RhinoCode API" \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code/Rhino.Runtime.Code.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Editor/Rhino.Runtime.Code.Editor.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Languages.IronPython2/Rhino.Runtime.Code.Languages.IronPython2.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Languages.PythonNet/Rhino.Runtime.Code.Languages.PythonNet.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Languages.Roslyn/Rhino.Runtime.Code.Languages.Roslyn.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Remote/Rhino.Runtime.Code.Remote.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Serialization/Rhino.Runtime.Code.Serialization.csproj \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/src/Rhino.Runtime.Code.Testing/Rhino.Runtime.Code.Testing.csproj \
+  --docs /Users/ein/gits/rhino-wip/src4/DotNetSDK/RhinoCode/docs/api \
+  -o /Users/ein/Downloads/rcode
+
+./dist/owl serve \
+   --name "RhinoCommon API" \
+  --examples /Users/ein/gits/rhino-wip/src4/DotNetSDK/rhinocommon \
+  /Users/ein/gits/rhino-wip/src4/DotNetSDK/rhinocommon/dotnet/RhinoCommon.csproj \
+  -o /Users/ein/Downloads/rc/

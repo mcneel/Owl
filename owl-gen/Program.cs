@@ -124,7 +124,7 @@ public static class OwlGen
         }
       }
 
-      var builder = new ApiBuilder(compilation, inputs, options.RepoRoot, owned, findings);
+      var builder = new ApiBuilder(compilation, inputs, options.RepoRoot, owned, findings, options.ExamplesRoot);
       ApiAssembly assembly = builder.Build();
       assemblies.Add(assembly);
 
@@ -162,6 +162,13 @@ public static class OwlGen
       log.WriteLine($"warning  {findings.UnresolvedCrefs.Count} unresolved cref(s)");
     }
 
+    if (findings.MissingExamples.Count > 0)
+    {
+      log.WriteLine(
+          $"warning  {findings.MissingExamples.Count} example file(s) not found, " +
+          $"first: {findings.MissingExamples[0]} (try --examples <dir>)");
+    }
+
     foreach (string error in findings.CompilationErrors)
     {
       log.WriteLine("error    " + error);
@@ -193,6 +200,15 @@ public static class OwlGen
       }
     }
 
+    if (findings.MissingExamples.Count > 0)
+    {
+      log.WriteLine($"  {findings.MissingExamples.Count} example file(s) not found, first 20:");
+      foreach (string path in findings.MissingExamples.Distinct(StringComparer.OrdinalIgnoreCase).Take(20))
+      {
+        log.WriteLine("    " + path);
+      }
+    }
+
     bool failed = findings.CompilationErrors.Count > 0 || findings.UnresolvedCrefs.Count > 0;
 
     if (!failed && findings.Undocumented.Count == 0)
@@ -220,6 +236,12 @@ sealed class CommandLineOptions
 
   /// <summary>Root that source paths are made relative to.</summary>
   public string RepoRoot { get; private set; } = "";
+
+  /// <summary>
+  /// Where a &lt;code source="..."/&gt; path is rooted. Null leaves it to the
+  /// project directory and the repo root, which is right for most layouts.
+  /// </summary>
+  public string? ExamplesRoot { get; private set; }
 
   /// <summary>
   /// Site name, recorded in the model rather than passed at render time.
@@ -297,6 +319,10 @@ sealed class CommandLineOptions
 
         case "--repo-root":
           repoRoot = Path.GetFullPath(Next(args, ref i, arg));
+          break;
+
+        case "--examples":
+          options.ExamplesRoot = Path.GetFullPath(Next(args, ref i, arg));
           break;
 
         case "--tfm":
@@ -421,6 +447,7 @@ sealed class CommandLineOptions
         --tfm <tfm>           Target framework to document (default: net8.0)
         -c, --configuration   Build configuration (default: Debug)
         --repo-root <dir>     Root that source paths are made relative to (default: git root)
+        --examples <dir>      Root for <code source="..."/> paths (default: project dir, repo root)
         --skip-msbuild        Reuse previously captured project inputs
         --no-restore          Skip the restore pass before capturing inputs
         --verify              Report undocumented public API and unresolved crefs; non-zero exit

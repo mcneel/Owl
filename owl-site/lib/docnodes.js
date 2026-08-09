@@ -11,6 +11,22 @@ const { highlight } = require('./highlight');
  * text.
  */
 
+/**
+ * What a code block with no language stated is taken to be.
+ *
+ * A <code> in a doc comment usually says nothing about its language, and this documents a C# API
+ * being read by people writing C#. Decided here rather than in the model, so the model stays
+ * honest about what the comment said and the guess can change without regenerating.
+ *
+ * Authored markdown is deliberately not covered by this: a fence there with no language is as
+ * likely to be a shell transcript or a file listing as it is to be code.
+ */
+const DEFAULT_CODE_LANGUAGE = 'cs';
+
+function codeLanguage(node) {
+  return (node && node.lang) || DEFAULT_CODE_LANGUAGE;
+}
+
 /** External types get a link to Microsoft Learn when they look like BCL types. */
 function learnUrl(docId) {
   if (!docId) return null;
@@ -63,8 +79,8 @@ function renderNode(node, context) {
       if (context.inline) {
         return `<code>${escape((node.v || '').replace(/\s+/g, ' ').trim())}</code>`;
       }
-      const lang = node.lang ? ` class="language-${attr(node.lang)}"` : '';
-      return `<pre><code${lang}>${highlight(node.v || '', node.lang)}</code></pre>`;
+      const lang = codeLanguage(node);
+      return `<pre><code class="language-${attr(lang)}">${highlight(node.v || '', lang)}</code></pre>`;
     }
 
     case 'para':
@@ -102,9 +118,28 @@ function renderNode(node, context) {
   }
 }
 
+/**
+ * A member's label with its declaring type taken off: 'KeyBinding.Register(string)' as
+ * 'Register(string)'. The parameter list stays, since that is what tells overloads apart.
+ */
+function shortMemberLabel(label) {
+  const paren = label.indexOf('(');
+  const head = paren < 0 ? label : label.slice(0, paren);
+  const dot = head.lastIndexOf('.');
+  return dot < 0 ? label : head.slice(dot + 1) + (paren < 0 ? '' : label.slice(paren));
+}
+
 function renderCref(node, context) {
-  const label = node.label || node.v || node.id || '';
+  let label = node.label || node.v || node.id || '';
   const url = crefUrl(node, context);
+
+  // On a type's own page, its members are referred to by name alone. Repeating the type in front
+  // of every one says nothing a reader on that page does not already know, and the prefix is
+  // longer than the name it qualifies. A reference to the type itself keeps its name, since
+  // containingTypeDocId returns nothing for one and there is nothing to strip.
+  if (context.selfType && containingTypeDocId(node.id) === context.selfType) {
+    label = shortMemberLabel(label);
+  }
 
   // Nothing to point at, so show the label without pretending it is a link.
   if (!url) {
@@ -234,4 +269,4 @@ function renderList(node, context) {
   return out + `</${tag}>`;
 }
 
-module.exports = { render, toText, learnUrl, containingTypeDocId };
+module.exports = { render, toText, learnUrl, containingTypeDocId, codeLanguage };

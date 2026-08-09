@@ -66,6 +66,16 @@ class Routes {
   }
 
   /**
+   * A member's examples, which get a page of their own rather than a place on the type page.
+   *
+   * Examples pulled from files run to hundreds of lines each, and several languages of the same
+   * example is the normal case, so inlining them would bury the member list they belong to.
+   */
+  example(typeSlug, anchor) {
+    return `${this.base}/example/${typeSlug}/${anchor}/`;
+  }
+
+  /**
    * The search page, optionally narrowed to one assembly.
    *
    * @param {string} query
@@ -117,6 +127,10 @@ class Routes {
 
     if (parts[0] === 'type' && parts.length === 2) {
       return { kind: 'type', slug: parts[1] };
+    }
+
+    if (parts[0] === 'example' && parts.length === 3) {
+      return { kind: 'example', slug: parts[1], anchor: parts[2] };
     }
 
     if (parts[0] === 'namespace' && parts.length === 2) {

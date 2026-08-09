@@ -19,8 +19,9 @@ const KEYWORDS = {
   csharp: new Set(`abstract as async await base bool break byte case catch char checked class const
     continue decimal default delegate do double dynamic else enum event explicit extern false
     finally fixed float for foreach get goto if implicit in init int interface internal is lock
-    long namespace new null object operator out override params private protected public readonly
-    record ref return sbyte sealed set short sizeof stackalloc static string struct switch this
+    long namespace new null object operator out override params partial private protected public
+    readonly record ref return sbyte sealed set short sizeof stackalloc static string struct switch
+    this
     throw true try typeof uint ulong unchecked unsafe ushort using var virtual void volatile when
     where while with yield`.split(/\s+/)),
 
@@ -31,7 +32,25 @@ const KEYWORDS = {
   javascript: new Set(`async await break case catch class const continue default delete do else
     export extends false finally for from function if import in instanceof let new null of return
     static super switch this throw true try typeof undefined var void while yield`.split(/\s+/)),
+
+  // Lower case throughout, because Visual Basic is not case sensitive and the source will write
+  // these however it likes. See CASE_FOLDED.
+  vbnet: new Set(`addhandler addressof alias and andalso as boolean byref byte byval call case catch
+    cbool cbyte cchar cdate cdbl cdec char cint class clng cobj const continue csbyte cshort csng
+    cstr ctype cuint culng cushort date decimal declare default delegate dim directcast do double
+    each else elseif end enum erase error event exit false finally for friend function get gettype
+    getxmlnamespace global gosub goto handles if implements imports in inherits integer interface
+    is isnot let lib like long loop me mod module mustinherit mustoverride mybase myclass namespace
+    narrowing new next not nothing notinheritable notoverridable object of on operator option
+    optional or orelse out overloads overridable overrides paramarray partial private property
+    protected public raiseevent readonly redim removehandler resume return sbyte select set shadows
+    shared short single static step stop string structure sub synclock then throw to true try
+    trycast typeof uinteger ulong ushort using variant wend when while widening with withevents
+    writeonly xor`.split(/\s+/)),
 };
+
+/** Languages whose keywords match regardless of case. */
+const CASE_FOLDED = new Set(['vbnet']);
 
 const ALIASES = {
   cs: 'csharp',
@@ -44,6 +63,11 @@ const ALIASES = {
   javascript: 'javascript',
   json: 'javascript',
   ts: 'javascript',
+  vb: 'vbnet',
+  vbnet: 'vbnet',
+  'vb.net': 'vbnet',
+  visualbasic: 'vbnet',
+  'visual basic': 'vbnet',
 };
 
 /**
@@ -74,6 +98,18 @@ const TOKENS = {
     ['ident', /[A-Za-z_$][\w$]*/],
     ['punct', /[{}()[\]<>;,.:?!=+\-*/%&|^~]+/],
   ],
+  // The apostrophe is a comment here rather than a quote, so that rule has to come first or a
+  // comment containing "..." would be read as code. The letters of REM are spelled out because
+  // these are merged into one case-sensitive regex.
+  vbnet: [
+    ['comment', /'[^\n]*|\b[Rr][Ee][Mm]\b[^\n]*/],
+    ['meta', /^\s*#\s*\w+[^\n]*/m],
+    // Doubled quotes are how a quote is escaped; there is no backslash escape.
+    ['string', /\$?"(?:[^"]|"")*"[cC]?/],
+    ['number', /&[hH][0-9a-fA-F_]+|&[oO][0-7_]+|&[bB][01_]+|\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?[FRDSILfrdsil]*\b/],
+    ['ident', /[A-Za-z_]\w*/],
+    ['punct', /[{}()[\]<>;,.:?!=+\-*/%&|^~]+/],
+  ],
 };
 
 /**
@@ -82,9 +118,10 @@ const TOKENS = {
  * @param {string} text      the identifier
  * @param {string} rest      the code following it, for the one bit of lookahead this needs
  * @param {Set}    keywords  the language's reserved words
+ * @param {boolean} fold     the language is case insensitive, so match on the folded form too
  */
-function classifyIdent(text, rest, keywords) {
-  if (keywords.has(text)) return 'keyword';
+function classifyIdent(text, rest, keywords, fold) {
+  if (keywords.has(text) || (fold && keywords.has(text.toLowerCase()))) return 'keyword';
 
   // Called or being declared: the only case a single token can settle on its own.
   if (/^\s*\(/.test(rest)) return 'func';
@@ -119,6 +156,7 @@ function highlight(code, languageHint) {
 
   const { regex, kinds } = patternFor(language);
   const keywords = KEYWORDS[language];
+  const fold = CASE_FOLDED.has(language);
 
   let out = '';
   let last = 0;
@@ -146,7 +184,7 @@ function highlight(code, languageHint) {
     const text = match[0];
 
     if (kind === 'ident') {
-      kind = classifyIdent(text, code.slice(match.index + text.length), keywords);
+      kind = classifyIdent(text, code.slice(match.index + text.length), keywords, fold);
     }
 
     out += kind ? `<span class="tok-${kind}">${escape(text)}</span>` : escape(text);

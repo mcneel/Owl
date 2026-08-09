@@ -134,6 +134,81 @@ const CALLABLE_KINDS = new Set(['method', 'constructor', 'destructor', 'operator
 /** The two kinds the compiler spells `op_`, listed as symbols rather than under those names. */
 const OPERATOR_KINDS = new Set(['operator', 'conversion']);
 
+/** What a tab is labelled, for the language hints a doc comment actually writes. */
+const LANGUAGE_LABELS = {
+  cs: 'C#',
+  'c#': 'C#',
+  csharp: 'C#',
+  vb: 'VB.NET',
+  vbnet: 'VB.NET',
+  'vb.net': 'VB.NET',
+  visualbasic: 'VB.NET',
+  py: 'Python',
+  py3: 'Python',
+  python: 'Python',
+  js: 'JavaScript',
+  javascript: 'JavaScript',
+  ts: 'TypeScript',
+  cpp: 'C++',
+  'c++': 'C++',
+  fs: 'F#',
+  'f#': 'F#',
+};
+
+function languageLabel(language) {
+  const key = String(language || '').toLowerCase().trim();
+  if (LANGUAGE_LABELS[key]) return LANGUAGE_LABELS[key];
+  return key ? key.replace(/^./, (c) => c.toUpperCase()) : 'Code';
+}
+
+/**
+ * Tab order: the two languages most of this API's readers write, then whatever else is there.
+ *
+ * Keyed on the label rather than the hint, so every spelling of a language ranks as one thing.
+ */
+const LANGUAGE_ORDER = ['C#', 'Python'];
+
+function languageRank(language) {
+  const rank = LANGUAGE_ORDER.indexOf(languageLabel(language));
+  return rank === -1 ? LANGUAGE_ORDER.length : rank;
+}
+
+/**
+ * The code blocks inside an <example>, wherever they sit in it. These are what the tabbed page
+ * shows, once something has decided the example belongs on one.
+ */
+function exampleCodeNodes(docs) {
+  const found = [];
+
+  const walk = (nodes) => {
+    for (const node of nodes || []) {
+      if (node.t === 'code') found.push(node);
+      if (node.children) walk(node.children);
+      if (node.items) {
+        for (const item of node.items) {
+          walk(item.term);
+          walk(item.description);
+        }
+      }
+    }
+  };
+
+  walk(docs && docs.example);
+  return found;
+}
+
+/**
+ * The code an example pulled out of files, which is what sends it to a page of its own.
+ *
+ * A block written in the comment is as long as its author was willing to type and belongs on the
+ * card, where it can be read against the summary it explains. A file runs to hundreds of lines in
+ * three languages, and only that is worth a second page. An example holding both goes whole to the
+ * page rather than being split across the two.
+ */
+function exampleFileNodes(docs) {
+  return exampleCodeNodes(docs).filter((node) => Boolean(node.src));
+}
+
 /**
  * The symbol a C# operator method stands for, keyed by the name the compiler gave it.
  *
@@ -251,8 +326,28 @@ class Renderer {
       logoDark: this.logoDark,
       routes: this.routes,
       siteUrl: this.siteUrl,
+      homeUrl: this.homeUrl(),
       ...options,
     });
+  }
+
+  /**
+   * Where 'home' goes.
+   *
+   * A landing page whose whole job is to list the assemblies has nothing to list when there is one
+   * of them, and the assembly's own page already opens the set. So on a single-assembly site every
+   * way back - the site name, the breadcrumb - goes straight there and the root is left as a
+   * redirect for anyone who arrives at it directly.
+   */
+  homeUrl() {
+    return this.assemblyNames.length === 1
+      ? this.routes.assembly(this.assemblyNames[0])
+      : this.routes.home();
+  }
+
+  /** True when the root is a redirect rather than a page of its own. */
+  get rootRedirects() {
+    return this.assemblyNames.length === 1;
   }
 
   /**
@@ -262,7 +357,7 @@ class Renderer {
    * page shows a picture.
    */
   homeCrumb() {
-    return { label: 'API', url: this.routes.home(), icon: 'home' };
+    return { label: 'API', url: this.homeUrl(), icon: 'home' };
   }
 
   summaryHtml(docs) {
@@ -304,10 +399,12 @@ class Renderer {
   }
 
   /**
-   * Readonly or SetOnly, ahead of the kind badge.
+   * Readonly or SetOnly, at the head of the chips.
    *
-   * Neither is shown for the ordinary read-write property, which is what makes the badge worth
-   * noticing when it does appear.
+   * It sits among them because it says what they say - how the member may be used, not what it is
+   * - and 'init' beside it is the same kind of fact about the same accessors. Neither label is
+   * shown for the ordinary read-write property, which is what makes it worth noticing when it
+   * does appear.
    */
   accessBadgeHtml(member) {
     const accessors = member.accessors;
@@ -417,9 +514,32 @@ class Renderer {
    * The highlighter has already picked them out, so this only resolves names. A dotted name arrives
    * as two tokens either side of a punctuation dot, which is why 'Code.Inner' links its halves
    * separately - both lead somewhere worth going.
+   *
+   * @param ownName  the name the signature declares, which is not a reference to anything. The
+   *   highlighter cannot tell one from a type: both are capitalised words, and a member is
+   *   routinely named after the type it returns, which is how 'MeshingParameters
+   *   MeshingParameters' ends up linked twice to the same page. A method's name escapes this by
+   *   being followed by '(', which makes it a call rather than a type to the highlighter.
    */
-  linkTypesIn(html, assemblyName, selfUrl) {
+  linkTypesIn(html, assemblyName, selfUrl, ownName) {
+    // The last token bearing that name, not every one: in 'Foo Foo' the first is the type being
+    // returned and only the second is the thing being declared.
+    let declaredAt = -1;
+    if (ownName) {
+      const token = `<span class="tok-type">${escape(ownName)}</span>`;
+      for (let at = html.indexOf(token); at >= 0; at = html.indexOf(token, at + 1)) {
+        declaredAt = at;
+      }
+
+      // Unless a parameter list follows it. Then the declared name is the one the highlighter
+      // marked as a call, and this token is the return type in front of it - which a method named
+      // after what it returns would otherwise lose its link to.
+      if (declaredAt >= 0 && html.indexOf('(', declaredAt) !== -1) declaredAt = -1;
+    }
+
     return html.replace(/<span class="tok-type">([^<]*)<\/span>/g, (whole, name, offset) => {
+      if (offset === declaredAt) return whole;
+
       const url = this.typeUrlByName(
         name,
         assemblyName,
@@ -434,11 +554,12 @@ class Renderer {
   }
 
   /** A highlighted, cross-linked signature: the one call every place that shows one makes. */
-  signatureHtml(code, assemblyName, selfSlug) {
+  signatureHtml(code, assemblyName, selfSlug, ownName) {
     return this.linkTypesIn(
       highlight(code, 'csharp'),
       assemblyName,
-      selfSlug ? this.routes.type(selfSlug) : ''
+      selfSlug ? this.routes.type(selfSlug) : '',
+      ownName
     );
   }
 
@@ -541,7 +662,7 @@ class Renderer {
       '<div class="member-header">' +
       this.badgeHtml(type.kind) +
       heading +
-      (type.obsolete ? '<span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
+      (type.obsolete ? '<span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
       // Chipped only when it is not public, the way a member card does it: nested types are
       // commonly protected or internal, and the card is otherwise silent about it.
       (type.accessibility && type.accessibility !== 'public'
@@ -618,7 +739,39 @@ class Renderer {
   // Home
   // ------------------------------------------------------------------
 
+  /**
+   * The root of a single-assembly site, which has nothing of its own to say.
+   *
+   * A page holding a refresh rather than a 302, because an exported site has to work from a plain
+   * file host with no rewrite rules: there is nowhere to configure a redirect, so the page has to
+   * be one. Kept out of the index, and pointed at the assembly as its canonical, so the two urls
+   * do not compete. Nothing inside the site links here - see homeUrl - so this is reached only by
+   * a bookmark or a typed address.
+   */
+  rootRedirect() {
+    const url = this.routes.assembly(this.assemblyNames[0]);
+    const absolute = this.siteUrl ? this.siteUrl.replace(/\/$/, '') + url : url;
+    const label = this.assemblyNames[0];
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=${attr(url)}">
+<meta name="robots" content="noindex,follow">
+<link rel="canonical" href="${attr(absolute)}">
+<title>${escape(this.siteName)}</title>
+</head>
+<body>
+<p><a href="${attr(url)}">${escape(label)}</a></p>
+</body>
+</html>
+`;
+  }
+
   home() {
+    if (this.rootRedirects) return this.rootRedirect();
+
     const main = this.model.siteMain;
 
     // The landing page is authored: docs/api/MAIN.md. Without it, fall back to a bare index so
@@ -833,12 +986,142 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
   // Type
   // ------------------------------------------------------------------
 
+  /**
+   * One member's examples, tabbed by language.
+   *
+   * A page rather than a section on the type: these come out of files that run to hundreds of
+   * lines, usually three of them saying the same thing in three languages, and putting that on the
+   * type page would bury every member under it.
+   */
+  example(slug, anchor) {
+    const found = this.model.typeBySlug(slug);
+    if (!found) return null;
+
+    const { type, assembly } = found;
+    const member = (type.members || []).find((m) => m.anchor === anchor);
+    if (!member) return null;
+
+    // Only a file-backed example gets a page; anything else is on the card already.
+    if (exampleFileNodes(member.docs).length === 0) return null;
+
+    // Ranked, then by the order the comment listed them, so languages of equal rank keep the
+    // sequence the author chose rather than one this decides for them.
+    const code = exampleCodeNodes(member.docs)
+      .map((node, i) => ({ node, i }))
+      .sort(
+        (a, b) =>
+          languageRank(docnodes.codeLanguage(a.node)) - languageRank(docnodes.codeLanguage(b.node)) || a.i - b.i
+      )
+      .map((entry) => entry.node);
+
+    const name = memberDisplayName(member);
+    const memberUrl = this.routes.member(type.slug, member.anchor);
+
+    // Everything in the example that is not a code block: the prose around it, which is where any
+    // explanation of what the example does actually lives.
+    const prose = (member.docs.example || []).filter((node) => node.t !== 'code');
+
+    const tabs = code
+      .map((node, i) => {
+        const label = languageLabel(docnodes.codeLanguage(node));
+        return (
+          `<button type="button" class="example-tab${i === 0 ? ' active' : ''}" ` +
+          `role="tab" aria-selected="${i === 0}" aria-controls="example-panel-${i}" ` +
+          `id="example-tab-${i}" data-panel="${i}">${escape(label)}</button>`
+        );
+      })
+      .join('');
+
+    const panels = code
+      .map((node, i) => {
+        const language = docnodes.codeLanguage(node);
+
+        // The member's own name marked wherever the example calls it: these run long and
+        // demonstrate a whole workflow, so the line the reader came for needs finding.
+        const rendered =
+          typeof node.v === 'string' && node.v.length > 0
+            ? markMarkup(highlight(node.v, language), lastSegment(member.name).toLowerCase())
+            : null;
+
+        // A source that resolved to nothing still gets a panel: saying which file is missing is
+        // more use than a tab that opens on emptiness.
+        const body =
+          rendered === null
+            ? `<p class="example-missing">This example could not be read from ${escape(node.src || 'its source file')}.</p>`
+            : `<pre><code class="language-${attr(language)}">${rendered}</code></pre>`;
+
+        return (
+          `<div class="example-panel${i === 0 ? '' : ' hidden'}" role="tabpanel" ` +
+          `id="example-panel-${i}" aria-labelledby="example-tab-${i}">` +
+          body +
+          '</div>'
+        );
+      })
+      .join('');
+
+    const body = `
+<article>
+<div class="page-head">
+  <h1 class="page-title">${this.badgeHtml(member.kind)}${escape(name)}</h1>
+  <div class="page-subtitle">${escape(type.fullName)}</div>
+  <p class="page-intro"><a href="${attr(memberUrl)}">Back to ${escape(name)} on ${escape(type.name)}</a></p>
+</div>
+
+${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docContext)}</div>` : ''}
+
+<section class="ns-section example-set">
+  <h2 class="ns-heading">Examples</h2>
+  <div class="example-tabs" role="tablist">${tabs}</div>
+  ${panels}
+</section>
+</article>`;
+
+    const description = `Examples for ${name} in ${type.fullName}.`;
+
+    return this.shell({
+      title: `${type.name}.${name} examples`,
+      description,
+      canonical: this.routes.example(type.slug, member.anchor),
+      breadcrumbs: [
+        this.homeCrumb(),
+        ...(type.namespace
+          ? [{ label: type.namespace, url: this.routes.namespace(type.namespace) }]
+          : []),
+        { label: type.name, url: this.routes.type(type.slug) },
+        { label: 'Examples', url: this.routes.example(type.slug, member.anchor) },
+      ],
+      body,
+      sidebar: this.categoryTree(assembly, { activeType: type }),
+      treeKey: slugify(assembly),
+      assemblies: this.assemblyChoices(assembly),
+      currentAssembly: assembly,
+      jsonLd: {
+        '@type': 'TechArticle',
+        headline: `${type.fullName}.${name} examples`,
+        description,
+      },
+    });
+  }
+
   type(slug) {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
     const { type, assembly } = found;
 
+    // Which type's page this is, for as long as it is being rendered: crefs into it are written
+    // by member name alone. Set on the shared context rather than threaded through the fifteen
+    // places that render doc nodes, since a page is rendered start to finish before the next one
+    // begins. The finally is what keeps a thrown render from leaking it into the page after.
+    this.docContext.selfType = type.docId;
+    try {
+      return this.typeBody(type, assembly);
+    } finally {
+      this.docContext.selfType = null;
+    }
+  }
+
+  typeBody(type, assembly) {
     const summaryHtml = this.summaryHtml(type.docs);
     const members = this.sortedMembers(type, true);
 
@@ -1222,7 +1505,7 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * Operators and conversions as a table: symbol, operands, result, description.
+   * Operators and conversions as a table: the operation, its result, and what it does.
    *
    * The enum table's shape, for the enum table's reason. A card is worth its space for a member
    * whose parameters have names and meanings worth a paragraph each; an operator's operands are
@@ -1233,17 +1516,10 @@ ${this.seeAlsoHtml(type.docs)}
   operatorsHtml(members, kind) {
     const rows = members
       .map((member) => {
-        const operands = (member.parameters || [])
-          .map((p) => this.typeRefHtml(p.type))
-          .join(', ');
-
         return (
           `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
-          `<td class="op-symbol">${escape(operatorSymbol(member))}` +
-          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
-          '</td>' +
-          `<td class="op-types">${operands}</td>` +
+          this.operationCells(member) +
           `<td class="op-types">${this.typeRefHtml(member.returnType)}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
           '</tr>'
@@ -1255,8 +1531,38 @@ ${this.seeAlsoHtml(type.docs)}
       `<section class="ns-section type-section" id="${attr(kind)}">` +
       `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
       '<div class="table-scroll"><table class="op-table">' +
-      '<thead><tr><th>Operator</th><th>Operands</th><th>Result</th><th>Description</th></tr></thead>' +
+      // One heading over three cells: the operation is one idea, but splitting it into columns is
+      // what makes every symbol in the table land on the same vertical line.
+      '<thead><tr><th colspan="3">Operation</th><th>Result</th><th>Description</th></tr></thead>' +
       `<tbody>${rows}</tbody></table></div></section>`
+    );
+  }
+
+  /**
+   * The operator written the way it is used, as three cells: `Point3d | + | Vector3d`.
+   *
+   * The symbol on its own says which operator and the operand types on their own say which
+   * overload, but neither says what you would type. Three cells rather than one string because a
+   * column of expressions is only scannable if the symbols line up, which means the operand on
+   * each side has to be its own column, closing on the symbol from either direction.
+   *
+   * A unary operator leaves the left cell empty, so its symbol still lands on the same line as
+   * every other, with its one operand where a right-hand operand goes.
+   */
+  operationCells(member) {
+    const operands = (member.parameters || []).map((p) => this.typeRefHtml(p.type));
+    const binary = operands.length >= 2;
+
+    const left = binary ? operands[0] : '';
+    const right = binary ? operands.slice(1).join(', ') : operands[0] || '';
+    const obsolete = member.obsolete
+      ? ' <span class="explicit-badge badge-obsolete">Obsolete</span>'
+      : '';
+
+    return (
+      `<td class="op-left">${left}</td>` +
+      `<td class="op-mark">${escape(operatorSymbol(member))}</td>` +
+      `<td class="op-right">${right}${obsolete}</td>`
     );
   }
 
@@ -1274,7 +1580,7 @@ ${this.seeAlsoHtml(type.docs)}
           `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           `<td class="enum-name">${escape(member.name)}` +
-          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
+          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
           '</td>' +
           `<td class="enum-value">${escape(member.constantValue || '')}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
@@ -1375,9 +1681,19 @@ ${this.seeAlsoHtml(type.docs)}
       member.docs && member.docs.remarks
         ? `<div class="remarks"><strong>Remarks:</strong> ${docnodes.render(member.docs.remarks, this.docContext)}</div>`
         : '';
+    // An example that reads from files goes to a page of its own, reached by the button in the
+    // header. Anything else - prose, or code written out in the comment - stays on the card, and
+    // is rendered plainly there: nothing is marked up, because there is no wall of code to find
+    // your way through.
+    const exampleFiles = exampleFileNodes(member.docs);
     const example =
-      member.docs && member.docs.example
+      member.docs && member.docs.example && exampleFiles.length === 0
         ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(member.docs.example, this.docContext)}</div>`
+        : '';
+
+    const exampleButton =
+      exampleFiles.length > 0
+        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Examples</a>`
         : '';
 
     return (
@@ -1386,16 +1702,14 @@ ${this.seeAlsoHtml(type.docs)}
       `${this.sinceAttr(member.docs)}>` +
       '<div class="member-header">' +
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
-      this.accessBadgeHtml(member) +
       this.badgeHtml(member.kind) +
       `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(member.name)}</h3>` +
-      (member.obsolete ? '<span class="explicit-badge badge-obsolete">obsolete</span>' : '') +
+      (member.obsolete ? '<span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
+      this.accessBadgeHtml(member) +
       chips.map((c) => `<span class="chip">${escape(c)}</span>`).join('') +
-      `<a class="member-anchor" href="#${attr(member.anchor)}" ` +
-      // Named as the heading beside it is, so the two do not read as different members.
-      `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>` +
+      exampleButton +
       '</div>' +
-      `<div class="declaration">${this.signatureHtml(member.signature, assemblyName, selfSlug)}</div>` +
+      `<div class="declaration">${this.signatureHtml(member.signature, assemblyName, selfSlug, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '') +
       remarks +
@@ -1755,7 +2069,7 @@ ${this.seeAlsoHtml(type.docs)}
       '</div>' +
       (row.signature
         ? `<div class="r-sig">${markMarkup(
-            this.signatureHtml(row.signature, row.assembly),
+            this.signatureHtml(row.signature, row.assembly, '', lastSegment(row.name)),
             query
           )}</div>`
         : '') +
@@ -1859,7 +2173,7 @@ ${this.seeAlsoHtml(type.docs)}
         r.haystack,
         r.summary,
         theme.badgeLetter(r.kind),
-        this.signatureHtml(r.signature, r.assembly),
+        this.signatureHtml(r.signature, r.assembly, '', lastSegment(r.name)),
         seen.get(r.namespace),
         // The letter cannot carry the colour on its own: an enum wears a T badge in the F colour.
         theme.kindColor(r.kind),
@@ -1873,12 +2187,22 @@ ${this.seeAlsoHtml(type.docs)}
   // ------------------------------------------------------------------
 
   sitemapUrls() {
-    const urls = [this.routes.home()];
+    // A root that only redirects is noindex, so it does not belong here. build.js writes it
+    // anyway, the way it writes the search page, because the file still has to exist.
+    const urls = this.rootRedirects ? [] : [this.routes.home()];
 
     for (const assembly of this.model.index.assemblies) urls.push(this.routes.assembly(assembly.name));
     for (const ns of this.model.sortedNamespaces()) urls.push(this.routes.namespace(ns.name));
     for (const c of this.model.allCategories()) urls.push(this.routes.category(c.assembly, c.category));
-    for (const { type } of this.model.allTypes()) urls.push(this.routes.type(type.slug));
+    for (const { type } of this.model.allTypes()) {
+      urls.push(this.routes.type(type.slug));
+
+      for (const member of type.members || []) {
+        if (exampleFileNodes(member.docs).length > 0) {
+          urls.push(this.routes.example(type.slug, member.anchor));
+        }
+      }
+    }
 
     return urls;
   }

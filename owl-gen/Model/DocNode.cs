@@ -51,6 +51,13 @@ sealed class DocNode
   /// <summary>Language hint for a code node.</summary>
   [JsonPropertyName("lang")] public string? Language { get; set; }
 
+  /// <summary>
+  /// The file a code node was read from, as the comment wrote it. Set only for
+  /// &lt;code source="..."/&gt;, and kept so a page can say where an example lives rather than
+  /// presenting a wall of code from nowhere.
+  /// </summary>
+  [JsonPropertyName("src")] public string? Source { get; set; }
+
   /// <summary>List style for a list node: bullet, number or table.</summary>
   [JsonPropertyName("style")] public string? Style { get; set; }
 

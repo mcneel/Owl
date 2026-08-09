@@ -67,13 +67,33 @@ sealed class ApiBuilder
   /// rather than external.
   /// </param>
   /// <param name="findings">Findings accumulate here across all projects.</param>
-  public ApiBuilder(CSharpCompilation cmpl, ProjectInputs inputs, string root, IEnumerable<string> apis, DocFindings findings)
+  /// <param name="examplesRoot">
+  /// Where &lt;code source="..."/&gt; paths are rooted, when one was given.
+  /// </param>
+  public ApiBuilder(
+      CSharpCompilation cmpl,
+      ProjectInputs inputs,
+      string root,
+      IEnumerable<string> apis,
+      DocFindings findings,
+      string? examplesRoot = null)
   {
     _compilation = cmpl;
     _inputs = inputs;
     _repoRoot = root;
     _findings = findings;
-    _docParser = new DocCommentParser(apis, findings.UnresolvedCrefs);
+
+    // An explicit root answers on its own. Without one, the two directories such a path is
+    // usually written against are tried in the order that a narrower guess comes first.
+    List<string> exampleRoots = examplesRoot is null
+        ? [inputs.ProjectDir, root]
+        : [examplesRoot];
+
+    _docParser = new DocCommentParser(
+        apis,
+        findings.UnresolvedCrefs,
+        exampleRoots.Where(dir => !string.IsNullOrEmpty(dir)).Distinct(StringComparer.Ordinal).ToList(),
+        findings.MissingExamples);
   }
 
   /// <summary>

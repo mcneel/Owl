@@ -27,4 +27,11 @@ sealed class DocFindings
   /// rendering a model built from missing symbols.
   /// </summary>
   public List<string> CompilationErrors { get; } = [];
+
+  /// <summary>
+  /// &lt;code source="..."/&gt; paths that no root resolved to a readable file.
+  /// Reported rather than thrown: an example that cannot be found is a gap in
+  /// the docs, not a reason to abandon the model.
+  /// </summary>
+  public List<string> MissingExamples { get; } = [];
 }

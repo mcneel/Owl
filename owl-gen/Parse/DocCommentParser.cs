@@ -35,6 +35,8 @@ sealed class DocCommentParser
 
   readonly HashSet<string> _ownedAssemblies;
   readonly List<string> _unresolvedCrefs;
+  readonly IReadOnlyList<string> _exampleRoots;
+  readonly List<string> _missingExamples;
 
   /// <summary>
   /// Creates a parser for one documented set.
@@ -46,10 +48,25 @@ sealed class DocCommentParser
   /// <param name="unresolvedCrefs">
   /// Notes about unbindable crefs accumulate here.
   /// </param>
-  public DocCommentParser(IEnumerable<string> ownedAssemblies, List<string> unresolvedCrefs)
+  /// <param name="exampleRoots">
+  /// Directories a &lt;code source="..."/&gt; path is tried against, in order.
+  /// The paths are written for a documentation tool that had one configured
+  /// base, and which base is not recorded anywhere in the comment, so the
+  /// likely ones are tried rather than guessed at.
+  /// </param>
+  /// <param name="missingExamples">
+  /// Paths that no root resolved accumulate here.
+  /// </param>
+  public DocCommentParser(
+      IEnumerable<string> ownedAssemblies,
+      List<string> unresolvedCrefs,
+      IReadOnlyList<string>? exampleRoots = null,
+      List<string>? missingExamples = null)
   {
     _ownedAssemblies = new HashSet<string>(ownedAssemblies, StringComparer.Ordinal);
     _unresolvedCrefs = unresolvedCrefs;
+    _exampleRoots = exampleRoots ?? [];
+    _missingExamples = missingExamples ?? [];
   }
 
   // ------------------------------------------------------------------
@@ -257,12 +274,11 @@ sealed class DocCommentParser
         return;
 
       case "code":
-        output.Add(new DocNode
-        {
-          Kind = "code",
-          Language = TextAttribute(node, "language") ?? TextAttribute(node, "lang"),
-          Value = Dedent(RawText(content)),
-        });
+        output.Add(CodeNode(
+            TextAttribute(node, "language") ?? TextAttribute(node, "lang"),
+            TextAttribute(node, "source"),
+            TextAttribute(node, "region"),
+            RawText(content)));
         return;
 
       case "para":
@@ -552,12 +568,11 @@ sealed class DocCommentParser
           break;
 
         case "code":
-          output.Add(new DocNode
-          {
-            Kind = "code",
-            Language = el.Attribute("language")?.Value ?? el.Attribute("lang")?.Value,
-            Value = Dedent(el.Value),
-          });
+          output.Add(CodeNode(
+              el.Attribute("language")?.Value ?? el.Attribute("lang")?.Value,
+              el.Attribute("source")?.Value,
+              el.Attribute("region")?.Value,
+              el.Value));
           break;
 
         case "para":
@@ -768,6 +783,131 @@ sealed class DocCommentParser
     }
 
     return sb.ToString();
+  }
+
+  /// <summary>
+  /// Builds a code node from either form of <c>&lt;code&gt;</c>: the text
+  /// written between the tags, or the contents of the file named by
+  /// <c>source</c>, optionally narrowed to one <c>#region</c>.
+  /// </summary>
+  /// <remarks>
+  /// A source that resolves to nothing still produces a node, carrying the
+  /// path and no value. The page can then say which example is missing, which
+  /// is more use to whoever has to fix it than silently dropping the block.
+  /// </remarks>
+  DocNode CodeNode(string? language, string? source, string? region, string inlineText)
+  {
+    if (string.IsNullOrWhiteSpace(source))
+    {
+      return new DocNode { Kind = "code", Language = language, Value = Dedent(inlineText) };
+    }
+
+    string? text = ReadExample(source, region);
+    if (text is null)
+    {
+      _missingExamples.Add(source);
+    }
+
+    return new DocNode
+    {
+      Kind = "code",
+      Language = language,
+      Source = source,
+      Value = text is null ? null : Dedent(text),
+    };
+  }
+
+  /// <summary>
+  /// Reads the file a <c>source</c> attribute names, trying each configured
+  /// root in turn. Returns null when none of them holds it.
+  /// </summary>
+  string? ReadExample(string source, string? region)
+  {
+    // Written on Windows, for a tool that ran there. Both separators have to work either way.
+    string relative = source.Trim()
+        .Replace('\\', Path.DirectorySeparatorChar)
+        .Replace('/', Path.DirectorySeparatorChar);
+
+    foreach (string root in Path.IsPathRooted(relative) ? [""] : _exampleRoots)
+    {
+      string full = root.Length == 0 ? relative : Path.Combine(root, relative);
+
+      string text;
+      try
+      {
+        text = File.ReadAllText(full);
+      }
+      catch (IOException)
+      {
+        continue;
+      }
+      catch (UnauthorizedAccessException)
+      {
+        continue;
+      }
+
+      return string.IsNullOrWhiteSpace(region) ? text : ExtractRegion(text, region!);
+    }
+
+    return null;
+  }
+
+  /// <summary>
+  /// The body of one named <c>#region</c>, in either the C# or the Visual
+  /// Basic spelling. Returns the whole text when the region is not there, on
+  /// the grounds that too much of the right file beats none of it.
+  /// </summary>
+  static string ExtractRegion(string text, string region)
+  {
+    string[] lines = text.Replace("\r\n", "\n").Split('\n');
+    string wanted = region.Trim().Trim('"');
+
+    var kept = new List<string>();
+    int depth = 0;
+
+    foreach (string line in lines)
+    {
+      string trimmed = line.TrimStart();
+      bool starts = trimmed.StartsWith("#region", StringComparison.OrdinalIgnoreCase)
+          || trimmed.StartsWith("#Region", StringComparison.Ordinal);
+
+      if (starts)
+      {
+        if (depth > 0)
+        {
+          depth++;
+          kept.Add(line);
+          continue;
+        }
+
+        string name = trimmed[(trimmed.IndexOf("egion", StringComparison.OrdinalIgnoreCase) + 5)..]
+            .Trim()
+            .Trim('"');
+
+        if (string.Equals(name, wanted, StringComparison.OrdinalIgnoreCase))
+        {
+          depth = 1;
+        }
+
+        continue;
+      }
+
+      if (depth > 0 && trimmed.StartsWith("#end", StringComparison.OrdinalIgnoreCase))
+      {
+        depth--;
+        if (depth == 0)
+        {
+          return string.Join('\n', kept);
+        }
+      }
+
+      if (depth > 0)
+      {
+        kept.Add(line);
+      }
+    }
+
+    return kept.Count > 0 ? string.Join('\n', kept) : text;
   }
 
   /// <summary>

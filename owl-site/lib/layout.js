@@ -36,6 +36,7 @@ const VERSIONS = ['9'];
  *                than smeared across every assembly's
  *   filterBar    optional filter bar HTML
  *   routes       Routes instance
+ *   homeUrl      where the site name and the home crumb point; the root, unless it only redirects
  *   siteUrl      absolute origin, when configured
  *   jsonLd       extra JSON-LD object
  *   noindex      keep this page out of search results
@@ -56,6 +57,7 @@ function page(options) {
     treeKey = '',
     filterBar = null,
     routes,
+    homeUrl = null,
     siteUrl = '',
     jsonLd = null,
     noindex = false,
@@ -66,6 +68,7 @@ function page(options) {
     assemblyUrl = null,
   } = options;
 
+  const stickyTop = renderBreadcrumbs(breadcrumbs) + (filterBar || '');
   const fullTitle = title ? `${title} | ${siteName}` : siteName;
   const absolute = (url) =>
     siteUrl && url && url.startsWith('/') ? siteUrl.replace(/\/$/, '') + url : url;
@@ -117,11 +120,15 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
 <a class="skip-link" href="#main">Skip to content</a>
 
 <header>
-  <span class="site-title"><a href="${attr(routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
+  <span class="site-title"><a href="${attr(homeUrl || routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
   <form action="${attr(routes.search())}" method="get" role="search">
     <label class="skip-link" for="search">Search the API</label>
+    <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
+         and not only on the one that happens to carry a results list. -->
     <input type="search" id="search" name="q" placeholder="Search"
-           value="${attr(currentQuery)}" autocomplete="off">
+           value="${attr(currentQuery)}" autocomplete="off"
+           data-index-url="${attr(routes.asset('search.json'))}"
+           data-scope="${attr(currentAssembly)}">
     ${
       // Carries the assembly being read into the search, so the box searches what the selector
       // beside it says. Nothing on a page that belongs to no assembly, which searches everything.
@@ -132,6 +139,8 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
     <svg class="nav-search-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
       <circle cx="7" cy="7" r="4.6"/><path d="M10.5 10.5 14 14"/>
     </svg>
+    <!-- Filled as you type, on every page but the search page, which shows the full list itself. -->
+    <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
   </form>
   ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
   ${versionSelector()}
@@ -156,10 +165,25 @@ ${sidebar}
     : ''
 }
   <main class="main-content" id="main">
-${renderBreadcrumbs(breadcrumbs)}
-${filterBar || ''}
+${
+  // Held together in one block so they stick as one. Both are controls for what is under them -
+  // where you are, and what is shown - and neither is any use scrolled off the top.
+  stickyTop ? `  <div class="main-sticky">\n${stickyTop}\n  </div>` : ''
+}
 ${body}
   </main>
+  <!-- Filled by the script when an Examples link is followed, and left out of the flow until then.
+       The link it comes from is a real page, so nothing here is needed for the examples to be
+       readable - this only saves the trip. -->
+  <aside class="example-dock hidden" id="example-dock" aria-label="Examples" aria-live="polite">
+    <div class="example-resize" id="example-resize" role="separator" aria-orientation="vertical"></div>
+    <div class="example-dock-head">
+      <span class="example-dock-title" id="example-dock-title"></span>
+      <a class="example-dock-open" id="example-dock-open" href="#" target="_blank" rel="noopener" title="Open these examples in a new tab">Open Tab</a>
+      <button type="button" class="example-dock-close" id="example-dock-close" aria-label="Close examples">&times;</button>
+    </div>
+    <div class="example-dock-body" id="example-dock-body"></div>
+  </aside>
 </div>
 
 <script src="${attr(routes.asset('app.js'))}" defer></script>
@@ -213,7 +237,6 @@ function filterBar({ kinds = null, extra = '' } = {}) {
   }).join('');
 
   return `<div class="filter-bar">
-  <span>Show:</span>
   ${buttons}
   ${extra}
 </div>`;
@@ -227,7 +250,9 @@ function filterBar({ kinds = null, extra = '' } = {}) {
  * than navigating away from the results.
  */
 function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
-  if (!assemblies || assemblies.length === 0) return '';
+  // A picker with one assembly in it offers a choice between that assembly and everything, which
+  // is the same set. The site title already goes home, so nothing here is otherwise unreachable.
+  if (!assemblies || assemblies.length < 2) return '';
 
   const target = urlFor || ((name) => (name ? routes.assembly(name) : routes.home()));
 
