@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const { Model } = require('./model');
 const { Routes, slugify } = require('./routes');
 const { Renderer } = require('./pages');
+const { Diagrams } = require('./diagrams');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
 
@@ -28,6 +29,7 @@ const DEFAULT_DOCS_DIR = 'docs/api';
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
  *   skipUndocumented  leave out anything with no <summary>
+ *   d2        the d2 binary that draws ```d2 fences, 'd2' from PATH by default
  */
 class Site {
   constructor(options = {}) {
@@ -46,6 +48,7 @@ class Site {
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
+    this.d2 = options.d2 || 'd2';
 
     this.reload();
   }
@@ -57,12 +60,26 @@ class Site {
       skipUndocumented: this.skipUndocumented,
     });
     this.routes = new Routes(this.base);
+
+    // Rebuilt with the model, so a diagram that failed to draw is reported again on the reload that
+    // follows the fix rather than staying quiet about it. What it has already drawn is cached
+    // outside the instance, so nothing is redrawn for the sake of a new warning list.
+    const diagrams = new Diagrams({
+      command: this.d2,
+      cwd: this.apiDir,
+      warn: (message) => this.model.warnings.push(message),
+    });
+
     this.renderer = new Renderer(this.model, this.routes, {
       siteName: this.siteName,
       siteUrl: this.siteUrl,
       sourceRefs: this.sourceRefs,
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
+      diagrams,
+      // Where a page says something went wrong while it was being made: an equation that would not
+      // typeset, alongside the diagrams that would not draw.
+      warn: (message) => this.model.warnings.push(message),
     });
     return this.model.warnings;
   }

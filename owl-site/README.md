@@ -27,6 +27,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--base <path>` | serve, build | Path prefix the site is served under. |
 | `--site-url <url>` | serve, build | Origin for canonical urls, Open Graph tags and the sitemap. |
 | `--source-refs <path>` | serve, build | Root the "declared in" references hang from. Without it, none are shown. |
+| `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
 | `--dist <dir>` | check | Check an already-exported directory instead of rendering. |
 
@@ -61,8 +62,70 @@ read on both backgrounds. Without one, `logo.svg` is used under both themes. Wit
 inlined and the stylesheet shows whichever matches, so the right mark is painted on the first frame
 rather than swapped in afterwards.
 
+## Diagrams
+
+A ` ```d2 ` fence in an authored page, or a `<code lang="d2">` in a doc comment, is drawn by
+[d2](https://d2lang.com) while the page is rendered and inlined as SVG.
+
+````markdown
+```d2
+direction: right
+Code -> Compile -> Execute -> Result
+```
+````
+
+d2 rather than Mermaid because Mermaid renders in a browser: as a client bundle it costs about a
+megabyte and a visible flash, and as a build step it costs a headless Chrome. d2 is a binary that
+answers in milliseconds, so the diagram is in the markup where a crawler can see it, its labels can
+be selected and searched, and the export still fetches nothing.
+
+Install it with `brew install d2`, or from d2lang.com. It is **optional**: without it a diagram
+fence renders as the code block it was written as, and the build logs one line saying so. The same
+line appears if d2 rejects a diagram, along with what it objected to.
+
+Each diagram is drawn once for both themes. d2 is asked for a light and a dark palette together,
+which makes it write colours as classes and put the dark set behind a `prefers-color-scheme` query;
+that query is rewritten to key on this site's own `data-theme`, so a diagram follows the theme
+toggle rather than the operating system. Diagrams are cached by source for the life of the process,
+so the dev server redraws only what changed.
+
+d2 has LaTeX of its own for labels inside a diagram, which needs nothing further here:
+
+````markdown
+```d2
+formula: |latex
+  \sum_{i=0}^{n} i^2
+|
+```
+````
+
+## Math
+
+`$...$` in an authored page is typeset inline and `$$...$$` as a display block, by
+[Temml](https://temml.org), which is vendored (see `lib/vendor/README.md`). The output is MathML,
+which every current browser draws natively: no client library, no webfont, nothing fetched, and an
+equation that stays selectable text and scales with the paragraph around it.
+
+```markdown
+The energy of a mass is $E = mc^2$, and the sum of the first $n$ squares is
+
+$$
+\sum_{i=0}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}
+$$
+```
+
+Prose that merely contains dollars is left alone: an inline formula may not have a space just
+inside either delimiter, and a closing `$` may not be followed by a digit, so `costs $5 and $10`
+and `set $PATH and $HOME` are text. A dollar inside a code span is always literal. TeX that does
+not parse is left as the author wrote it, with a line in the build log.
+
+Math is not read in doc comments — only in authored markdown. A `$` is too ordinary a character in
+API prose to reinterpret across a whole existing corpus.
+
 There are **no npm dependencies**, by design: a docs generator that needs an `npm install` before it
-renders anything is harder to adopt than one that does not. Node 18 or newer.
+renders anything is harder to adopt than one that does not. Node 18 or newer. The one exception is
+`lib/vendor/`, which is checked in rather than installed for exactly that reason; `d2` is an
+external binary and entirely optional.
 
 ## URLs
 
@@ -79,8 +142,8 @@ renders anything is harder to adopt than one that does not. Node 18 or newer.
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
 JSON-LD, and every link is a real `href`. The site works with JavaScript disabled; JavaScript adds
 the theme toggle, the kind filter, the collapsible tree, the resizable sidebar, the assembly
-selector and client-side search. Syntax highlighting happens at render time and nothing loads from a
-CDN, so an exported site works with no network at all.
+selector and client-side search. Syntax highlighting, diagrams and math all happen at render time
+and nothing loads from a CDN, so an exported site works with no network at all.
 
 ## Layout
 
@@ -98,8 +161,13 @@ owl-site/
     docnodes.js    structured doc comments -> HTML, including cref links
     markdown.js    authored markdown -> HTML
     highlight.js   syntax highlighting at render time
-    theme.js       kind badges, colours and the assembly palette
+    diagrams.js    ```d2 fences -> inline SVG, drawn by the d2 binary
+    math.js        $...$ and $$...$$ -> MathML, typeset by vendored Temml
+    theme.js       kind icons, colours and the assembly palette
+    icons.js       reads icons/ and writes the per-page sprite
     routes.js      URL construction and matching
     assets.js      CSS and client JavaScript
     html.js        escaping helpers
+    vendor/        third-party code, checked in rather than installed
+  icons/           one 16x16 svg per kind, drawn in currentColor
 ```

@@ -1,102 +1,84 @@
 'use strict';
 
 /**
- * The site's visual vocabulary: kind badges, their colours and the per-assembly palette.
+ * The site's visual vocabulary: what each kind is drawn as, in what colour, and the per-assembly
+ * palette.
  *
- * Badges collapse to five letters (T/M/P/F/E) because a reader scanning a long member list needs a
- * shape to recognise, not a taxonomy. The model's finer-grained kinds each map back to one.
+ * A kind is said three ways here, because a row, a card and a tab each need a different length of
+ * answer. The drawing is what a reader scanning a list sees. The label - Class, Method - is the word
+ * a card has room for. The letter is neither: it is the group the kind is filtered under, so the
+ * model's finer-grained kinds collapse to a handful of tabs, and it is what the tab and the marks it
+ * filters read their shared colour from.
  */
 
 /**
- * Badge colours, keyed by letter, named from the Open Color scales.
+ * No kind colours here, and that is the point: every kind is drawn in one ink, `--kind`.
  *
- * The pairs carry the meaning: types and interfaces are one blue at two weights, fields and
- * constructors one grey, so each pair reads as a family before its letter is read.
+ * The drawing is what tells a method from a property, so a colour doing the same job again would only
+ * be a second thing to learn - and a list whose every row was a different colour was a list that
+ * shouted. With one ink there is nothing to key by letter and nothing for a renderer to look up: the
+ * stylesheet paints every drawing, badge and tab marker from the one property, and lib/assets.js
+ * chooses its value per theme, beside --flash and the rest of the colours a theme decides.
+ *
+ * It stays out of the way of the three marks that are allowed a colour, all of which say something is
+ * unusual about the API rather than what kind it is: Readonly, Explicit and Obsolete.
  */
-const KIND_COLORS = {
-  T: 'var(--oc-blue-8)',
-  M: 'var(--oc-cyan-6)',
-  P: 'var(--oc-teal-6)',
-  F: 'var(--oc-gray-6)',
-  E: 'var(--oc-orange-5)',
-  I: 'var(--oc-blue-4)',
-  S: 'var(--oc-lime-6)',
-};
-
-// Constructors sit apart from the coloured kinds, on the field grey a step darker.
-KIND_COLORS.C = 'var(--oc-gray-7)';
-
-/** The one colour an enum and its values carry, which is no letter's own. */
-const ENUM_COLOR = 'var(--oc-yellow-6)';
 
 /**
- * Kinds whose badge takes a colour of its own rather than its letter's, named by the slot they are
- * painted from rather than by the paint itself, so both stay one colour when that slot is retuned.
- *
- * An enum keeps the T badge and an enum value keeps F, but both take the enum colour, so an enum
- * and the values inside it read as one family and neither is mistaken for a field.
- *
- * A finalizer wears F for the ~ it is written with, and takes the constructor's colour: the two
- * are the ends of an object's life and neither is a field.
- */
-const KIND_COLOR_SLOTS = {
-  enum: 'enum',
-  enumvalue: 'enum',
-  destructor: 'C',
-};
-
-/**
- * Every slot a badge can be painted from, as slot -> colour.
- *
- * The stylesheet writes one custom property per entry and everything that draws a badge references
- * the property, so the palette can be retuned in one place — a browser's element inspector
- * included, where editing `--kind-M` on :root repaints every method badge on the page at once.
- */
-const KIND_PAINTS = Object.assign({}, KIND_COLORS, { enum: ENUM_COLOR });
-
-/**
- * Badge colours that say something other than what kind a member is, tunable the same way.
+ * Badge colours that say something other than what kind a member is.
  *
  * Readonly and SetOnly share `mod`: they are one fact about a property told from either end, only
- * ever one of them is on a member, and neither is a kind, so they read as one marker.
+ * ever one of them is on a member, and neither is a kind, so they read as one marker. It is the
+ * darkest ink on the page, which is what makes it the one pill that reads as inverted against the
+ * kind marks around it whichever theme is on.
  *
  * `explicit` paints the badge and the card's border together, since the border is there to make the
- * badge's point at a glance. `obsolete` has a slot of its own only so that retuning either of them
- * cannot move the other: the two wear the same pill and would otherwise be impossible to separate.
+ * badge's point at a glance.
  */
 const BADGE_PAINTS = {
-  mod: 'var(--oc-red-6)',
+  mod: 'var(--oc-gray-9)',
   explicit: 'var(--oc-blue-4)',
-  obsolete: 'var(--oc-green-8)',
 };
 
 /**
- * Modifier chips that are painted rather than left grey, tunable the same way.
+ * Modifier chips that are filled rather than left plain, tunable the same way.
  *
  * These say what a member is bound to and whether it is yours to override, which is what a reader
- * scanning a card wants answered before the prose. Const shares static's paint because it is the
- * same fact about where the member lives - it is reached through the type, and there is no instance
- * of anything involved. The rest - extension, init, an accessibility - stay grey: a page where
- * every chip is coloured tells nothing apart.
+ * scanning a card wants answered before the prose. What sets them apart from the rest - extension,
+ * init, an accessibility - is that they are filled at all: a page where every chip is filled tells
+ * nothing apart. Const is the darkest of them because a constant is the strongest form of the fact
+ * static states - not merely reached through the type but fixed at the point of use.
  *
- * Filled in one colour under both themes, as every other badge is, which is why these are mid-scale
- * shades: they carry white text on either ground.
+ * `obsolete` is the one chip here that is a warning rather than a fact about how the member works,
+ * which is why it is the one that is not grey; orange is what a reader already reads as a warning.
+ * The note spelling out why the API is obsolete takes the same paint, so the chip on the card and
+ * the note on the page are recognisably the same thing said twice rather than two unrelated marks.
+ *
+ * Filled in one colour under both themes, as every other badge is, so each has to carry white text
+ * on either ground.
  */
 const CHIP_PAINTS = {
-  static: 'var(--oc-blue-8)',
-  const: 'var(--oc-blue-8)',
-  abstract: 'var(--oc-violet-6)',
-  virtual: 'var(--oc-grape-7)',
+  static: 'var(--oc-gray-6)',
+  const: 'var(--oc-gray-9)',
+  abstract: 'var(--oc-gray-6)',
+  virtual: 'var(--oc-gray-6)',
+  obsolete: 'var(--oc-orange-5)',
 };
 
-/** Model kind -> [badge letter, human label]. */
+/**
+ * Model kind -> [letter, human label].
+ *
+ * The letter is a filter group and a colour slot, not something a row shows; FILTER_LETTERS overrides
+ * it where the two answers differ.
+ */
 const KIND_MAP = {
-  // Types render as T, except an interface and a struct: a contract and a value type each read
-  // differently enough from a class to carry their own letter and colour.
+  // Types group under T, except an interface and a struct: a contract and a value type each read
+  // differently enough from a class to carry their own tab and colour.
   class: ['T', 'Class'],
   interface: ['I', 'Interface'],
   struct: ['S', 'Struct'],
-  enum: ['T', 'Enum'],
+  // E for what it is: an enum is worth a colour of its own, and its values are grouped with it.
+  enum: ['E', 'Enum'],
   delegate: ['T', 'Delegate'],
   record: ['T', 'Record'],
 
@@ -109,8 +91,55 @@ const KIND_MAP = {
   property: ['P', 'Property'],
   indexer: ['P', 'Indexer'],
   field: ['F', 'Field'],
-  enumvalue: ['F', 'Enum value'],
+  // V rather than the F it was: an enum value is not a field to anyone reading one, and a Values tab
+  // is what someone looking at an enum wants of the bar.
+  enumvalue: ['V', 'Enum value'],
   event: ['E', 'Event'],
+};
+
+/**
+ * Model kind -> the icon drawn for it, named after its file in owl-site/icons.
+ *
+ * Fewer drawings than kinds, and deliberately: an operator and a conversion are methods written
+ * differently, an indexer is a property reached differently, and a record is a class with a
+ * constructor written into its declaration. Each is worth its own word in a heading and not its own
+ * drawing in a list, where a shape that means almost the same as its neighbour is a shape to read
+ * twice. A finalizer takes the constructor's drawing, the two being the ends of one object's life,
+ * and an enum value takes the constant's, which is what one is.
+ *
+ * A delegate is the exception worth naming: it is a type, but the thing it describes is a call, so
+ * it takes the method drawing rather than the class one.
+ */
+const KIND_ICONS = {
+  class: 'class',
+  interface: 'interface',
+  struct: 'struct',
+  enum: 'enum',
+  delegate: 'method',
+  record: 'class',
+
+  method: 'method',
+  operator: 'method',
+  conversion: 'method',
+  constructor: 'constructor',
+  destructor: 'constructor',
+  property: 'property',
+  indexer: 'property',
+  field: 'field',
+  enumvalue: 'constant',
+  event: 'event',
+};
+
+/**
+ * Kinds filtered under a letter other than the one on their badge.
+ *
+ * E is worn by an enum and by an event, which are not one kind and must not be one tab: a search
+ * lists both, so the letter alone cannot say which tab a row belongs under. The badge answers what
+ * the reader is looking at and this answers which button shows it - an enum filters as the type it
+ * is, under Types, where it has always been found.
+ */
+const FILTER_LETTERS = {
+  enum: 'T',
 };
 
 /**
@@ -126,6 +155,7 @@ const FILTER_KINDS = [
   { key: 'M', label: 'Methods' },
   { key: 'P', label: 'Properties' },
   { key: 'F', label: 'Fields' },
+  { key: 'V', label: 'Values' },
   { key: 'E', label: 'Events' },
 ];
 
@@ -143,9 +173,30 @@ const ASSEMBLY_PALETTE = [
   '#0c4a6e',
 ];
 
-function badgeLetter(kind) {
+function kindLetter(kind) {
   const entry = KIND_MAP[kind];
   return entry ? entry[0] : '?';
+}
+
+/**
+ * Which drawing this kind wears. Anything unrecognised falls in with the classes, the way an
+ * unrecognised colour falls in with the constructors: a type is what a kind the model grew is
+ * likeliest to be.
+ */
+function kindIcon(kind) {
+  return Object.prototype.hasOwnProperty.call(KIND_ICONS, kind) ? KIND_ICONS[kind] : 'class';
+}
+
+/**
+ * The letter this kind is filtered under, which is its badge's unless FILTER_LETTERS says otherwise.
+ *
+ * Everything that carries a data-badge for the kind tabs to match on asks this; everything that
+ * draws a badge asks kindLetter. The two are the same answer for every kind but the enum.
+ */
+function filterLetter(kind) {
+  return Object.prototype.hasOwnProperty.call(FILTER_LETTERS, kind)
+    ? FILTER_LETTERS[kind]
+    : kindLetter(kind);
 }
 
 function kindLabel(kind) {
@@ -165,27 +216,6 @@ function kindPlural(kind) {
   return label + 's';
 }
 
-/** The custom property a slot is read from. */
-function kindVar(slot) {
-  return `var(--kind-${slot})`;
-}
-
-/** Which slot paints this kind's badge. Anything unrecognised falls in with the constructors. */
-function kindSlot(kind) {
-  // hasOwnProperty, not a plain lookup: one of the kinds is called 'constructor', and a plain
-  // lookup on an object literal finds Object.prototype.constructor and takes it for an override.
-  const slot = Object.prototype.hasOwnProperty.call(KIND_COLOR_SLOTS, kind)
-    ? KIND_COLOR_SLOTS[kind]
-    : badgeLetter(kind);
-
-  return Object.prototype.hasOwnProperty.call(KIND_PAINTS, slot) ? slot : 'C';
-}
-
-/** What a badge of this kind is painted with — a reference to the palette, never a colour. */
-function kindColor(kind) {
-  return kindVar(kindSlot(kind));
-}
-
 /** Assigns each assembly a colour by position, so it stays the same across pages. */
 function assemblyPalette(assemblyNames) {
   const map = new Map();
@@ -199,20 +229,18 @@ function assemblyColor(palette, assemblyName) {
 }
 
 module.exports = {
-  KIND_COLORS,
-  KIND_COLOR_SLOTS,
-  KIND_PAINTS,
   BADGE_PAINTS,
   CHIP_PAINTS,
   KIND_MAP,
+  KIND_ICONS,
+  FILTER_LETTERS,
   FILTER_KINDS,
   ASSEMBLY_PALETTE,
-  badgeLetter,
+  kindLetter,
+  kindIcon,
+  filterLetter,
   kindLabel,
   kindPlural,
-  kindVar,
-  kindSlot,
-  kindColor,
   assemblyPalette,
   assemblyColor,
 };

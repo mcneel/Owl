@@ -71,7 +71,6 @@ function collectPages() {
   }
 
   const site = new Site({ jsonDir, apiDir, skipUndocumented });
-  for (const warning of site.model.warnings) notes.push('model: ' + warning);
 
   const urls = site.renderer.sitemapUrls().concat([site.routes.search()]);
   for (const url of urls) {
@@ -82,6 +81,10 @@ function collectPages() {
     }
     pages.set(url, result.body);
   }
+
+  // Read after the pages are rendered, not before: a diagram that d2 refused to draw says so while
+  // the page holding it is being made, which is after the model has finished loading.
+  for (const warning of site.model.warnings) notes.push('model: ' + warning);
 
   return pages;
 }

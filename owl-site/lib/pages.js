@@ -5,6 +5,7 @@ const { slugify } = require('./routes');
 const { highlight } = require('./highlight');
 const { page, filterBar, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
+const icons = require('./icons');
 const markdown = require('./markdown');
 const theme = require('./theme');
 
@@ -63,18 +64,30 @@ function lastSegment(name) {
   return name.slice(name.lastIndexOf('.') + 1);
 }
 
+/** The '&lt;T, TOut&gt;' a generic method writes after its name. Empty for everything else. */
+function genericSuffix(member) {
+  const names = (member.typeParameters || []).map((tp) => tp.name);
+  return names.length > 0 ? `<${names.join(', ')}>` : '';
+}
+
 /**
- * What a member is called wherever it is listed.
+ * What a member is called wherever it is listed, and the only place that decides.
  *
  * Ordinarily its own name. An explicit interface implementation is named in the model the way the
  * declaration writes it - 'Rhino.Runtime.Code.ICode.Inputs' - and the namespace on the front of
  * that is the type's, not this member's, so it says nothing a reader of this page needs. The
  * interface still does, and keeps its short name.
+ *
+ * A generic method's type parameters are not in the name the model records, since the symbol does
+ * not carry them, and they are put back: 'Cast&lt;T&gt;' is how the declaration reads and how it is
+ * called, and two overloads can differ by nothing else.
  */
 function memberDisplayName(member) {
-  return member.explicitInterface
+  const name = member.explicitInterface
     ? `${member.explicitInterface.display}.${lastSegment(member.name)}`
     : member.name;
+
+  return name + genericSuffix(member);
 }
 
 /** A display name with its type parameters taken off: 'ListAspect&lt;T, TOut&gt;' becomes 'ListAspect'. */
@@ -133,6 +146,35 @@ const CALLABLE_KINDS = new Set(['method', 'constructor', 'destructor', 'operator
 
 /** The two kinds the compiler spells `op_`, listed as symbols rather than under those names. */
 const OPERATOR_KINDS = new Set(['operator', 'conversion']);
+
+/**
+ * The types the C# keywords stand for, so 'string' in a signature leads where System.String does.
+ *
+ * The highlighter marks these as keywords rather than types, which is what they are to a compiler,
+ * but a reader following a parameter's type does not care which of the two the word is.
+ *
+ * void, var and dynamic are left out: the first names a type nobody looks up, and the other two
+ * name no type at all.
+ */
+const KEYWORD_TYPES = {
+  bool: 'T:System.Boolean',
+  byte: 'T:System.Byte',
+  char: 'T:System.Char',
+  decimal: 'T:System.Decimal',
+  double: 'T:System.Double',
+  float: 'T:System.Single',
+  int: 'T:System.Int32',
+  long: 'T:System.Int64',
+  nint: 'T:System.IntPtr',
+  nuint: 'T:System.UIntPtr',
+  object: 'T:System.Object',
+  sbyte: 'T:System.SByte',
+  short: 'T:System.Int16',
+  string: 'T:System.String',
+  uint: 'T:System.UInt32',
+  ulong: 'T:System.UInt64',
+  ushort: 'T:System.UInt16',
+};
 
 /** What a tab is labelled, for the language hints a doc comment actually writes. */
 const LANGUAGE_LABELS = {
@@ -328,7 +370,13 @@ class Renderer {
     // The dark variant is optional; the layout falls back to the one logo for both themes.
     this.logo = options.logo || model.siteLogo || '';
     this.logoDark = options.logoDark || model.siteLogoDark || '';
-    this.docContext = { model, routes, inline: false };
+
+    // Diagrams are drawn by an outside binary, so the one renderer is built by the Site and passed
+    // through to wherever a fenced block can appear: authored markdown, and doc comments alike.
+    this.diagrams = options.diagrams || null;
+    this.warn = typeof options.warn === 'function' ? options.warn : () => {};
+    this.docContext = { model, routes, inline: false, diagrams: this.diagrams, warn: this.warn };
+    this.markdownContext = { diagrams: this.diagrams, warn: this.warn };
 
     // An assembly with nothing in it is not somewhere to send a reader, and --skip-undocumented can
     // empty one out completely. Authored prose counts as something: <Assembly>/MAIN.md is a page
@@ -411,13 +459,6 @@ class Renderer {
     return docs && docs.since ? ` data-since="${attr(docs.since)}"` : '';
   }
 
-  badgeHtml(kind) {
-    return (
-      `<span class="badge" style="background:${theme.kindColor(kind)}">` +
-      `${escape(theme.kindLabel(kind))}</span>`
-    );
-  }
-
   /**
    * True when a member offers no way to write it: a property with no setter, or a readonly field.
    *
@@ -447,18 +488,25 @@ class Renderer {
     return label ? `<span class="badge badge-mod">${label}</span>` : '';
   }
 
-  treeBadgeHtml(kind) {
-    return (
-      `<span class="tree-badge" style="background:${theme.kindColor(kind)}">` +
-      `${escape(theme.badgeLetter(kind))}</span>`
-    );
+  /**
+   * The mark for one API's kind: a row's, a card's, or the one at the head of its own page.
+   *
+   * A drawing everywhere, rather than the letter a row used to wear and the word a title used to. A
+   * letter has to be decoded before it says anything, and there were never enough to go round - an
+   * enum and an event both start with E. A word said the kind plainly enough, but every title said it
+   * the same way, so the pill in front of the name was a shape to read past rather than a thing to
+   * read. The stylesheet gives the same drawing three sizes, by where it lands.
+   */
+  kindIconHtml(kind) {
+    return icons.iconHtml(theme.kindIcon(kind));
   }
 
   /**
-   * The badge on an Overview row: a page, rather than the bars the collapse control uses.
+   * The mark on an Overview row: a page, rather than the bars the collapse control uses.
    *
-   * It keeps the square the kind badges use so the tree's left edge stays a single column, and
-   * inherits the badge's white through currentColor.
+   * A filled square where the kinds beside it are drawings, which is the point: what it leads to is
+   * something someone wrote, not an API. It sits in the same box they do, so the tree's left edge
+   * stays a single column, and inherits its white through currentColor.
    */
   overviewBadgeHtml() {
     return (
@@ -540,11 +588,79 @@ class Renderer {
   }
 
   /**
+   * Types from outside the documented set, by the name a signature spells them with.
+   *
+   * A signature is text, so 'IDisposable' in one says nothing about which IDisposable it is. The
+   * model does know: every parameter, return, base type and interface arrives as a reference
+   * carrying the doc id the compiler resolved it to, and that is the fully qualified name a Learn
+   * url needs. Collecting those is what lets the text be resolved back.
+   *
+   * A name two different external types answer to is filed as ambiguous and linked nowhere, since
+   * the wrong page is worse than none. Keyed by arity the way typesByName is, so IEnumerable and
+   * IEnumerable&lt;T&gt; are not each other.
+   */
+  externalTypesByName() {
+    if (this._externalTypesByName) return this._externalTypesByName;
+
+    const index = new Map();
+
+    const add = (ref) => {
+      if (!ref || !ref.external || !String(ref.id || '').startsWith('T:')) return;
+
+      // The display is how the use site wrote it, so it carries whatever array, nullable or
+      // generic decoration that use put on the name. The name underneath is what a token holds.
+      const written = /^[A-Za-z_][\w.]*/.exec(stripGenerics(ref.display || ''));
+      if (!written) return;
+
+      const name = lastSegment(written[0]);
+      const arity = declaredArity(ref.id);
+      const keys = arity === 0 ? [name, `${name}\`0`] : [`${name}\`${arity}`];
+
+      for (const key of keys) {
+        const seen = index.get(key);
+        if (seen === undefined) index.set(key, ref.id);
+        else if (seen !== ref.id) index.set(key, '');
+      }
+    };
+
+    for (const entry of this.model.allTypes()) {
+      add(entry.type.baseType);
+      for (const iface of entry.type.interfaces || []) add(iface);
+
+      for (const member of entry.type.members || []) {
+        add(member.returnType);
+        add(member.explicitInterface);
+        for (const parameter of member.parameters || []) add(parameter.type);
+      }
+    }
+
+    this._externalTypesByName = index;
+    return index;
+  }
+
+  /**
+   * Where a name no documented type answers to points: Microsoft Learn, when it is a BCL type.
+   *
+   * Anything else outside the set - a type from a third party package - has no page this knows of,
+   * and stays text.
+   */
+  externalTypeUrl(name, arity = 0) {
+    const index = this.externalTypesByName();
+    const docId = index.get(`${name}\`${arity}`) || index.get(name);
+    return (docId && docnodes.learnUrl(docId)) || '';
+  }
+
+  /**
    * Makes the type tokens in an already-highlighted signature clickable.
    *
    * The highlighter has already picked them out, so this only resolves names. A dotted name arrives
    * as two tokens either side of a punctuation dot, which is why 'Code.Inner' links its halves
    * separately - both lead somewhere worth going.
+   *
+   * A name the documented set does not answer to is tried against what the framework declares, so
+   * IDisposable and string lead to Learn rather than sitting there as the only dead words in a line
+   * where everything else is a link. The stylesheet leaves all of them their syntax colour, so this
+   * costs the declaration nothing to read.
    *
    * @param ownName  the name the signature declares, which is not a reference to anything. The
    *   highlighter cannot tell one from a type: both are capitalised words, and a member is
@@ -568,20 +684,33 @@ class Renderer {
       if (declaredAt >= 0 && html.indexOf('(', declaredAt) !== -1) declaredAt = -1;
     }
 
-    return html.replace(/<span class="tok-type">([^<]*)<\/span>/g, (whole, name, offset) => {
+    return html.replace(/<span class="tok-(type|keyword)">([^<]*)<\/span>/g, (whole, kind, name, offset) => {
+      // Most keywords are not types at all, and the ones that are cannot be anything else: 'string'
+      // is System.String wherever it is written, so it skips the lookups entirely.
+      if (kind === 'keyword') {
+        const url = docnodes.learnUrl(KEYWORD_TYPES[name]);
+        return url ? this.linkedToken(kind, name, url) : whole;
+      }
+
       if (offset === declaredAt) return whole;
 
-      const url = this.typeUrlByName(
-        name,
-        assemblyName,
-        typeArgumentCount(html.slice(offset + whole.length))
-      );
+      const arity = typeArgumentCount(html.slice(offset + whole.length));
+      const url = this.typeUrlByName(name, assemblyName, arity) || this.externalTypeUrl(name, arity);
       // A type names itself in its own declaration; linking that goes nowhere.
       if (!url || url === selfUrl) return whole;
 
-      // The captured name is already escaped, having come out of the highlighter.
-      return `<span class="tok-type"><a href="${attr(url)}">${name}</a></span>`;
+      return this.linkedToken(kind, name, url);
     });
+  }
+
+  /** One highlighted token, linked. The name is already escaped, having come out of the highlighter. */
+  linkedToken(kind, name, url) {
+    const external = /^https?:/i.test(url);
+    return (
+      `<span class="tok-${kind}">` +
+      `<a href="${attr(url)}"${external ? ' rel="noopener"' : ''}>${name}</a>` +
+      '</span>'
+    );
   }
 
   /** A highlighted, cross-linked signature: the one call every place that shows one makes. */
@@ -637,7 +766,7 @@ class Renderer {
     return (
       this.typeRefHtml({ id: iface.id, display: iface.display, external: iface.external }) +
       '.' +
-      escape(lastSegment(member.name))
+      escape(lastSegment(member.name) + genericSuffix(member))
     );
   }
 
@@ -688,12 +817,12 @@ class Renderer {
       : `<span class="member-name">${nameHtml}</span>`;
 
     return (
-      `<div class="member" data-badge="${attr(theme.badgeLetter(type.kind))}" ` +
+      `<div class="member" data-badge="${attr(theme.filterLetter(type.kind))}" ` +
       `data-kind="${attr(type.kind)}"${this.sinceAttr(type.docs)}>` +
       '<div class="member-header">' +
-      this.badgeHtml(type.kind) +
+      this.kindIconHtml(type.kind) +
       heading +
-      (type.obsolete ? '<span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
+      (type.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
       // Chipped only when it is not public, the way a member card does it: nested types are
       // commonly protected or internal, and the card is otherwise silent about it.
       (type.accessibility && type.accessibility !== 'public'
@@ -748,9 +877,14 @@ class Renderer {
       .filter((name) => name === current || this.assemblyNames.includes(name));
   }
 
-  /** The badge letters a list of types or members uses, for a filter bar offering only those. */
-  badgeLettersOf(items, pick) {
-    return new Set(items.map((item) => theme.badgeLetter(pick(item))));
+  /**
+   * The letters a list of types or members filters under, for a filter bar offering only those.
+   *
+   * Filter letters rather than badge letters, so a page of enums offers the tab that actually shows
+   * them rather than the Events tab their badge would ask for.
+   */
+  filterLettersOf(items, pick) {
+    return new Set(items.map((item) => theme.filterLetter(pick(item))));
   }
 
   typeSectionsHtml(entries, options = {}) {
@@ -812,7 +946,7 @@ class Renderer {
     // assembly and category pages, because here the prose is the page rather than a panel on it,
     // and the assemblies are not listed again below it: the header selector already goes there.
     const body = main
-      ? `<div class="cat-doc site-intro">${markdown.render(main.markdown)}</div>`
+      ? `<div class="cat-doc site-intro">${markdown.render(main.markdown, this.markdownContext)}</div>`
       : `<div class="page-head"><h1 class="page-title">${escape(this.siteName)}</h1>
            <p class="page-intro">Add <code>${escape(this.model.docsPath('MAIN.md'))}</code> to author
            this page.</p></div>`;
@@ -846,7 +980,7 @@ class Renderer {
 
     // Authored from docs/api/<AssemblyName>/MAIN.md, with a minimal fallback.
     const intro = main
-      ? `<div class="cat-doc">${markdown.render(main.markdown)}</div>`
+      ? `<div class="cat-doc">${markdown.render(main.markdown, this.markdownContext)}</div>`
       : `<div class="page-head">
            <h1 class="page-title">${escape(assemblyName)}<span class="page-kind">assembly</span></h1>
            <p class="page-intro">Add
@@ -858,7 +992,7 @@ class Renderer {
       .map(
         (ns) =>
           `<li><a href="${attr(this.routes.namespace(ns.name))}">` +
-          `<span class="tree-badge" style="background:${theme.kindVar('T')}">N</span>` +
+          icons.iconHtml('namespace') +
           `${escape(ns.name || '(global)')}</a></li>`
       )
       .join('');
@@ -944,7 +1078,7 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
         { label, url: this.routes.namespace(namespaceName) },
       ],
       body,
-      filterBar: filterBar({ kinds: this.badgeLettersOf(bucket.types, (e) => e.type.kind) }),
+      filterBar: filterBar({ kinds: this.filterLettersOf(bucket.types, (e) => e.type.kind) }),
       sidebar: this.namespaceTree(namespaceName),
       treeKey: 'namespaces',
       assemblies: this.assemblyChoices(assemblies.length === 1 ? assemblies[0] : ''),
@@ -968,7 +1102,7 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
     const bucket = this.model.categories.get(`${assemblyName}/${categoryName}`);
     if (!bucket) return null;
 
-    const overview = bucket.doc ? markdown.render(bucket.doc.markdown) : '';
+    const overview = bucket.doc ? markdown.render(bucket.doc.markdown, this.markdownContext) : '';
 
     const body = `
 <div class="page-head">
@@ -1000,7 +1134,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
         { label: categoryName, url: this.routes.category(assemblyName, categoryName) },
       ],
       body,
-      filterBar: filterBar({ kinds: this.badgeLettersOf(bucket.types, (e) => e.type.kind) }),
+      filterBar: filterBar({ kinds: this.filterLettersOf(bucket.types, (e) => e.type.kind) }),
       sidebar: this.categoryTree(assemblyName, { activeCategory: categoryName }),
       treeKey: slugify(assemblyName),
       assemblies: this.assemblyChoices(assemblyName),
@@ -1098,7 +1232,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
     const body = `
 <article>
 <div class="page-head">
-  <h1 class="page-title">${this.badgeHtml(member.kind)}${escape(name)}</h1>
+  <h1 class="page-title">${this.kindIconHtml(member.kind)}${escape(name)}</h1>
   <div class="page-subtitle">${escape(type.fullName)}</div>
   <p class="page-intro"><a href="${attr(memberUrl)}">Back to ${escape(name)} on ${escape(type.name)}</a></p>
 </div>
@@ -1175,7 +1309,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // Inherited members count towards the tabs, since they are listed under the declared ones: a
     // type that declares no events but inherits three still has events to filter to.
     const kindTabs = filterBar({
-      kinds: this.badgeLettersOf(
+      kinds: this.filterLettersOf(
         members.concat(inherited.map((entry) => entry.member)),
         (m) => m.kind
       ),
@@ -1205,8 +1339,10 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
         ? `<div class="remarks"><strong>Remarks:</strong> ${docnodes.render(type.docs.remarks, this.docContext)}</div>`
         : '';
 
-    // Name, declaration, summary, then where it lives - the order a search result reads in, so
-    // arriving from one lands on the same shape rather than a rearranged version of it.
+    // Name, declaration, summary - the order a search result reads in, so arriving from one lands on
+    // the same shape rather than a rearranged version of it. No namespace-qualified name under them:
+    // the breadcrumbs above say where the type lives and are the way to the rest of it, so a second
+    // copy here is a line that answers a question already answered.
     //
     // The head is in three parts. The brief - what the type is called, how it is declared and what
     // it does - takes the card ground, the way the same three things do on a member card, and holds
@@ -1217,13 +1353,24 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <article>
 <div class="page-head sticky-head">
   <div class="page-head-brief">
-    <div class="page-title-row"><h1 class="page-title">${this.badgeHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}</div>
+    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}</div>
     <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly, type.slug)}</div>
-    ${summaryHtml ? `<div class="page-intro">${summaryHtml}</div>` : ''}
+    ${
+      summaryHtml
+        ? '<div class="page-head-intro">' +
+          // Hidden until the script finds something behind the cap: a summary of one sentence has
+          // nothing to open out, and a button that says so on every page is a button to ignore.
+          '<button class="intro-more" type="button" aria-expanded="false" hidden>' +
+          '<span class="intro-more-label">Show all</span>' +
+          chevronHtml('intro-more-arrow') +
+          '</button>' +
+          `<div class="page-intro">${summaryHtml}</div>` +
+          '</div>'
+        : ''
+    }
   </div>
   <div class="page-head-body">
     ${remarksHtml}
-    <div class="page-subtitle">${escape(type.fullName)}</div>
     ${context}
   </div>
   ${kindTabs}
@@ -1547,11 +1694,17 @@ ${this.seeAlsoHtml(type.docs)}
     return `<section class="ns-section"><h2 class="ns-heading">See also</h2><div class="section">${links}</div></section>`;
   }
 
+  /**
+   * Why an API is obsolete, as a note under the name that wears the Obsolete chip.
+   *
+   * Classed the way &lt;note&gt; in a doc comment is, so the stylesheet paints this one warning
+   * without having to tell it apart from the asides it shares a shape with.
+   */
   obsoleteHtml(obsolete) {
     if (!obsolete) return '';
     const label = obsolete.isError ? 'removed' : 'obsolete';
     return (
-      `<div class="note"><span class="note-label">${escape(label)}</span>` +
+      `<div class="note note-${label}"><span class="note-label">${escape(label)}</span>` +
       escape(obsolete.message || 'This API is obsolete.') +
       '</div>'
     );
@@ -1731,9 +1884,9 @@ ${this.seeAlsoHtml(type.docs)}
 
     return (
       `<a class="member inherited" href="${attr(url)}" ` +
-      `data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
+      `data-badge="${attr(theme.filterLetter(member.kind))}" ` +
       `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
-      this.badgeHtml(member.kind) +
+      this.kindIconHtml(member.kind) +
       `<code class="inherited-sig">${highlight(member.signature || member.name, 'csharp')}</code>` +
       `<span class="inherited-from">from ${escape(from.name)}</span>` +
       '</a>'
@@ -1753,7 +1906,7 @@ ${this.seeAlsoHtml(type.docs)}
     const rows = members
       .map((member) => {
         return (
-          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
+          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.filterLetter(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           this.operationCells(member) +
           `<td class="op-types">${this.typeRefHtml(member.returnType)}</td>` +
@@ -1792,7 +1945,7 @@ ${this.seeAlsoHtml(type.docs)}
     const left = binary ? operands[0] : '';
     const right = binary ? operands.slice(1).join(', ') : operands[0] || '';
     const obsolete = member.obsolete
-      ? ' <span class="explicit-badge badge-obsolete">Obsolete</span>'
+      ? ' <span class="chip chip-obsolete">Obsolete</span>'
       : '';
 
     return (
@@ -1813,10 +1966,10 @@ ${this.seeAlsoHtml(type.docs)}
     const rows = members
       .map(
         (member) =>
-          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
+          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.filterLetter(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           `<td class="enum-name">${escape(member.name)}` +
-          (member.obsolete ? ' <span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
+          (member.obsolete ? ' <span class="chip chip-obsolete">Obsolete</span>' : '') +
           '</td>' +
           `<td class="enum-value">${escape(member.constantValue || '')}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
@@ -1835,7 +1988,7 @@ ${this.seeAlsoHtml(type.docs)}
 
   memberCardHtml(member, assemblyName, selfSlug) {
     const explicit = Boolean(member.explicitInterface);
-    const badgeLetter = theme.badgeLetter(member.kind);
+    const filterLetter = theme.filterLetter(member.kind);
 
     const chips = [];
     if (member.isStatic) chips.push('static');
@@ -1942,13 +2095,13 @@ ${this.seeAlsoHtml(type.docs)}
 
     return (
       `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
-      `data-badge="${attr(badgeLetter)}" data-kind="${attr(member.kind)}"` +
+      `data-badge="${attr(filterLetter)}" data-kind="${attr(member.kind)}"` +
       `${this.sinceAttr(member.docs)}>` +
       '<div class="member-header">' +
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
-      this.badgeHtml(member.kind) +
-      `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(member.name)}</h3>` +
-      (member.obsolete ? '<span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
+      this.kindIconHtml(member.kind) +
+      `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(memberDisplayName(member))}</h3>` +
+      (member.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
       this.accessBadgeHtml(member) +
       // Each chip names itself in a class, so the stylesheet can single one out - static, abstract
       // and virtual do - without this having to know which of them it has decided to colour.
@@ -2010,11 +2163,16 @@ ${this.seeAlsoHtml(type.docs)}
         return (
           `<a class="tree-child-link${source ? ' tree-child-inherited' : ''}" ` +
           `href="${attr(href)}"${this.sinceAttr(m.docs)} title="${attr(title)}">` +
-          this.treeBadgeHtml(m.kind) +
+          this.kindIconHtml(m.kind) +
           // Outlined rather than filled, and after the kind rather than instead of it: this is a
           // note on the badge beside it, not a second kind. It is also what the run of statics at
           // the head of each kind is sorted on, so the break in the alphabet is accounted for.
-          (m.isStatic ? '<span class="tree-badge tree-badge-static">S</span>' : '') +
+          //
+          // Not on an enum value, which has no other way to be: a mark every row in the tree wears
+          // distinguishes none of them, and only costs the names beside it the width.
+          (m.isStatic && m.kind !== 'enumvalue'
+            ? '<span class="tree-badge tree-badge-static">S</span>'
+            : '') +
           this.treeMemberLabelHtml(m) +
           '</a>'
         );
@@ -2029,7 +2187,7 @@ ${this.seeAlsoHtml(type.docs)}
       const label = theme.kindPlural(kind);
       out +=
         `<a class="tree-child-link" href="#${attr(kind)}" title="${attr(label)}">` +
-        this.treeBadgeHtml(kind) +
+        this.kindIconHtml(kind) +
         `<span class="tree-label">${escape(label)}</span></a>`;
     }
 
@@ -2079,7 +2237,7 @@ ${this.seeAlsoHtml(type.docs)}
       '<div class="tree-type-label">' +
       arrow +
       `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.type(type.slug))}">` +
-      this.treeBadgeHtml(type.kind) +
+      this.kindIconHtml(type.kind) +
       `${escape(type.name)}</a>` +
       inheritedArrow +
       '</div>' +
@@ -2220,7 +2378,7 @@ ${this.seeAlsoHtml(type.docs)}
         .map((c) =>
           row(
             `<a class="tree-link" href="${attr(this.routes.category(c.assembly, c.category))}">` +
-              `<span class="tree-badge" style="background:${theme.kindVar('T')}">C</span>` +
+              '<span class="tree-badge tree-badge-cat">C</span>' +
               `${escape(c.category)}</a>`
           )
         )
@@ -2253,7 +2411,7 @@ ${this.seeAlsoHtml(type.docs)}
           '<div class="tree-type"><div class="tree-type-label">' +
           '<span class="tree-arrow-spacer"></span>' +
           `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.namespace(name))}">` +
-          `<span class="tree-badge" style="background:${theme.kindVar('T')}">N</span>` +
+          icons.iconHtml('namespace') +
           `${escape(name || '(global)')}</a></div></div>`
         );
       })
@@ -2351,9 +2509,9 @@ ${this.seeAlsoHtml(type.docs)}
   searchResultHtml(row, query) {
     return (
       // data-badge is what the kind filter above the results matches on.
-      `<li data-badge="${attr(theme.badgeLetter(row.kind))}">` +
+      `<li data-badge="${attr(theme.filterLetter(row.kind))}">` +
       '<div class="r-head">' +
-      this.treeBadgeHtml(row.kind) +
+      this.kindIconHtml(row.kind) +
       `<a class="r-name" href="${attr(row.url)}">${markMatch(row.name, query)}</a>` +
       '</div>' +
       (row.signature
@@ -2428,10 +2586,16 @@ ${this.seeAlsoHtml(type.docs)}
 
   /**
    * Compact rows:
-   * [name, url, haystack, summary, badgeLetter, signature, nsIndex, badgeColour, asmIndex, static].
+   * [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static].
    *
-   * The last is there only on a static member, so the flag costs two bytes on the rows that carry
-   * it and nothing at all on the rest; a row without it simply ends one element short.
+   * The letter here is the one the row filters under, not one it shows: what a row shows is its
+   * kind's drawing, which is why the icon travels with it and cannot be worked out from the letter -
+   * an enum and an event are both filtered from E in this index's terms. No colour, since every kind
+   * is drawn in one ink: a property naming it on every row would be the same string tens of thousands
+   * of times, and the stylesheet already paints it once.
+   *
+   * The last is there only on a static member, so the flag costs two bytes on the rows that carry it
+   * and nothing at all on the rest; a row without it simply ends one element short.
    *
    * Namespace names go in a table the entries index into. There are a few dozen of them against
    * tens of thousands of entries, so repeating the name on every row would cost more than the
@@ -2457,7 +2621,7 @@ ${this.seeAlsoHtml(type.docs)}
     const assemblyIndex = new Map(this.assemblyNames.map((name, i) => [name, i]));
 
     return {
-      schema: 4,
+      schema: 5,
       namespaces,
       assemblies,
       entries: rows.map((r) => {
@@ -2466,12 +2630,11 @@ ${this.seeAlsoHtml(type.docs)}
           r.url,
           r.haystack,
           r.summary,
-          theme.badgeLetter(r.kind),
+          theme.filterLetter(r.kind),
           this.signatureHtml(r.signature, r.assembly, '', lastSegment(r.name)),
           seen.get(r.namespace),
-          // The letter cannot carry the colour on its own: an enum wears a T badge in the F colour.
-          theme.kindColor(r.kind),
           assemblyIndex.get(r.assembly),
+          theme.kindIcon(r.kind),
         ];
 
         if (r.isStatic) entry.push(1);

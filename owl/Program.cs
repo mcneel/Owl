@@ -58,6 +58,7 @@ static void PrintUsage()
       --port <n>          Port for serve (default 8080)
       --base <path>       Path prefix the site will be served under
       --site-url <url>    Origin for canonical urls and the sitemap
+      --d2 <path>         The d2 binary that draws diagrams (default: d2 on PATH)
       --skip-undocumented Leave anything with no <summary> out of the site
       -h, --help          Show this help
 

@@ -11,7 +11,20 @@
  * Syntax highlighting is done when the page is rendered, not in the browser.
  */
 
-const { KIND_COLORS, KIND_PAINTS, BADGE_PAINTS, CHIP_PAINTS, kindVar } = require('./theme');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const { ID_PREFIX: ICON_PREFIX } = require('./icons');
+const { BADGE_PAINTS, CHIP_PAINTS } = require('./theme');
+
+/**
+ * What MathML needs to draw correctly, from the converter that writes it.
+ *
+ * Read from the vendored file rather than pasted in here, so updating Temml is a matter of dropping
+ * two files in and nothing else. It is browser-correction rules and class names its output uses;
+ * the fonts are the reader's own, so this fetches nothing. See lib/vendor/README.md.
+ */
+const TEMML_CSS = fs.readFileSync(path.join(__dirname, 'vendor', 'temml.css'), 'utf8').trim();
 
 /** A palette from lib/theme.js, written out as one custom property per slot. */
 function paintCss(prefix, paints) {
@@ -19,10 +32,6 @@ function paintCss(prefix, paints) {
     .map((slot) => `  --${prefix}-${slot}: ${paints[slot]};`)
     .join('\n');
 }
-
-/** What the client script paints a badge letter with. The properties above, not the colours. */
-const KIND_VARS = {};
-for (const letter of Object.keys(KIND_COLORS)) KIND_VARS[letter] = kindVar(letter);
 
 const CSS = `
 /* ---- Open Color (yeun.github.io/open-color) ----
@@ -50,7 +59,9 @@ const CSS = `
 
 /* ---- Theme variables: the only place a colour is chosen ---- */
 /* The greys are docify's dark palette: its page is #1d1d1d and its surfaces, borders and muted text
-   come from Tailwind's neutral ramp, which has no hue in it at all. */
+   come from Tailwind's neutral ramp, which has no hue in it at all. The light theme is the same ramp
+   read from the other end, for the same reason: the site's own colours are few and they say
+   something, so a page that carried a tint of its own would be saying something too. */
 :root[data-theme="dark"] {
   --bg:          #1d1d1d;
   --bg-home:     #1d1d1d;
@@ -69,6 +80,11 @@ const CSS = `
   --card-detail: #1b1b1b;
   --card-split:  #2b2b2b;
   --fullname:    #737373;
+  /* Light against a dark page, where the light theme's kind ink is dark against a light one: a
+     drawing has to sit above its ground either way. Its text goes the other way for the same
+     reason - see --kind-ink. */
+  --kind:        var(--oc-gray-4);
+  --kind-ink:    var(--oc-gray-9);
   --flash:       #2196f3;
   --scrollbar:   #404040;
   --tok-keyword: #c4a7fd;
@@ -85,25 +101,27 @@ const CSS = `
   --accent:      #2196f3;
 }
 :root[data-theme="light"] {
-  --bg:          #f8fafc;
+  --bg:          #f8f8f8;
   --bg-home:     #ffffff;
   --bg2:         #ffffff;
-  --bg3:         #f1f5f9;
-  --bg4:         #e8f0fb;
-  --border:      #e2e8f0;
-  --border2:     #cbd5e1;
-  --text:        #1e293b;
-  --text2:       #334155;
-  --text3:       #64748b;
-  --text4:       #94a3b8;
+  --bg3:         #f1f1f1;
+  --bg4:         #e8e8e8;
+  --border:      #e5e5e5;
+  --border2:     #d4d4d4;
+  --text:        #262626;
+  --text2:       #3d3d3d;
+  --text3:       #737373;
+  --text4:       #a3a3a3;
   --card-bg:     #ffffff;
-  --card-border: #e2e8f0;
-  --card-hover:  #f8fafc;
-  --card-detail: #fafcff;
-  --card-split:  #edf2f9;
-  --fullname:    #94a3b8;
+  --card-border: #e5e5e5;
+  --card-hover:  #f8f8f8;
+  --card-detail: #fbfbfb;
+  --card-split:  #efefef;
+  --fullname:    #a3a3a3;
+  --kind:        var(--oc-gray-7);
+  --kind-ink:    var(--oc-white);
   --flash:       #0ea5e9;
-  --scrollbar:   #cbd5e1;
+  --scrollbar:   #d4d4d4;
   --tok-keyword: #7c3aed;
   --tok-string:  #0a7c52;
   --tok-comment: #64748b;
@@ -121,9 +139,9 @@ const CSS = `
 /* ---- Badge colours ----
    Written from lib/theme.js, so the palette is stated once and every badge, filter pill and search
    row reads it from here rather than carrying a colour of its own. Outside the two theme blocks
-   because a badge means the same thing under either one; move a line into both to split them. */
+   because a badge means the same thing under either one; the kind ink is the one that needed saying
+   twice, and it is up there with --flash. */
 :root {
-${paintCss('kind', KIND_PAINTS)}
 ${paintCss('badge', BADGE_PAINTS)}
 ${paintCss('chip', CHIP_PAINTS)}
 }
@@ -217,7 +235,11 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .filter-bar { margin-bottom: 1.1rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
 .filter-btn { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); cursor: pointer; }
 .filter-btn:hover { color: var(--text); }
-.filter-btn.active { color: var(--text); border-bottom-color: var(--flash); }
+/* A kind's tab is underlined in the ink the marks it filters are drawn in, so the tab and its rows
+   read as one thing and follow a retuned palette together. All filters nothing in particular and
+   keeps the accent. */
+.filter-btn.active { color: var(--text); border-bottom-color: var(--kind); }
+.filter-btn.active[data-kind="all"] { border-bottom-color: var(--flash); }
 .asm-legend { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: 0.5rem; }
 .legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); white-space: nowrap; text-decoration: none; }
 .legend-item:hover { color: var(--text); }
@@ -258,8 +280,25 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-link { color: var(--text2); text-decoration: none; font-size: 0.82rem; display: flex; align-items: center; gap: 0.35rem; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tree-link:hover { color: var(--text); }
 .tree-link.active { color: var(--flash); font-weight: 600; }
+/* The kind drawings, on the column the lettered squares used to hold: the same box, so the tree's
+   left edge is one column whether a row wears a drawing, the Overview page's mark or neither.
+   Painted here rather than by whatever draws one: every kind is one ink, so a colour written onto
+   each of the hundreds of icons a page carries would be the same string a hundred times over. */
+.kind-icon { display: block; width: 1.1rem; height: 1.1rem; flex-shrink: 0; color: var(--kind); }
+/* A step up on a card, where the name beside it is a heading rather than a row: the drawing holds
+   its own against the larger text instead of sitting under it, and lands about where the word it
+   replaced did. */
+.member-header .kind-icon { width: 1.25rem; height: 1.25rem; }
+/* Declared, never drawn. Taken out of the flow rather than hidden with display, which is the one
+   thing that has ever stopped a <use> resolving. */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .tree-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem; border-radius: 3px; font-size: 0.6rem; font-weight: 800; color: white; flex-shrink: 0; }
-.tree-badge-doc { background: #475569; }
+/* From the same scale as everything else, rather than the one slate left over from before it: the
+   Overview mark is filled where the kinds are drawn, and that is the whole of what sets it apart. */
+.tree-badge-doc { background: var(--oc-gray-8); }
+/* A lettered square rather than a drawing, there being no drawing for a category: on the kind ink,
+   with the ink's own text, so it sits with the marks below it under either theme. */
+.tree-badge-cat { background: var(--kind); color: var(--kind-ink); }
 /* The static mark: the badge's shape drawn rather than filled, so it reads as something said about
    the kind badge beside it and never as a kind of its own. */
 .tree-badge-static { background: none; border: 1px solid var(--text4); color: var(--text3); }
@@ -280,7 +319,9 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    arrow at the end of the type's row asks for them. */
 .tree-child-inherited { display: none; color: var(--text4); }
 .tree-type-children.show-inherited .tree-child-inherited { display: flex; }
-.tree-child-inherited .tree-badge { opacity: 0.6; }
+/* Drawn well back, the way the row's text is: a drawing holds its own against a dimmed name far
+   better than a filled square did, so what read as inherited at 0.6 now needs 0.3. */
+.tree-child-inherited .kind-icon, .tree-child-inherited .tree-badge { opacity: 0.3; }
 .tree-child-inherited:hover { color: var(--text2); }
 /* At the end of the row, where it cannot be mistaken for the arrow that opens the type's members. */
 .tree-inherited-toggle { background: none; border: none; padding: 0 0.15rem; cursor: pointer; color: var(--text4); display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -321,10 +362,18 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 /* ---- Page heading ---- */
 .page-title { font-size: 1.45rem; font-weight: 650; color: var(--text); letter-spacing: -0.01em; word-break: break-word; }
 /* Ancestors run off the right of the title rather than wrapping under it: the chain is context for
-   the name, and a deep one must not push the rest of a sticky header down the page. */
-.page-title-row { display: flex; align-items: baseline; column-gap: 0.45rem; }
+   the name, and a deep one must not push the rest of a sticky header down the page.
+
+   Centred rather than sat on the title's baseline, because the title is a row of its own now and a
+   row's baseline is whatever its first item's happens to be - here a drawing, whose baseline is its
+   bottom edge, and not agreed on between browsers. Centring asks nothing of either box. */
+.page-title-row { display: flex; align-items: center; column-gap: 0.45rem; }
 .page-title { flex: 0 1 auto; min-width: 0; }
-.type-chain { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 0.78rem; }
+/* Nudged onto the name's baseline. Centring the row put the chain's own middle level with the
+   title's, and small text centred against large reads high - the two sit on a line together only
+   once the smaller one comes down. An offset rather than baseline alignment, since the title is a
+   row whose baseline browsers do not agree on; relative, so it moves without moving anything else. */
+.type-chain { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 0.78rem; position: relative; top: 0.2rem; }
 /* Dimmer than the name it leads to: this is where the type came from, not what the page is about. */
 .type-chain .see-ref { font-family: inherit; color: var(--text3); }
 .type-chain .see-ref:hover { color: var(--flash); text-decoration: underline; }
@@ -332,9 +381,20 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .chain-sep { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; vertical-align: -0.2rem; color: var(--text4); transform: rotate(90deg); }
 .chain-sep svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
 .page-title .page-kind { font-size: 0.6em; font-weight: 500; color: var(--text4); margin-left: 0.5rem; }
-/* Sized in rem, so both stay badge-sized rather than growing with the heading. */
+/* Sized in rem, so it stays chip-sized rather than growing with the heading. */
 .page-title .chip { margin-left: 0.5rem; vertical-align: middle; font-weight: 500; }
-.page-title .badge { margin-right: 0.5rem; vertical-align: middle; }
+/* The drawing at its largest, since this is the one place a page says what it is about rather than
+   listing things.
+
+   Its title becomes a row to carry it, rather than the drawing sitting in a line of text: at this
+   size it is taller than the letters, so aligning it by their baseline both leaves it low and
+   stretches the line box under it. A row centres the two against each other and neither has to know
+   the other's size. Only the titles that carry a drawing - a type's and a member's - are rows; the
+   rest are a name and a small word after it, which reads as the line it is. */
+.page-title:has(.kind-icon) { display: flex; align-items: center; gap: 0.5rem; }
+/* The row's gap is the space now, so the chip drops the margin it used in a line of text. */
+.page-title:has(.kind-icon) .chip { margin-left: 0; }
+.page-title .kind-icon { width: 1.75rem; height: 1.75rem; }
 .page-subtitle { font-family: monospace; font-size: 0.76rem; color: var(--fullname); margin-top: 0.3rem; word-break: break-all; }
 .page-intro { color: var(--text2); font-size: 0.93rem; line-height: 1.6; margin-top: 0.6rem; }
 .page-chips { margin-top: 0.7rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
@@ -359,16 +419,44 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    block reaching past its container's edges is a horizontal scrollbar the moment that container
    is the thing that scrolls. */
 .page-head-brief { flex-shrink: 0; background: var(--card-bg); border-bottom: 1px solid var(--card-split); margin: -0.75rem -1.5rem 0; padding: 0.35rem 1.5rem 0.75rem; }
+/* The one part of the brief with no length of its own: a summary written as three paragraphs would
+   carry the tabs, and with them the members, off the bottom of the screen - and the brief cannot
+   shrink, because the name and the declaration are what the head is for. Five lines, then it
+   scrolls in place, so the head is the same height whatever the type says about itself. */
+.page-head-brief .page-intro { max-height: calc(1.6em * 5); overflow-y: auto; scrollbar-width: thin; }
+/* Five lines is right for prose and wrong for a summary that draws a diagram, so the cap comes off
+   on request. Opening it unpins the whole head as well: a full-height description held over the
+   viewport would leave the members nowhere to go, so an opened head scrolls away like any other
+   block and the members follow it. */
+.page-head.sticky-head.intro-open { position: static; max-height: none; }
+.page-head.sticky-head.intro-open .page-head-brief .page-intro { max-height: none; overflow: visible; }
+/* At the description's top-right corner rather than under it, and the corner is the one edge of the
+   box that opening it does not move: the text grows downwards, so the pointer is still on the
+   button afterwards and closing it again is a second click in the same place. The room it sits in
+   is a row of its own above it, at the right: over the text it covered a word, and beside the text
+   it cost every line the width of a label.
+
+   The row is above rather than below because that is the edge of the box that opening it does not
+   move - the text grows downwards - and it is anchored right, so 'Show all' becoming the longer
+   'Show less' grows leftwards. Between them the pointer does not have to follow the button
+   anywhere: closing it again is a second click where the first one landed.
+
+   It takes the gap the description was leaving under the declaration rather than adding a row to a
+   head whose height is the whole point of the cap. */
+.page-head-intro { display: flex; flex-direction: column; }
+.page-head-intro:has(.intro-more:not([hidden])) .page-intro { margin-top: 0.1rem; }
+.intro-more { align-self: flex-end; margin-top: 0.35rem; display: inline-flex; align-items: center; gap: 0.15rem; padding: 0; background: none; border: none; cursor: pointer; font: inherit; font-size: 0.75rem; white-space: nowrap; color: var(--text4); }
+.intro-more[hidden] { display: none; }
+.intro-more:hover { color: var(--flash); }
+.intro-more-arrow { display: inline-flex; width: 1rem; height: 1rem; transition: transform 0.15s; }
+.intro-more-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
+.intro-open .intro-more-arrow { transform: rotate(180deg); }
 /* The breadcrumbs are the top of that card rather than a strip above it, so they take the same
    ground - but only where there is a head to belong to, which is a type page.
 
    Closed up against the title too: the gap under them was holding two blocks apart, and now that
    the trail and the name are on one ground it was only pushing the name down the page. */
 .main-content:has(.page-head-brief) > .main-sticky { background: var(--card-bg); padding-bottom: 0.3rem; }
-/* A header, not a chapter: what the type relates to and what it is parameterised on are labelled
-   rows here rather than the groups they would be further down the page, so the head stays one
-   block. The room goes over the first of them; the rows carry their own spacing after that. */
-.page-head-body > .page-subtitle + * { margin-top: 1rem; }
 .page-head.sticky-head .declaration { margin-top: 0.6rem; margin-bottom: 0; }
 /* The kinds sit on the head's own rule rather than above it, so the tabs and the members they
    filter are the two sides of one line. The pull is the head's bottom padding, plus the pixel that
@@ -385,6 +473,9 @@ a.chip:hover { color: var(--flash); }
 .chip-const { background: var(--chip-const); color: var(--oc-white); }
 .chip-abstract { background: var(--chip-abstract); color: var(--oc-white); }
 .chip-virtual { background: var(--chip-virtual); color: var(--oc-white); }
+/* A chip like the rest of them rather than a pill of its own size: it sits in the same run, and a
+   label a size smaller or larger than the ones either side of it reads as an afterthought. */
+.chip-obsolete { background: var(--chip-obsolete); color: var(--oc-white); }
 
 /* ---- Category overview doc ---- */
 .cat-doc { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; line-height: 1.7; font-size: 0.88rem; color: var(--text2); scroll-margin-top: 1rem; }
@@ -405,6 +496,23 @@ a.chip:hover { color: var(--flash); }
 /* The landing page's authored prose: the same typography, without the card around it. */
 .cat-doc.site-intro { background: none; border: none; border-radius: 0; padding: 0; margin-bottom: 0; }
 .tree-cat-doc-link { font-style: italic; }
+
+/* ---- Diagrams ---- */
+/* Drawn by d2 at build time, so what lands here is an svg carrying its own palette for both
+   themes. Nothing is coloured from this end; the only job is fitting it to the column.
+
+   The svg keeps the size it was drawn at rather than filling the width, since a diagram of three
+   boxes blown up to the width of the page reads as a poster. max-width brings the other case back
+   in, and the scroll is for a diagram too wide to shrink legibly. */
+.diagram { margin: 0.9rem 0; overflow-x: auto; }
+.diagram svg { max-width: 100%; height: auto; }
+
+/* ---- Math ---- */
+/* Typeset to MathML at build time, so what follows is the browser's own rendering of it and the
+   only work left is placing the block and letting a long equation scroll rather than overflow.
+   Temml's stylesheet, below, is the part that corrects for how each engine draws it. */
+.math-display { margin: 0.9rem 0; overflow-x: auto; }
+${TEMML_CSS}
 
 /* ---- Member cards ---- */
 /* No hover state: the card is not a target, only the name and the anchor inside it are.
@@ -430,21 +538,23 @@ a.chip:hover { color: var(--flash); }
 .member.inherited { display: flex; align-items: baseline; gap: 0.5rem; background: none; border-color: transparent; border-radius: 6px; padding: 0.3rem 0.7rem; margin-bottom: 0.1rem; text-decoration: none; }
 .member.inherited:hover { background: var(--card-bg); border-color: var(--card-border); }
 .member.inherited:hover .inherited-sig { color: var(--text); }
-.member.inherited .badge { flex-shrink: 0; align-self: center; }
+.member.inherited .kind-icon { align-self: center; }
 .inherited-sig { flex: 1; min-width: 0; font-family: monospace; font-size: 0.78rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Dimmer than the signature: which base it came from answers a question the reader only asks once
    they have found the name they were looking for. */
 .inherited-from { flex-shrink: 0; font-size: 0.72rem; color: var(--text4); white-space: nowrap; }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
-.badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; color: white; letter-spacing: 0.03em; }
-/* A modifier rather than a kind, so it stays out of the kind palette. */
-.badge-mod { background: var(--badge-mod); }
-/* The small pill, worn by Explicit and by obsolete. Its own slot each, so retuning one leaves the
-   other where it was; the shape and typography are all they actually share. */
+/* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
+   picking up that name to paste somewhere, and 'class' riding along with it is never what they
+   meant. */
+.badge, .explicit-badge, .tree-badge, .asm-badge, .chip { user-select: none; -webkit-user-select: none; }
+/* The pill shape, worn by Readonly and SetOnly alone now that a kind is drawn rather than spelled:
+   what is left of it says how a property may be used, which is not a kind and takes no part in the
+   kind palette. Its ink is the darkest on the page under either theme, hence the white. */
+.badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em; }
+.badge-mod { background: var(--badge-mod); color: var(--oc-white); }
+/* The small pill, worn by Explicit alone. */
 .explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
-/* Sized as a chip rather than as the Explicit badge it shares a class with: it sits in the chip
-   run, and a label a size smaller than the ones either side of it reads as an afterthought. */
-.badge-obsolete { background: var(--badge-obsolete); font-size: 0.75rem; padding: 0.1rem 0.55rem; }
 .asm-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; color: white; margin-left: auto; opacity: 0.85; white-space: nowrap; text-decoration: none; }
 .member-name { font-size: 0.97rem; font-weight: 600; color: var(--text); }
 /* The interface an explicit implementation came from is a link, but it is also part of a heading. */
@@ -456,7 +566,11 @@ a.chip:hover { color: var(--flash); }
    sixty members is noise, and the only one worth drawing is the one being read. Focus shows it too,
    so it is reachable by keyboard rather than by cursor alone. */
 .member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; transition: opacity 0.12s; }
-.member:hover .member-anchor, .member-anchor:focus { opacity: 1; }
+/* focus-visible, not focus: clicking the mark focuses it, and on plain :focus it then stayed drawn
+   on a card the pointer had long since left - one # lit up somewhere down the page for no reason a
+   reader could see. Keyboard focus still shows it, which is the case the rule is here for: it is the
+   one way to reach a control that is otherwise invisible until hovered. */
+.member:hover .member-anchor, .member-anchor:focus-visible { opacity: 1; }
 .member-anchor:hover { color: var(--flash); }
 .member-fullname { font-size: 0.72rem; color: var(--fullname); font-family: monospace; margin-top: 0.4rem; margin-bottom: 0.45rem; word-break: break-all; }
 .summary { color: var(--text2); line-height: 1.6; font-size: 0.88rem; }
@@ -485,6 +599,9 @@ table.params td.param-name, table.params td.param-type { width: 1%; }
 a.see-ref:hover { text-decoration: underline; }
 /* A framework type on Microsoft Learn: blue-grey, so it sits behind the links into this site. */
 .see-ref-out { color: var(--ext-ref); }
+/* A type from a package that is neither documented here nor part of the framework: nowhere to send
+   a reader, so it is greyed to the back of the three - a name being reported, not offered. */
+.see-ref-none { color: var(--text4); }
 .see-ref-external::after { content: "\\2197"; font-size: 0.85em; opacity: 0.6; }
 .param-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0.1rem 0.3rem; border-radius: 3px; color: #0ea5e9; font-style: italic; }
 .langword-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0.1rem 0.3rem; border-radius: 3px; color: var(--tok-keyword); }
@@ -494,7 +611,11 @@ a.see-ref:hover { text-decoration: underline; }
 /* ---- Declarations and code ---- */
 /* No panel behind it: the monospace and the token colours already say this is code, and a filled
    box on every card turned a list of members into a list of boxes inside boxes. */
-.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; }
+/* A long signature still scrolls sideways, but nothing is drawn to say so: the block is one or two
+   lines tall, and a bar under it is a third of its height spent on furniture. Wheel, trackpad,
+   touch and a keyboard all still reach the rest of it. */
+.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; scrollbar-width: none; -ms-overflow-style: none; }
+.declaration::-webkit-scrollbar { display: none; }
 .member .declaration { font-size: 0.78rem; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
@@ -511,6 +632,11 @@ code { font-family: monospace; }
 /* ---- Notes, tables, lists in doc content ---- */
 .note { border-left: 3px solid var(--flash); background: var(--bg3); padding: 0.5rem 0.8rem; border-radius: 0 6px 6px 0; margin: 0.6rem 0; font-size: 0.85rem; }
 .note-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--flash); margin-bottom: 0.15rem; }
+/* The one note that is a warning rather than an aside, in the colour its chip is painted from, so
+   the pill on the card and the reason spelled out here are one mark. Removed is obsolete with the
+   compiler's answer changed from a warning to an error, not a different fact, so it reads the same. */
+.note-obsolete, .note-removed { border-left-color: var(--chip-obsolete); }
+.note-obsolete .note-label, .note-removed .note-label { color: var(--chip-obsolete); }
 .table-scroll { overflow-x: auto; margin: 0.6rem 0; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .table-scroll th, .table-scroll td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
@@ -544,7 +670,9 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
 .example-resize:hover, .example-resize.dragging { background: var(--flash); }
 .example-dock-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .example-dock-title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; font-size: 0.85rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.example-dock-title .badge { flex-shrink: 0; }
+/* The dock's title is the example page's heading, moved: the drawing comes with it and has to come
+   down to the size of a strip this shallow, rather than the title-sized one it arrives at. */
+.example-dock-title .kind-icon { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 /* The member the example is for, wherever the code calls it. */
 .example-panel mark { padding: 0 0.1rem; }
 .example-dock-open { margin-left: auto; font-size: 0.74rem; color: var(--text3); text-decoration: none; flex-shrink: 0; }
@@ -566,7 +694,9 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
    Two tables of members that a card would have padded out rather than filled. */
 .enum-table th, .op-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .enum-table td, .op-table td { padding: 0.45rem 0.5rem; vertical-align: top; }
-.enum-table .enum-name { font-family: monospace; font-weight: 600; color: var(--text); white-space: nowrap; }
+/* In the body font, like every other member name on the page: the monospace it wore said 'code' a
+   second time, when the row it heads is already a value and a number. */
+.enum-table .enum-name { font-weight: 600; color: var(--text); white-space: nowrap; }
 /* The expression is the row's identity, so it carries the weight. It is split across three cells
    and closed in on the symbol from both sides, which is what puts every symbol in the table on one
    vertical line; the padding is tightened so the three still read as one expression. */
@@ -574,7 +704,7 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
 .op-table .op-left { text-align: right; padding-right: 0.1rem; }
 .op-table .op-mark { text-align: center; padding-left: 0.3rem; padding-right: 0.3rem; color: var(--tok-keyword); }
 .op-table .op-right { text-align: left; padding-left: 0.1rem; }
-.enum-table .enum-value { font-family: monospace; color: var(--tok-number); white-space: nowrap; text-align: right; }
+.enum-table .enum-value { font-family: monospace; white-space: nowrap; text-align: right; }
 /* The operand and result columns are types, and read as the signatures they came out of. */
 .op-table .op-types { font-family: monospace; font-size: 0.8rem; color: var(--text2); }
 /* Rows are what the sidebar links at, so a jumped-to value marks itself the way a card does. */
@@ -749,8 +879,8 @@ const JS = `
           var set = parsed.querySelector('.example-set');
           if (!set) throw new Error('no examples in that page');
 
-          // The heading's nodes rather than its text: its badge is an element whose own text is
-          // the kind, so reading textContent glues 'Method' onto the front of the name.
+          // The heading's nodes rather than its text: the kind is drawn in front of the name, and
+          // textContent would take the name and leave the drawing behind.
           var heading = parsed.querySelector('.page-title');
           dockBody.innerHTML = '';
           dockBody.appendChild(set);
@@ -770,9 +900,8 @@ const JS = `
   }
 
   // ---- Filter bar ----
-  // Custom properties rather than colours, so the marker under a kind's tab cannot end up a
-  // different colour from the badges it is filtering, and both follow a retuned palette live.
-  var COLORS = ${JSON.stringify(KIND_VARS)};
+  // Nothing here paints anything: the marker under a kind's tab is the stylesheet's business, drawn
+  // from the same property as the marks that tab filters, so the two cannot end up disagreeing.
   var filterButtons = document.querySelectorAll('.filter-btn');
   var activeKind = 'all';
 
@@ -836,13 +965,8 @@ const JS = `
 
   filterButtons.forEach(function (button) {
     button.addEventListener('click', function () {
-      filterButtons.forEach(function (b) {
-        b.classList.remove('active');
-        b.style.borderBottomColor = '';
-      });
+      filterButtons.forEach(function (b) { b.classList.remove('active'); });
       button.classList.add('active');
-      // 'All' has no kind and so no colour of its own; cleared, it falls back to the stylesheet's.
-      button.style.borderBottomColor = COLORS[button.getAttribute('data-kind')] || '';
       activeKind = button.getAttribute('data-kind');
       applyFilter();
     });
@@ -1170,16 +1294,62 @@ const JS = `
   var mainSticky = document.querySelector('.main-sticky');
   var stickyHead = document.querySelector('.page-head.sticky-head');
 
-  if (mainSticky || stickyHead) {
-    var measureSticky = function () {
-      var top = mainSticky ? mainSticky.offsetHeight : 0;
-      var head = stickyHead ? stickyHead.offsetHeight : 0;
-      document.documentElement.style.setProperty('--sticky-top', top + 'px');
-      document.documentElement.style.setProperty('--anchor-offset', top + head + 16 + 'px');
-    };
+  var measureSticky = function () {
+    var top = mainSticky ? mainSticky.offsetHeight : 0;
+    // A head opened out to its full height is no longer pinned, so it is no longer standing over
+    // the place a jumped-to member lands.
+    var pinnedHead = stickyHead && !stickyHead.classList.contains('intro-open');
+    var head = pinnedHead ? stickyHead.offsetHeight : 0;
+    document.documentElement.style.setProperty('--sticky-top', top + 'px');
+    document.documentElement.style.setProperty('--anchor-offset', top + head + 16 + 'px');
+  };
 
+  if (mainSticky || stickyHead) {
     measureSticky();
     window.addEventListener('resize', measureSticky);
+  }
+
+  // ---- Page head: a description taller than its cap ----
+  // The cap holds the head to one height whatever the type says about itself, which costs nothing
+  // for a sentence and hides most of an ASCII drawing. This is the way past it.
+  var introToggle = document.querySelector('.intro-more');
+  var intro = stickyHead && stickyHead.querySelector('.page-intro');
+
+  if (introToggle && intro) {
+    var introLabel = introToggle.querySelector('.intro-more-label');
+
+    // Asked of the capped box, so the answer is 'is anything hidden' rather than 'is it tall'.
+    // Never asked while open, where the cap is off and the answer would always be no.
+    var syncIntroToggle = function () {
+      if (stickyHead.classList.contains('intro-open')) return;
+      introToggle.hidden = intro.scrollHeight <= intro.clientHeight + 1;
+    };
+
+    // The column scrolls, not the window, so this is what the browser corrects when the head above
+    // it changes height - and on a page opened at a member, that correction lands on the member.
+    // Asking for the rest of a description is not asking to be taken anywhere, so the position is
+    // put back: once after the reflow, and once on the next frame, where the correction arrives.
+    var scroller = document.querySelector('.main-content');
+
+    introToggle.addEventListener('click', function () {
+      var top = scroller ? scroller.scrollTop : 0;
+      var keepScroll = function () {
+        if (scroller && scroller.scrollTop !== top) scroller.scrollTop = top;
+      };
+
+      var open = stickyHead.classList.toggle('intro-open');
+      introToggle.setAttribute('aria-expanded', String(open));
+      introLabel.textContent = open ? 'Show less' : 'Show all';
+      measureSticky();
+      keepScroll();
+      requestAnimationFrame(keepScroll);
+    });
+
+    syncIntroToggle();
+    // A diagram or a formula in the summary is laid out after this script runs, and a narrower
+    // column wraps the same text into more lines than it had.
+    window.addEventListener('load', syncIntroToggle);
+    window.addEventListener('resize', syncIntroToggle);
   }
 
   // ---- Tree: the member being read ----
@@ -1372,6 +1542,17 @@ const JS = `
     return out + escapeHtml(value.slice(at));
   }
 
+  /**
+   * A row's kind drawing, referencing the sprite the page already carries.
+   *
+   * Both result lists build the same mark the same way, so the dropdown and the results page cannot
+   * end up drawing a row differently. Unnamed drawings fall back to the class, as the server's do.
+   */
+  function kindIcon(e) {
+    return '<svg class="kind-icon" aria-hidden="true" focusable="false">' +
+      '<use href="#${ICON_PREFIX}' + escapeHtml(e[8] || 'class') + '"/></svg>';
+  }
+
   function findMatches(q) {
     // The assembly the header is scoped to, as an index into the table the asset carries. -1
     // means no scope, or a name this build does not know, which searches everything.
@@ -1380,7 +1561,7 @@ const JS = `
     var matches = [];
     for (var i = 0; i < index.entries.length; i++) {
       var e = index.entries[i];
-      if (scope >= 0 && e[8] !== scope) continue;
+      if (scope >= 0 && e[7] !== scope) continue;
       var pos = e[2].indexOf(q);
       if (pos < 0) continue;
       var name = e[0].toLowerCase();
@@ -1424,14 +1605,13 @@ const JS = `
 
     var rows = matches.slice(0, NAV_LIMIT).map(function (m) {
       var e = m[2];
-      var colour = e[7] || COLORS[e[4]] || 'var(--kind-C)';
       var ns = (index.namespaces || [])[e[6]] || '';
       // The same outlined mark the tree puts beside a static member. The row has no signature on it
       // to say so in words, which is what the full results page has and this does not.
       var staticMark = e[9] ? '<span class="tree-badge tree-badge-static">S</span>' : '';
 
       return '<a class="nav-result" href="' + escapeHtml(e[1]) + '" role="option">' +
-        '<span class="tree-badge" style="background:' + colour + '">' + escapeHtml(e[4] || '?') + '</span>' +
+        kindIcon(e) +
         staticMark +
         '<span class="nav-result-name">' + markMatch(e[0], q) + '</span>' +
         '<span class="nav-result-ns">' + escapeHtml(ns) + '</span></a>';
@@ -1466,16 +1646,14 @@ const JS = `
       }
 
       // Same shape the server builds in Renderer.searchResultHtml.
-      // [name, url, haystack, summary, badgeLetter, signature, nsIndex, badgeColour]
+      // [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static]
       var shown = matches.slice(0, 200);
       results.innerHTML = shown.map(function (m) {
         var e = m[2];
-        // The row carries its own colour, because an enum wears a T badge in the F colour.
-        var colour = e[7] || COLORS[e[4]] || 'var(--kind-C)';
         var ns = (index.namespaces || [])[e[6]] || '';
         return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
           '<div class="r-head">' +
-          '<span class="tree-badge" style="background:' + colour + '">' + escapeHtml(e[4] || '?') + '</span>' +
+          kindIcon(e) +
           '<a class="r-name" href="' + escapeHtml(e[1]) + '">' + markMatch(e[0], q) + '</a>' +
           '</div>' +
           // Already highlighted markup, built by the same highlighter the server uses, which

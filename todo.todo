@@ -1,8 +1,16 @@
-- appearance colors
-- resizing tree or example panel makes tree items randomly look selecteds
+- latex, graph, syntax
 - namespace/ ?
-- namespace mode when --api is not supplied
-- agent md files for each entry
+- appearance colors
+publish:
+- check requirements
+- check arguments
+- how to bundle?
+
+TODO:
+- show since tag somewhere?
+- Support RhinoCommon-like old-school docs:
+  - resizing tree or example panel makes tree items randomly look selecteds
+  - namespace mode when --api is not supplied
 
 dotnet publish Ownl.slnx
 

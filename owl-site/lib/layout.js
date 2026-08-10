@@ -1,8 +1,9 @@
 'use strict';
 
 const { escape, attr, json } = require('./html');
+const icons = require('./icons');
 const { slugify } = require('./routes');
-const { FILTER_KINDS, KIND_COLORS } = require('./theme');
+const { FILTER_KINDS } = require('./theme');
 
 /**
  * The page shell: a fixed header, the kind filter bar, a resizable tree sidebar and an
@@ -122,6 +123,9 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
 </script>
 </head>
 <body${bodyClass ? ` class="${attr(bodyClass)}"` : ''}>
+<!-- The kind drawings, declared once so the rows that wear them are a reference each. First in the
+     body, because the search box above the content draws rows the moment it is typed into. -->
+${icons.spriteHtml()}
 <a class="skip-link" href="#main">Skip to content</a>
 
 <header>
@@ -325,4 +329,4 @@ function renderBreadcrumbs(breadcrumbs) {
   return `<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${items}</ol></nav>`;
 }
 
-module.exports = { page, filterBar, assemblySelector, DEFAULT_SITE_NAME, KIND_COLORS };
+module.exports = { page, filterBar, assemblySelector, DEFAULT_SITE_NAME };

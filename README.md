@@ -98,9 +98,10 @@ JSON-LD, and every link is a real `href`. The site works with JavaScript disable
 the theme toggle, the kind filter, the collapsible navigation tree, the resizable sidebar, the
 assembly selector and client-side search.
 
-Syntax highlighting happens when the site is generated and nothing is loaded from a CDN, so an
-exported site works with no network at all. Static output is written as `<path>/index.html`, which
-serves from any plain file host with no rewrite rules, alongside `sitemap.xml` and `robots.txt`.
+Syntax highlighting, diagrams and math all happen when the site is generated and nothing is loaded
+from a CDN, so an exported site works with no network at all. Static output is written as
+`<path>/index.html`, which serves from any plain file host with no rewrite rules, alongside
+`sitemap.xml` and `robots.txt`.
 
 While `owl serve` is running it watches the model and your hand-written pages and picks up changes on
 the next request.
@@ -145,7 +146,30 @@ before you have written a word.
 
 Supported Markdown: headings with anchors, bold, italic, strikethrough, inline code, fenced code
 blocks with highlighting, links, images, ordered and unordered lists including nesting, blockquotes,
-tables and horizontal rules.
+tables and horizontal rules, plus diagrams and math.
+
+### Diagrams and math
+
+A ` ```d2 ` fence is drawn by [d2](https://d2lang.com) and inlined as SVG, and `$...$` / `$$...$$`
+are typeset as MathML:
+
+````markdown
+```d2
+direction: right
+Code -> Compile -> Execute -> Result
+```
+
+The sum of the first $n$ squares is $\sum_{i=0}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}$.
+````
+
+Both happen while the site is generated, so a diagram is markup a crawler can read rather than a
+picture, an equation is text that scales with the paragraph, and neither ships a library to the
+reader. A diagram follows the site's theme toggle, light or dark, from a single drawing.
+
+Math needs nothing installed. Diagrams need the `d2` binary (`brew install d2`) and are optional
+without it: a diagram fence renders as a code block and the build says so in one line. Fences in
+other languages are unaffected either way, and math is read only in these pages, not in doc
+comments, where a `$` is too ordinary a character to reinterpret.
 
 ## Requirements
 

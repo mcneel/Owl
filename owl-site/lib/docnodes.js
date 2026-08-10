@@ -2,6 +2,7 @@
 
 const { escape, attr } = require('./html');
 const { highlight } = require('./highlight');
+const { isDiagram } = require('./diagrams');
 
 /**
  * Renders the model's structured documentation nodes to HTML.
@@ -79,7 +80,14 @@ function renderNode(node, context) {
       if (context.inline) {
         return `<code>${escape((node.v || '').replace(/\s+/g, ' ').trim())}</code>`;
       }
+
       const lang = codeLanguage(node);
+
+      // A <code lang="d2"> in a doc comment is a diagram, drawn the way a ```d2 fence in an
+      // authored page is. One renderer, so a remark and an overview page draw alike.
+      const drawn = isDiagram(lang) && context.diagrams ? context.diagrams.html(node.v || '') : '';
+      if (drawn) return drawn;
+
       return `<pre><code class="language-${attr(lang)}">${highlight(node.v || '', lang)}</code></pre>`;
     }
 
@@ -141,9 +149,11 @@ function renderCref(node, context) {
     label = shortMemberLabel(label);
   }
 
-  // Nothing to point at, so show the label without pretending it is a link.
+  // Nothing to point at - not documented here, and not a framework type Learn would have a page for
+  // - so it is marked as the dead name it is. A span alone was not enough: it kept the link colour,
+  // which promised a page to anyone reading an Implements row.
   if (!url) {
-    return `<span class="see-ref">${escape(label)}</span>`;
+    return `<span class="see-ref see-ref-none">${escape(label)}</span>`;
   }
 
   // A reference that leaves for Microsoft Learn is marked by colour rather than by an arrow: these

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <g fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="1.5">
+    <g transform="matrix(0.0625,0,0,0.0625,0,0)">
+      <g transform="matrix(2.67404,0,0,2.67404,-52.8312,-17.6846)">
+        <path d="M67.625,18.58L100.534,35L100.534,73L67.625,90.382L34.716,73L34.716,35L67.625,18.58Z" fill="none" stroke="currentColor" stroke-width="5.98"/>
+      </g>
+      <g transform="matrix(2.67404,0,0,2.67404,-28.8312,6.31541)">
+        <path d="M58.649,81.407L58.649,43.407L91.558,26.025" fill="none" stroke="currentColor" stroke-width="5.98"/>
+      </g>
+      <g transform="matrix(16,0,0,16,0,0)">
+        <path d="M8,7.649L2.5,4.744" fill="none" stroke="currentColor" stroke-width="1"/>
+      </g>
+    </g>
+  </g>
+</svg>

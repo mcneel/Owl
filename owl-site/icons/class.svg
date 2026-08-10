@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <g fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2">
+    <g transform="matrix(1,0,0,1,0,-0.19)">
+      <path d="M11.34,10.09L12.05,10.09L14.72,7.42L14.72,6.71L13.38,5.38L12.68,5.38L10.86,7.19L6,7.19L6,5.806L7.72,4.09L7.72,3.38L5.72,1.38L5,1.38L1,5.38L1,6.09L3,8.09L3.71,8.09L5,6.803L5.04,12.69L5.54,13.19L10,13.19L10,13.75L11.33,15.09L12.04,15.09L14.71,12.42L14.71,11.71L13.37,10.38L12.67,10.38L10.81,12.23L6,12.23L6,8.19L10,8.19L10,8.71L11.34,10.09Z" fill="currentColor" fill-rule="nonzero"/>
+    </g>
+  </g>
+</svg>

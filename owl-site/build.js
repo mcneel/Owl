@@ -28,6 +28,7 @@ function parseArgs(argv) {
     sourceRefs: '',
     logo: '',
     logoDark: '',
+    d2: '',
     skipUndocumented: false,
     quiet: false,
   };
@@ -60,6 +61,9 @@ function parseArgs(argv) {
         break;
       case '--logo-dark':
         options.logoDark = path.resolve(argv[++i]);
+        break;
+      case '--d2':
+        options.d2 = argv[++i];
         break;
       case '--skip-undocumented':
         options.skipUndocumented = true;
@@ -96,6 +100,7 @@ Options:
   --base <path>     Path prefix the site will be served under
   --site-url <url>  Origin for canonical urls, Open Graph tags and the sitemap
   --source-refs <path>  Root for "declared in" references; omitted, there are none
+  --d2 <path>       The d2 binary that draws diagram fences (default: d2 from PATH)
   --skip-undocumented   Leave out anything with no <summary>
   --quiet           Only print the summary
   -h, --help        Show this help
@@ -122,9 +127,19 @@ try {
   process.exit(1);
 }
 
-for (const warning of site.model.warnings) {
-  console.warn('warning: ' + warning);
+// Loading the model raises most warnings, but not all of them: a diagram is drawn while the page
+// that holds it is rendered, so anything d2 has to say arrives during the export below. Reported by
+// what has not been reported yet, so the run ends having mentioned everything exactly once.
+let warningsReported = 0;
+
+function reportWarnings() {
+  for (const warning of site.model.warnings.slice(warningsReported)) {
+    console.warn('warning: ' + warning);
+  }
+  warningsReported = site.model.warnings.length;
 }
+
+reportWarnings();
 
 if (options.skipUndocumented && !options.quiet) {
   const { types, members } = site.model.skipped;
@@ -202,6 +217,8 @@ for (const asset of ['app.css', 'app.js', 'search.json']) {
 
 write(site.routes.sitemap(), site.renderer.sitemap(new Date().toISOString().slice(0, 10)));
 write('/robots.txt', site.renderer.robots());
+
+reportWarnings();
 
 const seconds = ((Date.now() - started) / 1000).toFixed(1);
 console.log(

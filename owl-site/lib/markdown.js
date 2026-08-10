@@ -2,6 +2,8 @@
 
 const { escape } = require('./html');
 const { highlight } = require('./highlight');
+const { isDiagram } = require('./diagrams');
+const math = require('./math');
 
 /**
  * Markdown renderer for the authored pages.
@@ -11,16 +13,55 @@ const { highlight } = require('./highlight');
  * blockquotes, tables and rules - and nothing else.
  */
 
-/** Inline formatting. Escaping happens first so authored HTML is shown, not executed. */
-function inline(text) {
-  let out = escape(text);
+/**
+ * Inline math: $...$, with no space just inside either delimiter.
+ *
+ * That rule is what keeps prose which merely contains dollars out of it. 'costs $5 and $10' has a
+ * space before the closing dollar and a digit after it; 'set $PATH and $HOME' has a space before
+ * its closing one too. Neither is math, and neither matches.
+ */
+const INLINE_MATH = /\$(?!\s)((?:[^$\n\\]|\\.)+?)(?<!\s)\$(?!\d)/g;
 
-  // Code spans first: their contents must not be touched by the emphasis rules below.
+/**
+ * $$...$$ written inside a line rather than on one of its own.
+ *
+ * Matched before the single-dollar rule, which would otherwise take the inner pair and leave the
+ * outer two as stray dollars. Typeset in display style, as the doubled delimiter asks for: the
+ * limits of a sum go above and below it rather than beside it, which is the reason to write it
+ * this way in the middle of a sentence.
+ */
+const INLINE_DISPLAY_MATH = /\$\$([^\n]+?)\$\$/g;
+
+/** Inline formatting. Escaping happens first so authored HTML is shown, not executed. */
+function inline(text, context = {}) {
+  // Code spans come out before anything else and go back in last, so what is written inside one is
+  // shown rather than read: a dollar in a code span is a dollar, not the start of an equation.
   const codeSpans = [];
-  out = out.replace(/`([^`]+)`/g, (_, code) => {
+  let source = String(text).replace(/`([^`]+)`/g, (_, code) => {
     codeSpans.push(code);
     return `\u0000${codeSpans.length - 1}\u0000`;
   });
+
+  // Math next, and ahead of the escaping: TeX is not HTML, and the '<' in an inequality has to
+  // reach the converter as the author wrote it. What comes back is markup, so it goes back in at
+  // the very end, past the rules that would read its brackets and underscores as emphasis.
+  const equations = [];
+
+  const typeset = (whole, tex, display) => {
+    const rendered = math.render(tex, display);
+    if (!rendered) {
+      if (context.warn) context.warn('could not typeset ' + tex);
+      return whole;
+    }
+
+    equations.push(rendered);
+    return `\u0001${equations.length - 1}\u0001`;
+  };
+
+  source = source.replace(INLINE_DISPLAY_MATH, (whole, tex) => typeset(whole, tex, true));
+  source = source.replace(INLINE_MATH, (whole, tex) => typeset(whole, tex, false));
+
+  let out = escape(source);
 
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) =>
     `<img src="${src}" alt="${alt}" loading="lazy">`);
@@ -35,7 +76,8 @@ function inline(text) {
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   out = out.replace(/~~(.+?)~~/g, '<del>$1</del>');
 
-  out = out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codeSpans[Number(i)]}</code>`);
+  out = out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${escape(codeSpans[Number(i)])}</code>`);
+  out = out.replace(/\u0001(\d+)\u0001/g, (_, i) => equations[Number(i)]);
   return out;
 }
 
@@ -48,7 +90,13 @@ function headingId(text) {
     .replace(/\s+/g, '-');
 }
 
-function render(markdown) {
+/**
+ * @param {string} markdown
+ * @param {object} context  { diagrams, warn } - the renderer a d2 fence is drawn by, and where a
+ *   diagram or an equation that would not render says so. Both optional; without them a fence is
+ *   printed as code and an equation as the text it was written as.
+ */
+function render(markdown, context = {}) {
   const lines = String(markdown || '')
     .replace(/\r\n/g, '\n')
     // Drop HTML comments before anything else. Everything downstream is escaped, so an
@@ -87,9 +135,55 @@ function render(markdown) {
       }
       index++; // closing fence
 
+      // A diagram fence is drawn rather than printed. With nothing to draw it with, it falls
+      // through to the code block below: the source is what the author wrote, and showing it says
+      // more than an empty frame would.
+      const drawn =
+        isDiagram(language) && context.diagrams ? context.diagrams.html(body.join('\n')) : '';
+
+      if (drawn) {
+        out.push(drawn);
+        continue;
+      }
+
       const code = highlight(body.join('\n'), language);
       const cls = language ? ` class="language-${escape(language)}"` : '';
       out.push(`<pre><code${cls}>${code}</code></pre>`);
+      continue;
+    }
+
+    // Display math: $$ alone on a line opens a block that runs to the next one, and $$...$$ on a
+    // single line is the same thing written short. Ahead of everything below, so a formula holding
+    // a pipe or a hash is not read as a table or a heading.
+    const openMath = /^\s*\$\$\s*(.*)$/.exec(line);
+    if (openMath) {
+      closeAllLists();
+
+      const oneLine = /^(.*?)\$\$\s*$/.exec(openMath[1]);
+      let tex;
+
+      if (oneLine) {
+        tex = oneLine[1];
+        index++;
+      } else {
+        const body = [];
+        index++;
+        while (index < lines.length && !/^\s*\$\$\s*$/.test(lines[index])) {
+          body.push(lines[index]);
+          index++;
+        }
+        index++; // closing $$
+        tex = body.join('\n');
+      }
+
+      const rendered = math.render(tex, true);
+      if (rendered) {
+        out.push(`<div class="math-display">${rendered}</div>`);
+      } else {
+        if (context.warn) context.warn('could not typeset ' + tex.replace(/\s+/g, ' ').trim());
+        out.push(`<pre><code class="language-tex">${escape(tex)}</code></pre>`);
+      }
+
       continue;
     }
 
@@ -114,11 +208,11 @@ function render(markdown) {
       }
 
       let table = '<div class="table-scroll"><table><thead><tr>';
-      headers.forEach((h, i) => { table += `<th${alignments[i] || ''}>${inline(h)}</th>`; });
+      headers.forEach((h, i) => { table += `<th${alignments[i] || ''}>${inline(h, context)}</th>`; });
       table += '</tr></thead><tbody>';
       for (const row of rows) {
         table += '<tr>';
-        headers.forEach((_, i) => { table += `<td${alignments[i] || ''}>${inline(row[i] || '')}</td>`; });
+        headers.forEach((_, i) => { table += `<td${alignments[i] || ''}>${inline(row[i] || '', context)}</td>`; });
         table += '</tr>';
       }
       table += '</tbody></table></div>';
@@ -132,7 +226,7 @@ function render(markdown) {
       closeAllLists();
       const level = heading[1].length;
       const text = heading[2].trim();
-      out.push(`<h${level} id="${escape(headingId(text))}">${inline(text)}</h${level}>`);
+      out.push(`<h${level} id="${escape(headingId(text))}">${inline(text, context)}</h${level}>`);
       index++;
       continue;
     }
@@ -153,7 +247,7 @@ function render(markdown) {
         body.push(lines[index].replace(/^\s*>\s?/, ''));
         index++;
       }
-      out.push(`<blockquote>${render(body.join('\n'))}</blockquote>`);
+      out.push(`<blockquote>${render(body.join('\n'), context)}</blockquote>`);
       continue;
     }
 
@@ -184,7 +278,7 @@ function render(markdown) {
         }
       }
 
-      out.push(inline(item[3]));
+      out.push(inline(item[3], context));
       index++;
       continue;
     }
@@ -199,7 +293,7 @@ function render(markdown) {
     // Paragraph: gather until a blank line or a construct starts
     if (listStack.length > 0) {
       // Lazy continuation of the current list item.
-      out.push(' ' + inline(line.trim()));
+      out.push(' ' + inline(line.trim(), context));
       index++;
       continue;
     }
@@ -218,7 +312,7 @@ function render(markdown) {
     }
 
     if (paragraph.length > 0) {
-      out.push(`<p>${inline(paragraph.join(' '))}</p>`);
+      out.push(`<p>${inline(paragraph.join(' '), context)}</p>`);
     } else {
       index++;
     }

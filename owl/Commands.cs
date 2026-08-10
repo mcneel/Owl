@@ -104,6 +104,7 @@ sealed class Command
         case "--logo":
         case "--logo-dark":
         case "--source-refs":
+        case "--d2":
           command.SiteArgs.Add(arg);
           command.SiteArgs.Add(Next(args, ref i, arg));
           break;

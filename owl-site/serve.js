@@ -20,6 +20,9 @@ const fs = require('node:fs');
 /** The renderer's source, watched alongside the content it renders. */
 const LIB_DIR = path.join(__dirname, 'lib');
 
+/** The kind drawings, which are source too. */
+const ICON_DIR = path.join(__dirname, 'icons');
+
 function parseArgs(argv) {
   const options = {
     port: 8080,
@@ -31,6 +34,7 @@ function parseArgs(argv) {
     sourceRefs: '',
     logo: '',
     logoDark: '',
+    d2: '',
     skipUndocumented: false,
   };
 
@@ -70,6 +74,9 @@ function parseArgs(argv) {
       case '--logo-dark':
         options.logoDark = path.resolve(argv[++i]);
         break;
+      case '--d2':
+        options.d2 = argv[++i];
+        break;
       case '--skip-undocumented':
         options.skipUndocumented = true;
         break;
@@ -102,6 +109,7 @@ Options:
   --base <path>     Serve under a path prefix
   --site-url <url>  Origin used for canonical and Open Graph urls
   --source-refs <path>  Root for "declared in" references; omitted, there are none
+  --d2 <path>       The d2 binary that draws diagram fences (default: d2 from PATH)
   --skip-undocumented   Leave out anything with no <summary>
   -h, --help        Show this help
 
@@ -118,6 +126,18 @@ if (options.help) {
 
 let site;
 
+// Whatever loading the model had to say, and then whatever rendering a page has to say: a diagram
+// is drawn when the page holding it is asked for, so d2's complaint about one arrives mid-serve.
+// A rebuild starts a new list, and this starts over with it.
+let warningsReported = 0;
+
+function reportWarnings() {
+  for (const warning of site.model.warnings.slice(warningsReported)) {
+    console.warn('warning: ' + warning);
+  }
+  warningsReported = site.model.warnings.length;
+}
+
 /**
  * Builds everything the next request will use, from source.
  *
@@ -133,6 +153,7 @@ function rebuild() {
 
   const { Site } = require('./lib/site');
   site = new Site(options);
+  warningsReported = 0;
 }
 
 try {
@@ -142,9 +163,7 @@ try {
   process.exit(1);
 }
 
-for (const warning of site.model.warnings) {
-  console.warn('warning: ' + warning);
-}
+reportWarnings();
 
 if (options.skipUndocumented) {
   const { types, members } = site.model.skipped;
@@ -168,7 +187,7 @@ function watch(target) {
           // A syntax error in a half-saved edit must not take the server down: the previous build
           // stays in place and the next save gets another go.
           rebuild();
-          console.log('reloaded');
+          // console.log('reloaded');
         } catch (err) {
           console.error('reload failed: ' + err.message);
         }
@@ -183,6 +202,9 @@ function watch(target) {
 watch(site.jsonDir);
 watch(site.apiDir);
 watch(LIB_DIR);
+// The kind drawings are read when lib/icons.js loads, and the rebuild above drops it from the cache,
+// so editing one shows up the way editing the stylesheet does.
+watch(ICON_DIR);
 
 // Named on the command line, so they sit outside the watched directories.
 watch(options.logo);
@@ -206,6 +228,8 @@ const server = http.createServer((request, response) => {
     response.end('Internal error: ' + err.message);
     return;
   }
+
+  reportWarnings();
 
   const body = Buffer.from(result.body, 'utf8');
   response.writeHead(result.status, {

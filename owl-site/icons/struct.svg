@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <g fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2">
+    <path d="M2,2L1,3L1,6L2,7L14,7L15,6L15,3L14,2L2,2ZM2,3L14,3L14,6L2,6L2,3ZM1,10L2,9L5,9L6,10L6,13L5,14L2,14L1,13L1,10ZM5,10L2,10L2,13L5,13L5,10ZM10,10L11,9L14,9L15,10L15,13L14,14L11,14L10,13L10,10ZM14,10L11,10L11,13L14,13L14,10Z"/>
+  </g>
+</svg>
