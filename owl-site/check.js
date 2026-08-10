@@ -31,7 +31,20 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--docs') apiDir = path.resolve(args[++i]);
   else if (args[i] === '--skip-undocumented') skipUndocumented = true;
   else if (args[i] === '-h' || args[i] === '--help') {
-    console.log('Usage: node check.js --json <model-dir> [--docs <dir>] | --dist <exported-dir>');
+    console.log(`
+Check a documentation site for dead links, missing metadata and offline-ness.
+
+Usage:
+  node check.js --json <dir> [--docs <dir>] [--skip-undocumented]
+  node check.js --dist <dir>
+
+Options:
+  --json <dir>          Location of the generated model; renders every page in memory
+  --docs <dir>          Authored markdown pages; without them the site is browsed by namespace
+  --skip-undocumented   Leave out anything with no <summary>, as serve and build would
+  --dist <dir>          Check an already-exported directory instead of rendering one
+  -h, --help            Show this help
+`);
     process.exit(0);
   } else {
     console.error(`Unknown argument '${args[i]}'`);

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Owl.Gen;
 
 namespace Owl;
@@ -28,15 +27,11 @@ static class Tools
   }
 
   /// <summary>Runs one of owl-site's Node scripts. Returns its exit code.</summary>
+  /// <remarks>node is checked for by <see cref="Requirements"/> before the command starts, so that
+  /// a missing one is reported before a build spends minutes generating a model it cannot render.
+  /// </remarks>
   public static int Site(string script, IEnumerable<string> args)
   {
-    if (FindNode() is null)
-    {
-      throw new OwlError(
-        "Node is required to serve or export the site, and 'node' was not found on PATH.\n" +
-        "Install Node 18 or newer, or run 'owl gen' on its own to write the model only.");
-    }
-
     return Run("node", [Path.Combine(UnpackSite(), script), .. args]);
   }
 
@@ -92,32 +87,6 @@ static class Tools
 
     process.WaitForExit();
     return process.ExitCode;
-  }
-
-  static string ExeSuffix => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
-
-  static string? FindNode()
-  {
-    string[] names = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-      ? ["node.exe", "node.cmd"]
-      : ["node"];
-
-    string paths = Environment.GetEnvironmentVariable("PATH") ?? "";
-
-    foreach (string dir in paths.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-    {
-      foreach (string name in names)
-      {
-        string candidate = Path.Combine(dir.Trim('"'), name);
-
-        if (File.Exists(candidate))
-        {
-          return candidate;
-        }
-      }
-    }
-
-    return null;
   }
 }
 

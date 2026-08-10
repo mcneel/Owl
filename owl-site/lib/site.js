@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const { Model } = require('./model');
 const { Routes, slugify } = require('./routes');
 const { Renderer } = require('./pages');
-const { Diagrams } = require('./diagrams');
+const { Diagrams, probe } = require('./diagrams');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
 
@@ -48,6 +48,13 @@ class Site {
     this.logoDarkPath = options.logoDark || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
     this.d2 = options.d2 || 'd2';
+
+    // Naming a d2 that is not there is a mistake worth stopping for. The default is what makes
+    // diagrams optional - without one installed a fence stays the code block it was written as -
+    // but asking for a particular binary is asking for it to work.
+    if (options.d2 && !probe(options.d2)) {
+      throw new Error(`--d2 ${options.d2}: not found, or it did not answer --version.`);
+    }
 
     this.reload();
   }

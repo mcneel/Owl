@@ -50,21 +50,29 @@ static void PrintUsage()
     derived types are found across the whole set.
 
     Options:
-      -o, --out <dir>     Model directory for gen and serve (default .owl/json)
-                          Site directory for build (default .owl/site)
-      --json <dir>        Reuse an existing model instead of generating one
-      --docs <dir>        Authored markdown pages (default docs/api, when it exists)
-                          Without them the site is browsed by namespace alone
-      --name <text>       Site name
-      --port <n>          Port for serve (default 8080)
-      --base <path>       Path prefix the site will be served under
-      --site-url <url>    Origin for canonical urls and the sitemap
-      --d2 <path>         The d2 binary that draws diagrams (default: d2 on PATH)
-      --skip-undocumented Leave anything with no <summary> out of the site
-      -h, --help          Show this help
+      -o, --out <dir>       Model directory for gen and serve (default .owl/json)
+                            Site directory for build (default .owl/site)
+      --json <dir>          Reuse an existing model instead of generating one
+      --docs <dir>          Authored markdown pages (default docs/api, when it exists)
+                            Without them the site is browsed by namespace alone
+      --name <text>         Site name
+      --port <n>            Port for serve (default 8080)
+      --base <path>         Path prefix the site will be served under
+      --site-url <url>      Origin for canonical urls and the sitemap
+      --logo <file>         Header icon, overriding <docs>/logo.svg
+      --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
+      --source-refs <path>  Root for "declared in" references; without it there are none
+      --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
+      --skip-undocumented   Leave anything with no <summary> out of the site
+      --quiet               Only print the summary, not per-page progress (build)
+      -h, --help            Show this help
+      --version             Print owl's version
 
     serve and build generate first, so they accept everything gen does, including --tfm,
-    --configuration, --verify and --verbose. Run 'owl gen --help' for the full list.
+    --configuration, --examples, --verify and --verbose. Run 'owl gen --help' for the full list.
+
+    Requires a .NET SDK (8.0 or newer) to generate, and node (18 or newer) to serve or export.
+    Diagrams additionally need the d2 binary; without it a diagram fence stays a code block.
 
     Examples:
       owl serve src/MyLib/MyLib.csproj

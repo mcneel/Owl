@@ -21,11 +21,34 @@
   <ItemGroup>
     <!-- owl-site is embedded because it is JavaScript that node has to require from real files.
          Tools.cs writes these back out at run time. LogicalName always uses forward slashes; the
-         RecursiveDir metadata does not, so Tools.cs normalizes before matching. -->
-    <EmbeddedResource Include="../owl-site/**/*.js;../owl-site/package.json"
+         RecursiveDir metadata does not, so Tools.cs normalizes before matching.
+
+         Not only the scripts: icons/ is read per kind drawing, lib/vendor/temml.cjs is required by
+         math.js, and lib/vendor/temml.css is read as assets.js loads. Every pattern here is a **
+         glob so RecursiveDir has a value and a file lands back in the directory it came from.
+         VerifySiteEmbedded below fails the build rather than let this list fall behind again. -->
+    <EmbeddedResource Include="../owl-site/**/*.js;../owl-site/**/*.cjs;../owl-site/**/*.css;
+                               ../owl-site/**/*.svg;../owl-site/**/*.LICENSE;
+                               ../owl-site/package.json"
                       Exclude="../owl-site/node_modules/**;../owl-site/dist/**"
                       LogicalName="site/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <!--
+    A file owl-site reads at run time but nobody embedded is invisible until the shipped binary is
+    run: a dev build resolves it from the source tree and works. That is how icons/, temml.cjs and
+    temml.css came to be missing at once. Everything owl-site ships, minus what only a reader needs,
+    has to be in the list above.
+  -->
+  <Target Name="VerifySiteEmbedded" BeforeTargets="Build">
+    <ItemGroup>
+      <SiteFile Include="../owl-site/**/*"
+                Exclude="../owl-site/node_modules/**;../owl-site/dist/**;../owl-site/**/*.md;../owl-site/**/.DS_Store" />
+      <SiteUnembedded Include="@(SiteFile)" Exclude="@(EmbeddedResource)" />
+    </ItemGroup>
+    <Error Condition="'@(SiteUnembedded)' != ''"
+           Text="owl-site file(s) not embedded, so the bundled binary would not find them: @(SiteUnembedded). Add the extension to the EmbeddedResource Include in owl/Owl.csproj." />
+  </Target>
 
   <!--
     Publish produces one file in dist/ that an installer copies on its own: no runtime to install,

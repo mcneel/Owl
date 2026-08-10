@@ -49,31 +49,53 @@ owl build --json .owl/json --out ./public
 ### Options
 
 ```
+owl <command> ...
+  -h, --help            Show this help
+  --version             Print owl's version
+
 owl gen <project.csproj...>
-  -o, --out <dir>     Where to write the model (default .owl/json)
-  --name <text>       Site name
-  --repo-url <url>    Base url for source links
-  --tfm <tfm>         Target framework to document (default net8.0)
-  --verify            Report undocumented public API and unresolved crefs
-  -v, --verbose       Full diagnostics
+  -o, --out <dir>       Where to write the model (default .owl/json)
+  --name <text>         Site name, recorded in the model
+  --tfm <tfm>           Target framework to document (default net8.0)
+  -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
+  --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
+  --examples <dir>      Root for <code source="..."/> paths (default: project dir, repo root)
+  --skip-msbuild        Reuse previously captured project inputs
+  --no-restore          Skip the restore pass before capturing inputs
+  --verify              Report undocumented public API and unresolved crefs
+  -v, --verbose         Full diagnostics
 
 owl serve <project.csproj...>
-  -o, --out <dir>     Where to write the model (default .owl/json)
-  --port <n>          Port to listen on (default 8080)
-  --docs <dir>        Your hand-written pages (default docs/api, when it exists)
+  -o, --out <dir>       Where to write the model (default .owl/json)
+  --port <n>            Port to listen on (default 8080)
 
 owl build <project.csproj...>
-  --out <dir>         Where to write the site (default .owl/site)
-  --docs <dir>        Your hand-written pages (default docs/api, when it exists)
-  --base <path>       Path prefix the site will be served under
-  --site-url <url>    Origin for canonical urls and the sitemap
+  -o, --out <dir>       Where to write the site (default .owl/site)
+  --quiet               Only print the summary, not per-page progress
+
+owl serve and owl build, both
+  --json <dir>          Reuse an existing model instead of generating one
+  --docs <dir>          Your hand-written pages (default docs/api, when it exists)
+  --name <text>         Site name, overriding the one recorded in the model
+  --logo <file>         Header icon, overriding <docs>/logo.svg
+  --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
+  --base <path>         Path prefix the site will be served under
+  --site-url <url>      Origin for canonical urls and the sitemap
+  --source-refs <path>  Root for "declared in" references; without it there are none
+  --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
+  --skip-undocumented   Leave anything with no <summary> out of the site
 ```
 
 `serve` and `build` generate first, so they take everything `gen` does. Give them `--json <dir>`
 instead of projects to reuse a model.
 
-`--name` and `--repo-url` are recorded in the model, so you set them once at generation time rather
-than repeating them every time you serve or export.
+`--name` is recorded in the model, so you set it once at generation time rather than repeating it
+every time you serve or export. Passing it to `serve` or `build` overrides it for that run.
+
+Every member's source file and line is recorded too, but nothing is shown until `--source-refs`
+gives a root to hang those paths from — on its own the recorded path is relative to the tree the
+projects were built from and means nothing. An `http`/`https` root turns each into a link with a
+`#L<line>` anchor; anything else, such as a local checkout, renders as plain text.
 
 Projects that target several frameworks are documented one framework per run. `--tfm net48` for the
 desktop build, `--tfm net8.0` for the modern one.
@@ -91,6 +113,8 @@ never shows up in a normal build; `--verify` is where it surfaces, along with an
 | `/namespace/<namespace>/` | the types in a namespace |
 | `/category/<assembly>/<category>/` | a category overview and its types |
 | `/type/<type>/` | one type, its members as `#anchor` sections |
+| `/example/<type>/<member>/` | one member's examples, tabbed by language |
+| `/namespace/type/<type>/` | the same type page in namespace mode |
 | `/search/` | search |
 
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
@@ -184,9 +208,17 @@ comments, where a `$` is too ordinary a character to reinterpret.
 
 ## Requirements
 
-- .NET SDK 8.0 or newer
-- Node 18 or newer, for `owl serve` and `owl build`
+| | Needed by | Without it |
+|---|---|---|
+| .NET SDK 8.0+ | `owl gen`, and `serve`/`build` when they generate | owl stops before starting |
+| Node 18+ | `owl serve`, `owl build` | owl stops before generating |
+| [d2](https://d2lang.com) | ` ```d2 ` fences only | the fence renders as a code block, and the run says so |
 
-Owl needs to be able to build your projects, since that is where the extra detail comes from. It runs
-your build's own configuration, so conditional compilation, multi-targeting and package references
-are honoured as your build defines them.
+Owl is a single self-contained binary, so there is no .NET runtime to install, but the SDK is a
+separate matter: owl needs to be able to build your projects, since that is where the extra detail
+comes from. It runs your build's own configuration, so conditional compilation, multi-targeting and
+package references are honoured as your build defines them.
+
+Both hard requirements are checked before a command does any work, so a missing one is a sentence
+naming what to install rather than a failure minutes into a build. `d2` is checked when the first
+diagram is met, which is why a project that draws nothing never needs it.

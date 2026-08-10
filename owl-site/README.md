@@ -29,7 +29,16 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--source-refs <path>` | serve, build | Root the "declared in" references hang from. Without it, none are shown. |
 | `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
+| `--quiet` | build | Only print the summary, not per-page progress. |
 | `--dist <dir>` | check | Check an already-exported directory instead of rendering. |
+| `-h`, `--help` | all | Show that script's usage. |
+
+`serve.js` also takes a bare port as a positional argument, so `node serve.js --json .owl/json 9000`
+and `--port 9000` are the same thing.
+
+`--d2` names the binary that draws diagram fences. Not having d2 at all is fine — a fence stays the
+code block it was written as and the run logs one line — but naming one that is not there is a
+mistake, and stops the run rather than quietly producing a site with no diagrams in it.
 
 `serve.js` watches the model, the docs directory and `lib/` itself, and reloads on change, so
 editing a `MAIN.md`, regenerating the model or adjusting a renderer shows up on the next request.

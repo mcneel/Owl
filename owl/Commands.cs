@@ -118,6 +118,16 @@ sealed class Command
           command.SiteArgs.Add(arg);
           break;
 
+        // Only build.js has per-page progress to quieten, and serve.js rejects what it does not
+        // know, so this is forwarded for the one command it means something to. gen and serve
+        // accept and ignore it, the way they do --port.
+        case "--quiet":
+          if (name == "build")
+          {
+            command.SiteArgs.Add(arg);
+          }
+          break;
+
         // A project, serve's bare port form, or a flag only owl-gen understands.
         default:
           if (arg.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
@@ -175,6 +185,19 @@ sealed class Command
     if (ForwardsHelp)
     {
       return Tools.Gen(GenArgs);
+    }
+
+    // Before anything is generated or rendered, so a missing prerequisite is a sentence at the
+    // start rather than a failure minutes into a build. What is needed depends on the command:
+    // generating asks MSBuild what a project compiles, and only serve and build run the site.
+    if (Generates)
+    {
+      Requirements.Dotnet();
+    }
+
+    if (Name is "serve" or "build")
+    {
+      Requirements.Node();
     }
 
     if (Generates)

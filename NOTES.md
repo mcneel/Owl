@@ -108,11 +108,18 @@ nothing is left in a temp folder. Rewriting it every time means an upgraded owl
 never reuses a stale copy. The lookup asks owl-gen's own assembly rather than
 the entry assembly, which is what keeps it working once bundled inside owl.
 
-`owl-site` (14 scripts, about 140 KB) is embedded in owl because node needs real
+`owl-site` (32 files, about 830 KB) is embedded in owl because node needs real
 files to `require`. Those go to a temp directory keyed by owl's version, not
 next to the binary, which is usually read-only once installed. They are
 rewritten every run for the same reason: at that size, caching would buy nothing
 and could serve a stale copy after an upgrade.
+
+Not only the scripts. `icons/` is eleven SVGs read one per kind,
+`lib/vendor/temml.cjs` is what `math.js` requires, and `lib/vendor/temml.css` is
+read as `assets.js` loads — so a `.js`-only glob produced a binary that died on
+the first page it rendered while every dev build kept working, because a dev
+build resolves those from the source tree. `VerifySiteEmbedded` in `owl/Owl.csproj`
+now fails the build if anything under `owl-site` is outside the embedded set.
 
 ### Not compressed
 
@@ -152,3 +159,16 @@ Shipping a self-contained executable removes the .NET runtime as a
 prerequisite, not the rest. owl-gen shells out to `dotnet msbuild`, so a .NET
 SDK still has to be on the machine, and `owl serve` and `owl build` still need
 `node` on PATH. `owl gen` on its own needs only the SDK.
+
+`owl/Requirements.cs` checks both before a command starts, rather than letting
+them surface where they bite: a missing `dotnet` otherwise appears as a child
+process that would not start, from inside a capture, and a missing `node` only
+after `owl build` has spent minutes generating the model it then cannot render.
+`--list-sdks` rather than `--version` for dotnet, because a runtime-only install
+answers the second and has no msbuild to run.
+
+d2 is deliberately not checked there. It is needed only by a page that actually
+holds a diagram, so owl-site probes on meeting the first one and leaves the
+fence as a code block otherwise; requiring it up front would stop every project
+that has never drawn anything. Naming one with `--d2` is different, and does
+stop the run — asking for a particular binary is asking for it to work.
