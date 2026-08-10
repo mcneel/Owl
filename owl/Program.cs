@@ -1,3 +1,4 @@
+using System.Reflection;
 using Owl;
 
 // owl: generate API documentation for .NET projects, then serve or export it as a website.
@@ -13,7 +14,17 @@ if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
 
 if (args[0] is "--version")
 {
-  Console.WriteLine(typeof(Command).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+  // The informational version rather than the assembly one, which is four numbers and cannot hold
+  // a prerelease suffix: every 0.1.0-ci.N build would otherwise report itself as plain 0.1.0, and
+  // two CI builds would be indistinguishable from the binary alone.
+  Assembly owl = typeof(Command).Assembly;
+  string version =
+    owl.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+    ?? owl.GetName().Version?.ToString(3)
+    ?? "0.0.0";
+
+  // A build that knows its commit appends '+<sha>'. That is provenance, not part of the version.
+  Console.WriteLine(version.Split('+')[0]);
   return 0;
 }
 

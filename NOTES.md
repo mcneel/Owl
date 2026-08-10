@@ -1,7 +1,7 @@
 # Implementation notes
 
 Background on decisions that are not obvious from the code. For what owl is and
-how to use it, see the [README](../README.md).
+how to use it, see the [README](README.md).
 
 ## Asking MSBuild for the compiler inputs
 
@@ -73,24 +73,48 @@ and reuses the previously written inputs files.
 
 ## Shipping
 
-One command produces the whole installer payload — a single file in `dist/`:
+owl ships as a .NET tool and nothing else. `.github/workflows/build.yml` packs
+one on every push to `main` and keeps it as a workflow artifact; other
+repositories install from that.
 
 ```
-dotnet publish owl/Owl.csproj -c Release -r osx-arm64 --self-contained
+dotnet pack owl/Owl.csproj -c Release -p:VersionSuffix=ci.<run> -o nupkg
 ```
 
 ```
-dist/owl    84 MB   everything: the CLI, the extractor, and the site renderer
+McNeel.Owl.0.1.0-ci.<run>.nupkg   3.5 MB   tools/net8.0/any, one package for every platform
 ```
 
-`osx-arm64`, `osx-x64`, `win-x64` and `linux-x64` are pre-listed for restore.
-Copy that one file anywhere and owl works.
+Framework-dependent and RID-agnostic, which is not the compromise it sounds
+like: owl-gen shells out to `dotnet msbuild`, so any machine able to run owl
+already has an SDK, and bundling a runtime would hand it a second copy of what
+it has. One 3.5 MB package covers Linux, macOS and Windows, where self-contained
+binaries would have been about 81 MB each and one per platform.
+
+Locally there is nothing to install — `dotnet run --project owl -- <args>` runs
+it straight from the tree.
+
+### Versioning
+
+The base is `VersionPrefix` in `owl/Owl.csproj`, so the number is owned by the
+project rather than by a workflow file, and CI supplies only the suffix.
+`VersionPrefix` rather than `Version` because the two differ under a suffix: an
+explicit `Version` wins outright and would make `VersionSuffix` do nothing,
+while a prefix composes with it. Packing with neither gives a plain `0.1.0`.
+
+`owl --version` reads `AssemblyInformationalVersionAttribute` rather than the
+assembly version, which is four numbers and cannot hold a prerelease suffix —
+every `0.1.0-ci.N` build would otherwise report itself as plain `0.1.0`.
+
+`RollForward` is `LatestMajor` because the tool targets `net8.0`: on a machine
+whose newest runtime is 9 or 10 it otherwise refuses to start rather than roll
+forward to what is there.
 
 ### One binary, three parts
 
 `owl-gen` is a class library that owl links and calls in-process, not a second
-executable it spawns. Both are .NET, so a separate process would have meant a
-second copy of the runtime in the shipped payload for nothing. `OwlGen.Run`
+executable it spawns. Both are .NET, so a separate process would have bought
+nothing the shipped payload does not already carry. `OwlGen.Run`
 takes a command line and returns an exit code, writing progress to standard
 output the way a child process would, so linking changed nothing a user sees.
 
@@ -121,44 +145,12 @@ the first page it rendered while every dev build kept working, because a dev
 build resolves those from the source tree. `VerifySiteEmbedded` in `owl/Owl.csproj`
 now fails the build if anything under `owl-site` is outside the embedded set.
 
-### Not compressed
+### Prerequisites
 
-`EnableCompressionInSingleFile` halves the binary, from 84 MB to 38 MB. It is
-off because it makes owl crash.
-
-With compression on, documenting a large project set died with a fatal
-`AccessViolationException` inside Roslyn's parallel symbol completion
-(`SourceMemberContainerTypeSymbol.ComputeInterfaceImplementations` under
-`RoslynParallel`) on 7 of 11 runs. The same workload is clean on an uncompressed
-single file, on a self-contained non-single-file publish, and on an ordinary
-dev build. The crash is a hard SIGABRT, not an exception owl can report.
-
-The size is tempting enough that someone will try turning it back on. Run a
-large project set several times before believing it works; a single passing run
-proves nothing at that failure rate.
-
-### Not trimmed
-
-Roslyn resolves plenty by reflection, and the model is written by the
-reflection-based `JsonSerializer`, which reports IL2026 under `PublishTrimmed`:
-the model types' property metadata can be trimmed away. The failure mode is a
-smaller binary that quietly writes a wrong model, which is a bad trade against a
-larger file. Trimming would first need a source-generated
-`JsonSerializerContext`, and Roslyn would still need proving.
-
-### Properties that must stay off the project files
-
-`SelfContained` and `RuntimeIdentifier` belong on the publish command, not in
-either `.csproj`. As plain properties they make an *ordinary build* emit
-RID-specific output under `bin/Release/net8.0/<rid>/`, which is not where the
-solution build expects either project to land.
-
-### Prerequisites the binary does not remove
-
-Shipping a self-contained executable removes the .NET runtime as a
-prerequisite, not the rest. owl-gen shells out to `dotnet msbuild`, so a .NET
-SDK still has to be on the machine, and `owl serve` and `owl build` still need
-`node` on PATH. `owl gen` on its own needs only the SDK.
+A .NET SDK has to be on the machine, and not only to run the tool: owl-gen
+shells out to `dotnet msbuild` to learn what a project compiles. `owl serve` and
+`owl build` additionally need `node` on PATH. `owl gen` on its own needs only
+the SDK.
 
 `owl/Requirements.cs` checks both before a command starts, rather than letting
 them surface where they bite: a missing `dotnet` otherwise appears as a child

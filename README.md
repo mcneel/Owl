@@ -23,6 +23,40 @@ Owl uses semantic analysis so the documentation it writes knows:
 - **Main Markdown**, so the site and each assembly have a hand-written entry page
 - **Category Markdowns**, so each category has a hand-written overview page
 
+## Installing
+
+owl is published from `main` as a .NET tool package — one ~3.5 MB `.nupkg` that serves Linux,
+macOS and Windows alike. It is framework-dependent, which costs nothing here: `owl gen` shells out
+to `dotnet msbuild`, so any machine able to run owl already has the SDK such a package needs.
+
+The latest build of `main`, from the workflow artifact:
+
+```bash
+RUN=$(gh run list -R mcneel/Owl -w build -b main -s success -L1 --json databaseId -q '.[0].databaseId')
+gh run download "$RUN" -R mcneel/Owl -n owl-nupkg --dir pkg
+
+dotnet tool install McNeel.Owl --source pkg --tool-path ./bin --prerelease
+./bin/owl --version
+```
+
+`--source` rather than `--add-source`, because a tool package carries its dependencies: the
+install resolves entirely from that folder and never reaches nuget.org. `--prerelease` is required
+because every build is versioned `0.1.0-ci.<run>` — the base comes from `owl/Owl.csproj` and CI
+appends the run number. Drop `--tool-path` to install it on PATH as an ordinary global tool.
+
+Artifacts are kept for 90 days, so pin by keeping the `.nupkg` rather than by expecting an old
+run to still be downloadable.
+
+Working on owl itself, there is nothing to install — run it straight from the tree:
+
+```bash
+dotnet run --project owl -- serve --json .owl/json
+```
+
+From inside GitHub Actions, reading a private repo needs a token of its own — a fine-grained PAT
+with `actions: read` on this repository. A repository's own
+`GITHUB_TOKEN` cannot reach another repository.
+
 ## Commands
 
 ```bash
@@ -214,10 +248,9 @@ comments, where a `$` is too ordinary a character to reinterpret.
 | Node 18+ | `owl serve`, `owl build` | owl stops before generating |
 | [d2](https://d2lang.com) | ` ```d2 ` fences only | the fence renders as a code block, and the run says so |
 
-Owl is a single self-contained binary, so there is no .NET runtime to install, but the SDK is a
-separate matter: owl needs to be able to build your projects, since that is where the extra detail
-comes from. It runs your build's own configuration, so conditional compilation, multi-targeting and
-package references are honoured as your build defines them.
+The SDK is not only there to run owl: owl needs to be able to build your projects, since that is
+where the extra detail comes from. It runs your build's own configuration, so conditional
+compilation, multi-targeting and package references are honoured as your build defines them.
 
 Both hard requirements are checked before a command does any work, so a missing one is a sentence
 naming what to install rather than a failure minutes into a build. `d2` is checked when the first

@@ -50,28 +50,39 @@
            Text="owl-site file(s) not embedded, so the bundled binary would not find them: @(SiteUnembedded). Add the extension to the EmbeddedResource Include in owl/Owl.csproj." />
   </Target>
 
-  <!--
-    Publish produces one file in dist/ that an installer copies on its own: no runtime to install,
-    nothing to keep beside it. See docs/NOTES.md for the command.
-
-    Not trimmed. Roslyn resolves plenty by reflection and the model is written by the reflection
-    based JsonSerializer, so trimming risks a smaller binary that quietly writes a wrong model.
-
-    Not compressed either, which is not a size preference. EnableCompressionInSingleFile made owl
-    die with a fatal AccessViolationException inside Roslyn's parallel symbol completion on roughly
-    two runs in three over a large project set; uncompressed is clean over the same runs. It halves
-    the file, so someone will be tempted: measure a real run before turning it back on.
-
-    RuntimeIdentifier and SelfContained belong on the publish command, not here: as plain
-    properties they make an ordinary build emit RID-specific output.
-  -->
+  <!-- What the package says about itself, whichever way owl is built. -->
   <PropertyGroup>
-    <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- VersionPrefix rather than Version, because the two behave differently under a suffix: an
+         explicit Version wins outright and would make -p:VersionSuffix do nothing, while a prefix
+         composes with one. CI packs with -p:VersionSuffix=ci.<run>, giving 0.1.0-ci.42; packing
+         with neither gives a plain 0.1.0. -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+
+    <PackageId>McNeel.Owl</PackageId>
+    <Authors>McNeel</Authors>
+    <Description>API documentation generator and website builder for .NET</Description>
+    <RepositoryUrl>https://github.com/mcneel/Owl</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
-    <RuntimeIdentifiers>osx-arm64;osx-x64;win-x64;linux-x64</RuntimeIdentifiers>
-    <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildThisFileDirectory)../dist/</PublishDir>
+
+    <!-- owl targets net8.0, and a machine whose newest runtime is 9 or 10 would otherwise refuse
+         to start the tool rather than roll forward to what it has. -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    owl ships as a .NET tool and nothing else: one framework-dependent, RID-agnostic package of
+    about 3.5 MB that serves every platform, resolved against the SDK the machine already has.
+
+    That SDK is not an extra ask. owl-gen shells out to 'dotnet msbuild' to learn what a project
+    compiles, so anything able to run owl at all already has one, and carrying a runtime as well
+    would hand it a second copy of what it has.
+  -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>owl</ToolCommandName>
   </PropertyGroup>
 
 </Project>
