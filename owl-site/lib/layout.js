@@ -6,8 +6,9 @@ const { FILTER_KINDS, KIND_COLORS } = require('./theme');
 
 /**
  * The page shell: a fixed header, the kind filter bar, a resizable tree sidebar and an
- * independently scrolling content pane, with dark as the default theme. Every page carries its own
- * title, description and canonical url, plus Open Graph tags, breadcrumbs and JSON-LD.
+ * independently scrolling content pane, themed to follow the system unless the reader has toggled.
+ * Every page carries its own title, description and canonical url, plus Open Graph tags,
+ * breadcrumbs and JSON-LD.
  */
 
 /** Used when the model carries no site name and none was passed on the command line. */
@@ -95,6 +96,8 @@ function page(options) {
 
   return `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
+<!-- The attribute is what a reader with JavaScript off gets, since the script below is what reads
+     the system's appearance. Dark, because that is the site's own look. -->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -112,8 +115,10 @@ ${canonicalUrl ? `<meta property="og:url" content="${attr(canonicalUrl)}">` : ''
 <link rel="sitemap" type="application/xml" href="${attr(routes.sitemap())}">
 ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</script>` : ''}
 <script>
-/* Applied before first paint so a stored choice does not flash the default dark theme. */
-(function(){try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+/* Applied before first paint, so the appearance the site opens as does not flash the other one.
+   The session's store, not the origin's: a toggle holds across the links of one read and is gone by
+   the next, so the site opens as the system says every time and no choice outlives the tab. */
+(function(){try{var t=sessionStorage.getItem('docs-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 </script>
 </head>
 <body${bodyClass ? ` class="${attr(bodyClass)}"` : ''}>
@@ -124,11 +129,14 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
   <form action="${attr(routes.search())}" method="get" role="search">
     <label class="skip-link" for="search">Search the API</label>
     <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
-         and not only on the one that happens to carry a results list. -->
+         and not only on the one that happens to carry a results list.
+
+         The scope is the slug, not the name: the index keys its assemblies by slug, and a name here
+         matched none of them, so every page but the search page quietly searched the whole API. -->
     <input type="search" id="search" name="q" placeholder="Search"
            value="${attr(currentQuery)}" autocomplete="off"
            data-index-url="${attr(routes.asset('search.json'))}"
-           data-scope="${attr(currentAssembly)}">
+           data-scope="${attr(currentAssembly ? slugify(currentAssembly) : '')}">
     ${
       // Carries the assembly being read into the search, so the box searches what the selector
       // beside it says. Nothing on a page that belongs to no assembly, which searches everything.
@@ -211,11 +219,14 @@ function siteLogo(logo, logoDark) {
 }
 
 /**
- * Buttons that filter the cards on the page by badge letter.
+ * Tabs that filter the cards on the page by badge letter.
  *
  * It renders inside the content column rather than in the chrome above it, because it acts on this
  * page and nothing else: the state resets on navigation, and the script it drives only ever looks
- * inside .main-content.
+ * inside .main-content. A type page takes it further and puts the row in its own head, where it
+ * ends up sitting on the line the member list starts under.
+ *
+ * A type's tabs cover what it inherits as well as what it declares, since both are listed under it.
  */
 function filterBar({ kinds = null, extra = '' } = {}) {
   // Only the letters this page actually renders. A namespace holds no methods and a type holds no
@@ -225,14 +236,13 @@ function filterBar({ kinds = null, extra = '' } = {}) {
   // 'All' plus one kind is not a choice, so there is nothing to put a bar around.
   if (available.length < 3) return '';
 
+  // Nothing is painted here: 'All' opens active, and the stylesheet knows what that looks like.
+  // The kinds are coloured by the script, from the same palette their badges are drawn from.
   const buttons = available.map((kind) => {
     const active = kind.key === 'all';
-    const style = active
-      ? ' style="background:#1e293b;color:white;border-color:#1e293b"'
-      : '';
     return (
       `<button type="button" class="filter-btn${active ? ' active' : ''}" ` +
-      `data-kind="${attr(kind.key)}"${style}>${escape(kind.label)}</button>`
+      `data-kind="${attr(kind.key)}">${escape(kind.label)}</button>`
     );
   }).join('');
 

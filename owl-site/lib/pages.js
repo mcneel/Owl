@@ -277,6 +277,37 @@ const MEMBER_ORDER = [
   'conversion',
 ];
 
+/**
+ * Kinds a derived type shows as its own.
+ *
+ * A constructor and a finalizer belong to the type that declares them and to nothing below it.
+ * Operators and conversions are static and read as a table of one type's operations, so rolling a
+ * base's into a derived type's table would claim they operate on the derived one.
+ */
+const INHERITED_KINDS = new Set(['field', 'property', 'indexer', 'event', 'method']);
+
+/**
+ * What makes two members the same member, for deciding whether a base's version of one is already
+ * answered for further down.
+ *
+ * Name and parameter types, because that is what C# resolves an override or a `new` declaration on:
+ * the return type is not part of it, and neither is what the parameters are called. A generic base
+ * declares Compare(T) where the type below overrides Compare(Mesh), which this does not catch;
+ * `overrides` does, and the two are used together.
+ */
+/** A modifier's class name. 'protected internal' is the only one that is not already a word. */
+function chipSlug(label) {
+  return String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
+function memberKey(member) {
+  const parameters = (member.parameters || [])
+    .map((p) => (p.type && p.type.display) || '')
+    .join(',');
+
+  return `${member.kind}|${member.name}|${parameters}`;
+}
+
 class Renderer {
   constructor(model, routes, options = {}) {
     this.model = model;
@@ -1032,15 +1063,20 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
       })
       .join('');
 
+    // The member's own name marked wherever the example calls it: these run long and demonstrate a
+    // whole workflow, so the line the reader came for needs finding. Only where the code reaches
+    // through a dot, so a method named Add does not light up every local called add. A constructor
+    // is the exception: it is written as the type name, with 'new' in front of it rather than a dot.
+    const needle = lastSegment(member.name);
+    const lead = member.kind === 'constructor' ? '' : '.';
+
     const panels = code
       .map((node, i) => {
         const language = docnodes.codeLanguage(node);
 
-        // The member's own name marked wherever the example calls it: these run long and
-        // demonstrate a whole workflow, so the line the reader came for needs finding.
         const rendered =
           typeof node.v === 'string' && node.v.length > 0
-            ? markMarkup(highlight(node.v, language), lastSegment(member.name).toLowerCase())
+            ? markMarkup(highlight(node.v, language), needle, lead)
             : null;
 
         // A source that resolved to nothing still gets a panel: saying which file is missing is
@@ -1123,7 +1159,8 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 
   typeBody(type, assembly) {
     const summaryHtml = this.summaryHtml(type.docs);
-    const members = this.sortedMembers(type, true);
+    const members = this.sortedMembers(type, { pageOrder: true });
+    const inherited = this.inheritedMembers(type);
 
     // The same chip a member card wears, and in the same place: after the name, not before it.
     const accessChip =
@@ -1131,28 +1168,71 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
         ? `<span class="chip">${escape(type.accessibility)}</span>`
         : '';
 
+    // At the foot of the head rather than in the chrome above it: the row says what the member list
+    // shows, so it belongs at the bottom of the block that list scrolls under, not two blocks up
+    // beside the breadcrumbs.
+    //
+    // Inherited members count towards the tabs, since they are listed under the declared ones: a
+    // type that declares no events but inherits three still has events to filter to.
+    const kindTabs = filterBar({
+      kinds: this.badgeLettersOf(
+        members.concat(inherited.map((entry) => entry.member)),
+        (m) => m.kind
+      ),
+    });
+
+    // Everything between the name and the first group of members: what the type relates to, what it
+    // is parameterised on, and what it says about itself. All of it is context for the list below,
+    // so all of it rides in the head and stays put while that list scrolls under it - as labelled
+    // rows, since a run of headings and rules in a header reads as several blocks rather than one.
+    const context = [
+      this.obsoleteHtml(type.obsolete),
+      this.relationsHtml(type),
+      this.typeParamsHtml(type, assembly),
+      this.delegateHtml(type, assembly),
+      type.docs && type.docs.example
+        ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(type.docs.example, this.docContext)}</div>`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('');
+
+    // Under the description and in the same shape a member card gives it: remarks carry on from the
+    // summary rather than opening a subject of their own, and a heading the weight of 'Type
+    // relationships' over them would announce them as one.
+    const remarksHtml =
+      type.docs && type.docs.remarks
+        ? `<div class="remarks"><strong>Remarks:</strong> ${docnodes.render(type.docs.remarks, this.docContext)}</div>`
+        : '';
+
     // Name, declaration, summary, then where it lives - the order a search result reads in, so
     // arriving from one lands on the same shape rather than a rearranged version of it.
+    //
+    // The head is in three parts. The brief - what the type is called, how it is declared and what
+    // it does - takes the card ground, the way the same three things do on a member card, and holds
+    // still. The detail under it reads on the page's own ground like a card's does, and is what
+    // scrolls when there is more of it than the cap allows. The kinds row closes the block, outside
+    // the scrolling part, on the rule the members start under.
     const body = `
 <article>
 <div class="page-head sticky-head">
-  <div class="page-title-row"><h1 class="page-title">${this.badgeHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}</div>
-  <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly, type.slug)}</div>
-  ${summaryHtml ? `<div class="page-intro">${summaryHtml}</div>` : ''}
-  <div class="page-subtitle">${escape(type.fullName)}</div>
+  <div class="page-head-brief">
+    <div class="page-title-row"><h1 class="page-title">${this.badgeHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}</div>
+    <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly, type.slug)}</div>
+    ${summaryHtml ? `<div class="page-intro">${summaryHtml}</div>` : ''}
+  </div>
+  <div class="page-head-body">
+    ${remarksHtml}
+    <div class="page-subtitle">${escape(type.fullName)}</div>
+    ${context}
+  </div>
+  ${kindTabs}
 </div>
 
-${this.obsoleteHtml(type.obsolete)}
-
-${this.relationsHtml(type)}
-${this.typeParamsHtml(type, assembly)}
-${this.delegateHtml(type, assembly)}
-${type.docs && type.docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Remarks</h2><div class="remarks">${docnodes.render(type.docs.remarks, this.docContext)}</div></section>` : ''}
-${type.docs && type.docs.example ? `<section class="ns-section"><h2 class="ns-heading">Example</h2>${docnodes.render(type.docs.example, this.docContext)}</section>` : ''}
 ${
   type.kind === 'enum'
     ? this.enumValuesHtml(members)
-    : this.membersHtml(members, assembly, type.slug)
+    : this.membersHtml(members, assembly, type.slug, inherited)
 }
 ${this.seeAlsoHtml(type.docs)}
 </article>
@@ -1180,7 +1260,6 @@ ${this.seeAlsoHtml(type.docs)}
       canonical: this.routes.type(type.slug),
       breadcrumbs,
       body,
-      filterBar: filterBar({ kinds: this.badgeLettersOf(members, (m) => m.kind) }),
       sidebar: this.categoryTree(assembly, { activeType: type }),
       treeKey: slugify(assembly),
       assemblies: this.assemblyChoices(assembly),
@@ -1197,16 +1276,32 @@ ${this.seeAlsoHtml(type.docs)}
   /**
    * Members by kind, then name.
    *
-   * @param {boolean} pageOrder  order the way the page reads rather than the way the tree does:
-   *   readonly members ahead of writable ones, and enum values by their value. The tree does
-   *   neither, because it shows neither the badge nor the value, so a break in the alphabet there
-   *   has no visible cause and just looks mis-sorted.
+   * @param {object} options
+   *   pageOrder   order the way the page reads rather than the way the tree does: readonly members
+   *     ahead of writable ones, and enum values by their value. The tree does neither, because it
+   *     shows neither the badge nor the value, so a break in the alphabet there has no visible
+   *     cause and just looks mis-sorted.
+   *   staticFirst  a kind's statics at the head of its run. The tree does this and the page does
+   *     not: the page states every member's modifiers on the card, where the alphabet is the only
+   *     order that helps, while the tree is a column of bare names in which what is called on the
+   *     type and what is called on an instance are worth separating - and it marks them, so the
+   *     break in the alphabet has something visible behind it.
    */
-  sortedMembers(type, pageOrder = false) {
-    return type.members.slice().sort((a, b) => {
+  sortedMembers(type, options = {}) {
+    return this.sortMembers(type.members, options);
+  }
+
+  /**
+   * The same order over any list of members, including one holding members from several types.
+   * The tree merges what a type declares with what it inherits and sorts the two as one.
+   */
+  sortMembers(members, { pageOrder = false, staticFirst = false } = {}) {
+    return members.slice().sort((a, b) => {
       const orderA = MEMBER_ORDER.indexOf(a.kind);
       const orderB = MEMBER_ORDER.indexOf(b.kind);
       if (orderA !== orderB) return (orderA < 0 ? 99 : orderA) - (orderB < 0 ? 99 : orderB);
+
+      if (staticFirst && Boolean(a.isStatic) !== Boolean(b.isStatic)) return a.isStatic ? -1 : 1;
 
       if (pageOrder) {
         // An enum is a numbered set, and the numbers are on the page beside the names. Reading
@@ -1272,21 +1367,33 @@ ${this.seeAlsoHtml(type.docs)}
     // The model leaves the keyword out of an event's signature, as it does the modifiers.
     if (member.kind === 'event') parts.push('event');
 
-    let out = parts.concat(member.signature || '').filter(Boolean).join(' ');
+    const out = parts.concat(member.signature || '').filter(Boolean).join(' ');
+    return out + this.accessorList(member);
+  }
 
+  /**
+   * What a property offers, written the way it is declared: ' { get; protected set; }'.
+   *
+   * The model records the two accessors and their visibility but leaves them out of the signature,
+   * so a property arrives as 'bool IsComplete' - which does not say whether it can be written, and
+   * that is most of what a reader wants from a property. A narrower accessor names its own
+   * accessibility, as C# requires; one as visible as the property says nothing and stays bare.
+   *
+   * Returns '' for everything that has no accessors, which is every member but a property or an
+   * indexer.
+   */
+  accessorList(member) {
     const accessors = member.accessors;
-    if (accessors && (accessors.get || accessors.set)) {
-      // A narrower accessor names its own accessibility, the way C# does.
-      const part = (visibility, keyword) =>
-        (visibility && visibility !== member.accessibility ? `${visibility} ` : '') + keyword + ';';
+    if (!accessors || !(accessors.get || accessors.set)) return '';
 
-      const list = [];
-      if (accessors.get) list.push(part(accessors.get, 'get'));
-      if (accessors.set) list.push(part(accessors.set, accessors.initOnly ? 'init' : 'set'));
-      out += ` { ${list.join(' ')} }`;
-    }
+    const part = (visibility, keyword) =>
+      (visibility && visibility !== member.accessibility ? `${visibility} ` : '') + keyword + ';';
 
-    return out;
+    const list = [];
+    if (accessors.get) list.push(part(accessors.get, 'get'));
+    if (accessors.set) list.push(part(accessors.set, accessors.initOnly ? 'init' : 'set'));
+
+    return ` { ${list.join(' ')} }`;
   }
 
   /**
@@ -1339,6 +1446,13 @@ ${this.seeAlsoHtml(type.docs)}
     return `<span class="type-chain">${separator}${links}</span>`;
   }
 
+  /**
+   * What the type implements and what derives from it, as labelled rows.
+   *
+   * Rows rather than a group with a heading and a rule over it: these sit in the page head beside
+   * the name and the declaration, where a heading the weight of a section would break the block in
+   * two. Each row says what it is on the left, the way a member card labels its parameters.
+   */
   relationsHtml(type) {
     const rows = [];
 
@@ -1373,9 +1487,7 @@ ${this.seeAlsoHtml(type.docs)}
       }
     }
 
-    return rows.length > 0
-      ? `<section class="ns-section"><h2 class="ns-heading">Type relationships</h2>${rows.join('')}</section>`
-      : '';
+    return rows.join('');
   }
 
   typeParamsHtml(type, assemblyName) {
@@ -1402,19 +1514,21 @@ ${this.seeAlsoHtml(type.docs)}
       })
       .join('');
 
+    // Labelled and laid out the way a member card gives its own parameters, since that is what
+    // these are: the table is the same table, and the label is what says which set it holds.
     return (
-      '<section class="ns-section"><h2 class="ns-heading">Type parameters</h2>' +
-      `<table class="params"><tbody>${rows}</tbody></table></section>`
+      '<div class="section"><span class="section-label">Type parameters:</span>' +
+      `<table class="params"><tbody>${rows}</tbody></table></div>`
     );
   }
 
   delegateHtml(type, assemblyName) {
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
-      '<section class="ns-section"><h2 class="ns-heading">Signature</h2>' +
+      '<div class="section"><span class="section-label">Signature:</span>' +
       `<div class="declaration">${this.signatureHtml(type.signature, assemblyName, type.slug)}</div>` +
       this.parametersHtml(type.parameters) +
-      '</section>'
+      '</div>'
     );
   }
 
@@ -1471,11 +1585,81 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
+   * The types a type takes its inherited members from, nearest first.
+   *
+   * A class or a struct has one line of ancestry, which the model records as the inheritance chain.
+   * An interface has no base type at all - what it extends are interfaces - so its ancestry is the
+   * ones it names, then everything those extend in turn.
+   *
+   * A class's interfaces are not ancestry: what it gets from one it either declares itself or has
+   * from a base class, and both are already here.
+   */
+  inheritedFrom(type) {
+    if (type.kind !== 'interface') {
+      return (type.inheritanceChain || []).map((ref) => ref.id);
+    }
+
+    // The ones it names first, so a member is credited to the interface this one actually extends
+    // rather than to whichever of its ancestors declared it. allInterfaces carries the rest.
+    const direct = (type.interfaces || []).map((ref) => ref.id);
+    return [...new Set([...direct, ...(type.allInterfaces || [])])].filter(Boolean);
+  }
+
+  /**
+   * What a type gets from the types above it, as {member, from}, nearest first.
+   *
+   * The model records a type's own members and nothing else, so this walks what inheritedFrom
+   * gives back and gathers the rest. A type outside the documented set - System.Object, and
+   * anything from a package that was not generated - resolves to nothing and contributes nothing,
+   * which is why Equals and GetHashCode do not turn up on every page in the site.
+   *
+   * A member is skipped once something nearer the reader answers for it: an override, a `new`
+   * declaration, or a nearer ancestor that had already offered it. Static members are left out for
+   * the same reason constructors are - they are called on the type that declares them, and listing
+   * them here would say they belong to this one.
+   */
+  inheritedMembers(type) {
+    const sources = this.inheritedFrom(type);
+    if (sources.length === 0) return [];
+
+    const seen = new Set((type.members || []).map(memberKey));
+    const overridden = new Set((type.members || []).map((m) => m.overrides).filter(Boolean));
+
+    const out = [];
+
+    for (const docId of sources) {
+      const found = this.model.typeByDocId(docId);
+      if (!found) continue;
+
+      for (const member of found.type.members || []) {
+        if (!INHERITED_KINDS.has(member.kind)) continue;
+        if (member.isStatic || member.explicitInterface) continue;
+        if (member.accessibility === 'private') continue;
+        if (overridden.has(member.docId)) continue;
+
+        const key = memberKey(member);
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+        if (member.overrides) overridden.add(member.overrides);
+        out.push({ member, from: found.type });
+      }
+    }
+
+    return out;
+  }
+
+  /**
    * Members grouped under .ns-section headings, each card inside .type-children so it picks up the
    * indented, rule-on-the-left styling.
+   *
+   * What the type inherits goes in one group at the end rather than into each kind's section: the
+   * page is about what this type adds, and a base's members mixed in among them would be read as
+   * this type's own. Rows rather than cards, because they are documented where they are declared
+   * and what they owe this page is a name to find and a way through to the rest.
    */
-  membersHtml(members, assemblyName, selfSlug) {
-    if (members.length === 0) return '';
+  membersHtml(members, assemblyName, selfSlug, inherited = []) {
+    if (members.length === 0 && inherited.length === 0) return '';
 
     const groups = new Map();
     for (const member of members) {
@@ -1501,7 +1685,59 @@ ${this.seeAlsoHtml(type.docs)}
         '</div></section>';
     }
 
-    return out;
+    return out + this.inheritedHtml(inherited);
+  }
+
+  /**
+   * Everything the type inherits, in one group under the members it declares.
+   *
+   * Ordered the way the sections above are - data before behaviour, then by name - so the same
+   * member is looked for in the same place whether this type declares it or a base does. Which
+   * base each came from is on the row rather than in a heading per base: the reader is looking a
+   * name up, and where it came from is the answer, not the index.
+   */
+  inheritedHtml(inherited) {
+    if (inherited.length === 0) return '';
+
+    const rows = [...inherited]
+      .sort(
+        (a, b) =>
+          MEMBER_ORDER.indexOf(a.member.kind) - MEMBER_ORDER.indexOf(b.member.kind) ||
+          a.member.name.localeCompare(b.member.name)
+      )
+      .map((entry) => this.inheritedRowHtml(entry))
+      .join('');
+
+    return (
+      '<section class="ns-section type-section" id="inherited">' +
+      '<h2 class="ns-heading">Inherited members</h2>' +
+      `<div class="type-children">${rows}</div></section>`
+    );
+  }
+
+  /**
+   * One inherited member: badge, signature, and the type it came from, on a line that is all one
+   * link to where the member is documented.
+   *
+   * The signature is highlighted but not cross-linked, since a link inside a link is neither: the
+   * row leads to the member, which is the one place every type in its signature is linked anyway.
+   *
+   * It carries the same data-badge the cards do, so the kind tabs act on it without knowing it is
+   * a different shape. No id: the anchor belongs to the member's own page, and a second element
+   * answering to it here would take the link away from the card that documents it.
+   */
+  inheritedRowHtml({ member, from }) {
+    const url = this.routes.member(from.slug, member.anchor);
+
+    return (
+      `<a class="member inherited" href="${attr(url)}" ` +
+      `data-badge="${attr(theme.badgeLetter(member.kind))}" ` +
+      `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
+      this.badgeHtml(member.kind) +
+      `<code class="inherited-sig">${highlight(member.signature || member.name, 'csharp')}</code>` +
+      `<span class="inherited-from">from ${escape(from.name)}</span>` +
+      '</a>'
+    );
   }
 
   /**
@@ -1696,6 +1932,14 @@ ${this.seeAlsoHtml(type.docs)}
         ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Examples</a>`
         : '';
 
+    // Everything past the description, which the card sets on a dimmer ground of its own. What a
+    // reader running down a list of members reads is the name, the declaration and the sentence
+    // under it; the parameters, returns and exceptions are for the one they stopped at, and giving
+    // them a colour of their own is what lets the eye skip them until then.
+    const rest = [remarks, ...detail, example, this.sourceHtml(member.source)]
+      .filter(Boolean)
+      .join('');
+
     return (
       `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
       `data-badge="${attr(badgeLetter)}" data-kind="${attr(member.kind)}"` +
@@ -1706,16 +1950,23 @@ ${this.seeAlsoHtml(type.docs)}
       `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(member.name)}</h3>` +
       (member.obsolete ? '<span class="explicit-badge badge-obsolete">Obsolete</span>' : '') +
       this.accessBadgeHtml(member) +
-      chips.map((c) => `<span class="chip">${escape(c)}</span>`).join('') +
+      // Each chip names itself in a class, so the stylesheet can single one out - static, abstract
+      // and virtual do - without this having to know which of them it has decided to colour.
+      chips.map((c) => `<span class="chip chip-${attr(chipSlug(c))}">${escape(c)}</span>`).join('') +
+      // Beside the name it links to, and before the Examples button, which the row's own margin
+      // holds at the far end: the anchor belongs to the member, not to the action next to it.
+      `<a class="member-anchor" href="#${attr(member.anchor)}" ` +
+      // Named as the heading beside it is, so the two do not read as different members.
+      `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>` +
       exampleButton +
       '</div>' +
-      `<div class="declaration">${this.signatureHtml(member.signature, assemblyName, selfSlug, lastSegment(member.name))}</div>` +
+      // The accessors ride on the declaration rather than sitting beside it as chips: 'get; set;'
+      // is how the property is written, and a reader looking for whether one can be assigned to
+      // looks where the assignment would be declared.
+      `<div class="declaration">${this.signatureHtml(member.signature + this.accessorList(member), assemblyName, selfSlug, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '') +
-      remarks +
-      detail.filter(Boolean).join('') +
-      example +
-      this.sourceHtml(member.source) +
+      (rest ? `<div class="member-detail">${rest}</div>` : '') +
       '</div>'
     );
   }
@@ -1730,22 +1981,44 @@ ${this.seeAlsoHtml(type.docs)}
    * A type that overloads a dozen operators otherwise spends a dozen rows on `op_` names that all
    * sort together and none of which anyone is looking for, pushing the members they are looking
    * for off the visible tree. The row points at the section, which is one click either way.
+   *
+   * What the type inherits is merged in and sorted as one list rather than gathered at the end: a
+   * reader running an eye down a column of names is reading alphabetically and does not know which
+   * type declared what. The rows are drawn back and hidden until the arrow beside the type's name
+   * asks for them, which is what keeps a tree of names the type actually declares by default.
    */
-  treeMemberLinksHtml(type) {
-    const members = this.sortedMembers(type);
+  treeMemberLinksHtml(type, inherited = []) {
+    // Where a row came from, for the ones this type did not declare. Keyed by the member itself, so
+    // the merged list can be sorted as one and each row still knows what it belongs to.
+    const from = new Map();
+    for (const entry of inherited) from.set(entry.member, entry.from);
+
+    const members = this.sortMembers(type.members.concat([...from.keys()]), { staticFirst: true });
 
     let out = members
       .filter((m) => !OPERATOR_KINDS.has(m.kind))
-      .map(
-        (m) =>
-          `<a class="tree-child-link" href="#${attr(m.anchor)}"${this.sinceAttr(m.docs)}` +
-          // The row truncates, and the part that tells overloads apart is at the end, so the full
-          // signature is on the title where it can still be read.
-          ` title="${attr(m.signature || m.name)}">` +
+      .map((m) => {
+        const source = from.get(m);
+
+        // An inherited row leads to the page that documents it; a declared one to the card below.
+        const href = source ? this.routes.member(source.slug, m.anchor) : `#${m.anchor}`;
+
+        // The row truncates, and the part that tells overloads apart is at the end, so the full
+        // signature is on the title where it can still be read.
+        const title = (m.signature || m.name) + (source ? ` - inherited from ${source.name}` : '');
+
+        return (
+          `<a class="tree-child-link${source ? ' tree-child-inherited' : ''}" ` +
+          `href="${attr(href)}"${this.sinceAttr(m.docs)} title="${attr(title)}">` +
           this.treeBadgeHtml(m.kind) +
+          // Outlined rather than filled, and after the kind rather than instead of it: this is a
+          // note on the badge beside it, not a second kind. It is also what the run of statics at
+          // the head of each kind is sorted on, so the break in the alphabet is accounted for.
+          (m.isStatic ? '<span class="tree-badge tree-badge-static">S</span>' : '') +
           this.treeMemberLabelHtml(m) +
           '</a>'
-      )
+        );
+      })
       .join('');
 
     // Ordered by MEMBER_ORDER rather than by the set, so the rows land where their sections do.
@@ -1784,13 +2057,22 @@ ${this.seeAlsoHtml(type.docs)}
     );
   }
 
-  treeTypeRow(type, { active = false, children = '', childrenId = null } = {}) {
+  treeTypeRow(type, { active = false, children = '', childrenId = null, inherited = false } = {}) {
     const hasChildren = Boolean(children);
     const arrow = hasChildren
       ? `<button class="tree-toggle" type="button" data-target="${attr(childrenId)}" aria-label="Toggle members">` +
         this.treeArrowHtml(!active) +
         '</button>'
       : '<span class="tree-arrow-spacer"></span>';
+
+    // Its own arrow at the end of the row, for the rows that are in the list but not drawn: what it
+    // opens is a second helping of the same list, so it opens the way everything else here does.
+    const inheritedArrow = inherited
+      ? `<button class="tree-inherited-toggle" type="button" data-target="${attr(childrenId)}" ` +
+        'aria-pressed="false" title="Show inherited members" aria-label="Show inherited members">' +
+        this.treeArrowHtml(true) +
+        '</button>'
+      : '';
 
     return (
       `<div class="tree-type"${this.sinceAttr(type.docs)}>` +
@@ -1799,6 +2081,7 @@ ${this.seeAlsoHtml(type.docs)}
       `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.type(type.slug))}">` +
       this.treeBadgeHtml(type.kind) +
       `${escape(type.name)}</a>` +
+      inheritedArrow +
       '</div>' +
       (hasChildren
         ? `<div class="tree-type-children${active ? '' : ' collapsed'}" id="${attr(childrenId)}">${children}</div>`
@@ -1869,9 +2152,15 @@ ${this.seeAlsoHtml(type.docs)}
           const active = activeType !== null && type.docId === activeType.docId;
 
           // Only the current type lists its members, so a large category stays readable.
-          const children = active ? this.treeMemberLinksHtml(type) : '';
+          const inherited = active ? this.inheritedMembers(type) : [];
+          const children = active ? this.treeMemberLinksHtml(type, inherited) : '';
 
-          return this.treeTypeRow(type, { active, children, childrenId: `tc_${type.slug}` });
+          return this.treeTypeRow(type, {
+            active,
+            children,
+            childrenId: `tc_${type.slug}`,
+            inherited: inherited.length > 0,
+          });
         })
         .join('');
 
@@ -2121,6 +2410,7 @@ ${this.seeAlsoHtml(type.docs)}
             // form so a search for the interface's namespace still reaches the member.
             name: `${type.name}.${memberDisplayName(member)}`,
             kind: member.kind,
+            isStatic: Boolean(member.isStatic),
             url: this.routes.member(type.slug, member.anchor),
             summary: memberSummary,
             signature: this.memberDeclaration(member),
@@ -2138,7 +2428,10 @@ ${this.seeAlsoHtml(type.docs)}
 
   /**
    * Compact rows:
-   * [name, url, haystack, summary, badgeLetter, signature, nsIndex, badgeColour, asmIndex].
+   * [name, url, haystack, summary, badgeLetter, signature, nsIndex, badgeColour, asmIndex, static].
+   *
+   * The last is there only on a static member, so the flag costs two bytes on the rows that carry
+   * it and nothing at all on the rest; a row without it simply ends one element short.
    *
    * Namespace names go in a table the entries index into. There are a few dozen of them against
    * tens of thousands of entries, so repeating the name on every row would cost more than the
@@ -2167,18 +2460,23 @@ ${this.seeAlsoHtml(type.docs)}
       schema: 4,
       namespaces,
       assemblies,
-      entries: rows.map((r) => [
-        r.name,
-        r.url,
-        r.haystack,
-        r.summary,
-        theme.badgeLetter(r.kind),
-        this.signatureHtml(r.signature, r.assembly, '', lastSegment(r.name)),
-        seen.get(r.namespace),
-        // The letter cannot carry the colour on its own: an enum wears a T badge in the F colour.
-        theme.kindColor(r.kind),
-        assemblyIndex.get(r.assembly),
-      ]),
+      entries: rows.map((r) => {
+        const entry = [
+          r.name,
+          r.url,
+          r.haystack,
+          r.summary,
+          theme.badgeLetter(r.kind),
+          this.signatureHtml(r.signature, r.assembly, '', lastSegment(r.name)),
+          seen.get(r.namespace),
+          // The letter cannot carry the colour on its own: an enum wears a T badge in the F colour.
+          theme.kindColor(r.kind),
+          assemblyIndex.get(r.assembly),
+        ];
+
+        if (r.isStatic) entry.push(1);
+        return entry;
+      }),
     };
   }
 

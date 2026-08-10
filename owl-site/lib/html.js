@@ -82,11 +82,19 @@ function markMatch(text, query) {
  *
  * Only text between tags is ever wrapped, so a mark cannot land in a class attribute, and the query
  * is escaped the way the text was, so searching '<' still finds '&lt;'.
+ *
+ * A lead is text a match must be preceded by to count, and which stays outside the mark. Searching
+ * a member name behind a '.' marks the Bake in 'mesh.Bake' and nothing in a local called bake, and
+ * leaving the dot unmarked keeps the highlight to one <mark> rather than one either side of the
+ * token boundary the highlighter put between them.
  */
-function markMarkup(html, query) {
+function markMarkup(html, query, lead = '') {
   const source = String(html || '');
   const needle = escape(String(query || '')).toLowerCase();
   if (!needle) return source;
+
+  const prefix = escape(String(lead || '')).toLowerCase();
+  const search = prefix + needle;
 
   const parts = source.split(/(<[^>]*>)/);
   const isText = (part) => Boolean(part) && part.charAt(0) !== '<';
@@ -98,8 +106,8 @@ function markMarkup(html, query) {
 
   const hay = plain.toLowerCase();
   const ranges = [];
-  for (let at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length)) {
-    ranges.push([at, at + needle.length]);
+  for (let at = hay.indexOf(search); at >= 0; at = hay.indexOf(search, at + search.length)) {
+    ranges.push([at + prefix.length, at + search.length]);
   }
 
   if (ranges.length === 0) return source;

@@ -70,6 +70,25 @@ const BADGE_PAINTS = {
   obsolete: 'var(--oc-green-8)',
 };
 
+/**
+ * Modifier chips that are painted rather than left grey, tunable the same way.
+ *
+ * These say what a member is bound to and whether it is yours to override, which is what a reader
+ * scanning a card wants answered before the prose. Const shares static's paint because it is the
+ * same fact about where the member lives - it is reached through the type, and there is no instance
+ * of anything involved. The rest - extension, init, an accessibility - stay grey: a page where
+ * every chip is coloured tells nothing apart.
+ *
+ * Filled in one colour under both themes, as every other badge is, which is why these are mid-scale
+ * shades: they carry white text on either ground.
+ */
+const CHIP_PAINTS = {
+  static: 'var(--oc-blue-8)',
+  const: 'var(--oc-blue-8)',
+  abstract: 'var(--oc-violet-6)',
+  virtual: 'var(--oc-grape-7)',
+};
+
 /** Model kind -> [badge letter, human label]. */
 const KIND_MAP = {
   // Types render as T, except an interface and a struct: a contract and a value type each read
@@ -184,6 +203,7 @@ module.exports = {
   KIND_COLOR_SLOTS,
   KIND_PAINTS,
   BADGE_PAINTS,
+  CHIP_PAINTS,
   KIND_MAP,
   FILTER_KINDS,
   ASSEMBLY_PALETTE,

@@ -11,7 +11,7 @@
  * Syntax highlighting is done when the page is rendered, not in the browser.
  */
 
-const { KIND_COLORS, KIND_PAINTS, BADGE_PAINTS, kindVar } = require('./theme');
+const { KIND_COLORS, KIND_PAINTS, BADGE_PAINTS, CHIP_PAINTS, kindVar } = require('./theme');
 
 /** A palette from lib/theme.js, written out as one custom property per slot. */
 function paintCss(prefix, paints) {
@@ -66,6 +66,8 @@ const CSS = `
   --card-bg:     #262626;
   --card-border: #333333;
   --card-hover:  #2e2e2e;
+  --card-detail: #1b1b1b;
+  --card-split:  #2b2b2b;
   --fullname:    #737373;
   --flash:       #2196f3;
   --scrollbar:   #404040;
@@ -97,6 +99,8 @@ const CSS = `
   --card-bg:     #ffffff;
   --card-border: #e2e8f0;
   --card-hover:  #f8fafc;
+  --card-detail: #fafcff;
+  --card-split:  #edf2f9;
   --fullname:    #94a3b8;
   --flash:       #0ea5e9;
   --scrollbar:   #cbd5e1;
@@ -121,6 +125,7 @@ const CSS = `
 :root {
 ${paintCss('kind', KIND_PAINTS)}
 ${paintCss('badge', BADGE_PAINTS)}
+${paintCss('chip', CHIP_PAINTS)}
 }
 
 /* The header keeps one colour under both themes: it is chrome rather than content, and holding it
@@ -205,11 +210,14 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 :root[data-theme="light"] #theme-toggle .icon-moon { display: none; }
 
 /* ---- Filter bar ---- */
-/* Lives in the content column, so it takes that column's width and none of the header's padding. */
-.filter-bar { margin-bottom: 1.1rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-.filter-btn { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; font-size: 0.78rem; font-weight: 500; transition: all 0.15s; }
-.filter-btn:hover { background: var(--bg3); }
-.filter-btn.active { color: white; border-color: transparent; }
+/* Lives in the content column, so it takes that column's width and none of the header's padding.
+   Drawn as the tabs the example panel uses for its languages: both rows say what the block under
+   them shows, and one shape for the two is one thing to learn. The kind's colour goes on the marker
+   rather than the label, because a constructor's grey reads as a marker and not as legible text. */
+.filter-bar { margin-bottom: 1.1rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.filter-btn { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); cursor: pointer; }
+.filter-btn:hover { color: var(--text); }
+.filter-btn.active { color: var(--text); border-bottom-color: var(--flash); }
 .asm-legend { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: 0.5rem; }
 .legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); white-space: nowrap; text-decoration: none; }
 .legend-item:hover { color: var(--text); }
@@ -252,6 +260,9 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-link.active { color: var(--flash); font-weight: 600; }
 .tree-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem; border-radius: 3px; font-size: 0.6rem; font-weight: 800; color: white; flex-shrink: 0; }
 .tree-badge-doc { background: #475569; }
+/* The static mark: the badge's shape drawn rather than filled, so it reads as something said about
+   the kind badge beside it and never as a kind of its own. */
+.tree-badge-static { background: none; border: 1px solid var(--text4); color: var(--text3); }
 .tree-badge svg { display: block; width: 0.72rem; height: 0.72rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .tree-type-children { padding-left: 0.25rem; }
 .tree-type-children.collapsed { display: none; }
@@ -264,6 +275,17 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    a hair of space in front - the row's own 0.35rem gap was far too much. */
 .tree-child-link .tree-sig { color: var(--text4); margin-left: 0.12rem; }
 .tree-toggle { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: inline-flex; align-items: center; }
+/* Inherited rows sit in the list in their alphabetical place, drawn back to the shade the parameter
+   types beside them use: there, and plainly not what this type declares. Not drawn at all until the
+   arrow at the end of the type's row asks for them. */
+.tree-child-inherited { display: none; color: var(--text4); }
+.tree-type-children.show-inherited .tree-child-inherited { display: flex; }
+.tree-child-inherited .tree-badge { opacity: 0.6; }
+.tree-child-inherited:hover { color: var(--text2); }
+/* At the end of the row, where it cannot be mistaken for the arrow that opens the type's members. */
+.tree-inherited-toggle { background: none; border: none; padding: 0 0.15rem; cursor: pointer; color: var(--text4); display: inline-flex; align-items: center; flex-shrink: 0; }
+.tree-inherited-toggle:hover { color: var(--text); }
+.tree-inherited-toggle[aria-pressed="true"] { color: var(--text2); }
 
 /* ---- Main content ---- */
 /* No padding at the top. It sits inside the scrollport, so a sticky child stops below it and
@@ -322,10 +344,47 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 /* Sticks under the breadcrumbs and filter rather than at the top of the column, and below them in
    the stack so it slides beneath rather than over. The offset is measured, not written here: the
    block above is as tall as its filter bar wraps to. */
-.page-head.sticky-head { position: sticky; top: var(--sticky-top, 0px); z-index: 5; background: var(--bg); margin: 0 -1.5rem 1.2rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border2); }
+.page-head.sticky-head { position: sticky; top: var(--sticky-top, 0px); z-index: 5; background: var(--bg); margin: 0 -1.5rem 1.2rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border2); display: flex; flex-direction: column; max-height: 55vh; }
+/* Everything above the members rides here - what the type relates to, what it is parameterised on,
+   what it says about itself - so it holds still while they scroll under it. Capped, because a type
+   with six paragraphs of remarks would otherwise pin a headerful of prose over the viewport and
+   leave the list nowhere to go; past the cap the head scrolls within itself. */
+.page-head-body { min-height: 0; padding-top: 0.5rem; overflow-y: auto; scrollbar-width: thin; }
+/* The head is a card the width of the column: the name, the declaration and the description on the
+   card's own ground, and everything that details the type - what it relates to, what it is
+   parameterised on, its remarks - under a hairline on the page's, exactly as a member card splits.
+   The negative margins are the head's padding given back, so the ground reaches its edges.
+
+   Outside the scrolling part, both because the identity is what the head is for and because a
+   block reaching past its container's edges is a horizontal scrollbar the moment that container
+   is the thing that scrolls. */
+.page-head-brief { flex-shrink: 0; background: var(--card-bg); border-bottom: 1px solid var(--card-split); margin: -0.75rem -1.5rem 0; padding: 0.35rem 1.5rem 0.75rem; }
+/* The breadcrumbs are the top of that card rather than a strip above it, so they take the same
+   ground - but only where there is a head to belong to, which is a type page.
+
+   Closed up against the title too: the gap under them was holding two blocks apart, and now that
+   the trail and the name are on one ground it was only pushing the name down the page. */
+.main-content:has(.page-head-brief) > .main-sticky { background: var(--card-bg); padding-bottom: 0.3rem; }
+/* A header, not a chapter: what the type relates to and what it is parameterised on are labelled
+   rows here rather than the groups they would be further down the page, so the head stays one
+   block. The room goes over the first of them; the rows carry their own spacing after that. */
+.page-head-body > .page-subtitle + * { margin-top: 1rem; }
+.page-head.sticky-head .declaration { margin-top: 0.6rem; margin-bottom: 0; }
+/* The kinds sit on the head's own rule rather than above it, so the tabs and the members they
+   filter are the two sides of one line. The pull is the head's bottom padding, plus the pixel that
+   puts the marker over that rule instead of under it. Outside the scrolling part, so a long head
+   cannot carry the tabs off with it. */
+.page-head.sticky-head .filter-bar { flex-shrink: 0; margin: 0.7rem 0 calc(-0.75rem - 1px); border-bottom: none; }
 
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); background: var(--bg3); border-radius: 3px; padding: 0.1rem 0.55rem; text-decoration: none; }
 a.chip:hover { color: var(--flash); }
+/* The modifiers worth telling apart at a glance: what a member is bound to, and whether it is yours
+   to override. Painted like the Readonly pill beside them, from lib/theme.js, so a chip that means
+   something and a chip that is just a word are not the same shape in a different colour. */
+.chip-static { background: var(--chip-static); color: var(--oc-white); }
+.chip-const { background: var(--chip-const); color: var(--oc-white); }
+.chip-abstract { background: var(--chip-abstract); color: var(--oc-white); }
+.chip-virtual { background: var(--chip-virtual); color: var(--oc-white); }
 
 /* ---- Category overview doc ---- */
 .cat-doc { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; line-height: 1.7; font-size: 0.88rem; color: var(--text2); scroll-margin-top: 1rem; }
@@ -348,11 +407,34 @@ a.chip:hover { color: var(--flash); }
 .tree-cat-doc-link { font-style: italic; }
 
 /* ---- Member cards ---- */
-/* No hover state: the card is not a target, only the name and the anchor inside it are. */
-.member { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.6rem; transition: box-shadow 0.15s; scroll-margin-top: var(--anchor-offset, 1rem); }
+/* No hover state: the card is not a target, only the name and the anchor inside it are.
+   Clipped, so the half below can reach the border on three sides and still take the corners. */
+.member { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.6rem; overflow: hidden; transition: box-shadow 0.15s; scroll-margin-top: var(--anchor-offset, 1rem); }
 .member:target { box-shadow: 0 0 0 3px var(--flash); }
+/* Two grounds inside the one border: what identifies the member on the card, and everything that
+   details it a shade off it under a rule. A reader running down a list reads the name, the
+   declaration and the sentence under it, so the parameters and returns are given a shade to be
+   skipped by until the reader has stopped at the one they were looking for. A slot of its own
+   rather than the page's --bg, since how far it steps off the card is the whole of its job.
+
+   The negative margins are the card's padding given back, so the ground reaches the border rather
+   than floating inside it as a second panel. */
+.member-detail { background: var(--card-detail); border-top: 1px solid var(--card-split); margin: 0.85rem -1.1rem -0.9rem; padding: 0.7rem 1.1rem 0.85rem; }
+.member-detail > :first-child { margin-top: 0; }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
 .member.explicit-impl { border-color: var(--badge-explicit); }
+/* An inherited member is a line, not a card: it is documented on the type that declares it, and
+   what it owes this page is a name to find and a way through to the rest. Held to one line, so a
+   hundred of them stay a list the reader can run an eye down rather than a second page of cards.
+   The whole row is the link, since going to where it is written is the only thing to do with it. */
+.member.inherited { display: flex; align-items: baseline; gap: 0.5rem; background: none; border-color: transparent; border-radius: 6px; padding: 0.3rem 0.7rem; margin-bottom: 0.1rem; text-decoration: none; }
+.member.inherited:hover { background: var(--card-bg); border-color: var(--card-border); }
+.member.inherited:hover .inherited-sig { color: var(--text); }
+.member.inherited .badge { flex-shrink: 0; align-self: center; }
+.inherited-sig { flex: 1; min-width: 0; font-family: monospace; font-size: 0.78rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dimmer than the signature: which base it came from answers a question the reader only asks once
+   they have found the name they were looking for. */
+.inherited-from { flex-shrink: 0; font-size: 0.72rem; color: var(--text4); white-space: nowrap; }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
 .badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; color: white; letter-spacing: 0.03em; }
 /* A modifier rather than a kind, so it stays out of the kind palette. */
@@ -370,14 +452,25 @@ a.chip:hover { color: var(--flash); }
 .member-name .see-ref:hover { text-decoration: underline; }
 .member-name a { color: var(--text); text-decoration: none; }
 .member-name a:hover { color: var(--flash); }
+/* The permalink, kept out of sight until the card is pointed at: a column of hashes down a list of
+   sixty members is noise, and the only one worth drawing is the one being read. Focus shows it too,
+   so it is reachable by keyboard rather than by cursor alone. */
+.member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; transition: opacity 0.12s; }
+.member:hover .member-anchor, .member-anchor:focus { opacity: 1; }
+.member-anchor:hover { color: var(--flash); }
 .member-fullname { font-size: 0.72rem; color: var(--fullname); font-family: monospace; margin-top: 0.4rem; margin-bottom: 0.45rem; word-break: break-all; }
 .summary { color: var(--text2); line-height: 1.6; font-size: 0.88rem; }
 .remarks { color: var(--text3); font-size: 0.83rem; margin-top: 0.4rem; }
 .section { margin-top: 0.55rem; font-size: 0.83rem; color: var(--text2); }
 .section-label { font-weight: 700; color: var(--text3); }
+/* No rule under each row: a parameter list runs to three or four short lines, and ruling them turns
+   a small table into a grid to be read across rather than a set of names to be scanned down. */
 table.params { margin-top: 0.3rem; border-collapse: collapse; width: 100%; }
-table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: top; border-bottom: 1px solid var(--border); text-align: left; }
-table.params tr:last-child td, table.params tr:last-child th { border-bottom: none; }
+table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: top; text-align: left; }
+/* The name and the type take what they need and nothing more - 1% is shorthand for shrink-to-fit
+   against the nowrap below - so what is left goes to the description, which is what runs out of
+   room first and is the only column with anything to wrap. */
+table.params td.param-name, table.params td.param-type { width: 1%; }
 /* Body colour, not the link blue it used to borrow: a parameter name is not a link. */
 .param-name { font-family: monospace; font-size: 0.8rem; color: var(--text); white-space: nowrap; padding-right: 0.75rem; }
 .param-type { font-family: monospace; font-size: 0.78rem; color: var(--text3); white-space: nowrap; padding-right: 0.75rem; }
@@ -399,7 +492,9 @@ a.see-ref:hover { text-decoration: underline; }
 [hidden] { display: none !important; }
 
 /* ---- Declarations and code ---- */
-.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); background: var(--bg3); border-radius: 3px; padding: 0.5rem 0.7rem; margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; }
+/* No panel behind it: the monospace and the token colours already say this is code, and a filled
+   box on every card turned a list of members into a list of boxes inside boxes. */
+.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; }
 .member .declaration { font-size: 0.78rem; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
@@ -541,7 +636,10 @@ const JS = `
  */
 
 (function () {
-  // ---- Theme (same storage key as the Python version, so an existing choice carries over) ----
+  // ---- Theme ----
+  // The theme is already on the page: the head script read the session's key, or the system when
+  // that was empty. Written here in the same store, which is what keeps a toggle whole across a
+  // read of several pages without letting it decide how the site opens tomorrow.
   var KEY = 'docs-theme';
   var root = document.documentElement;
 
@@ -564,7 +662,7 @@ const JS = `
     toggle.addEventListener('click', function () {
       var next = currentTheme() === 'dark' ? 'light' : 'dark';
       applyTheme(next);
-      try { localStorage.setItem(KEY, next); } catch (e) {}
+      try { sessionStorage.setItem(KEY, next); } catch (e) {}
     });
   }
 
@@ -672,7 +770,7 @@ const JS = `
   }
 
   // ---- Filter bar ----
-  // Custom properties rather than colours, so the button a kind filters by cannot end up a
+  // Custom properties rather than colours, so the marker under a kind's tab cannot end up a
   // different colour from the badges it is filtering, and both follow a retuned palette live.
   var COLORS = ${JSON.stringify(KIND_VARS)};
   var filterButtons = document.querySelectorAll('.filter-btn');
@@ -740,15 +838,11 @@ const JS = `
     button.addEventListener('click', function () {
       filterButtons.forEach(function (b) {
         b.classList.remove('active');
-        b.style.background = '';
-        b.style.color = '';
-        b.style.borderColor = '';
+        b.style.borderBottomColor = '';
       });
       button.classList.add('active');
-      var colour = COLORS[button.getAttribute('data-kind')] || '#1e293b';
-      button.style.background = colour;
-      button.style.color = 'white';
-      button.style.borderColor = colour;
+      // 'All' has no kind and so no colour of its own; cleared, it falls back to the stylesheet's.
+      button.style.borderBottomColor = COLORS[button.getAttribute('data-kind')] || '';
       activeKind = button.getAttribute('data-kind');
       applyFilter();
     });
@@ -873,6 +967,23 @@ const JS = `
       var arrow = toggleButton.querySelector('.tree-arrow');
       if (children) children.classList.toggle('collapsed');
       if (arrow) arrow.classList.toggle('collapsed');
+    });
+  });
+
+  // ---- Tree: inherited members ----
+  // The rows are already in the tree, in their alphabetical place and drawn back. This only says
+  // whether they are drawn, and only for the one type whose members are listed.
+  document.querySelectorAll('.tree-inherited-toggle').forEach(function (button) {
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      var children = document.getElementById(button.getAttribute('data-target'));
+      if (!children) return;
+
+      var shown = children.classList.toggle('show-inherited');
+      button.setAttribute('aria-pressed', String(shown));
+
+      var arrow = button.querySelector('.tree-arrow');
+      if (arrow) arrow.classList.toggle('collapsed', !shown);
     });
   });
 
@@ -1053,9 +1164,9 @@ const JS = `
   });
 
   // ---- Sticky top ----
-  // Two things pin themselves: the breadcrumbs and filter, then a type page's header under them.
-  // Both are as tall as their contents wrap to, so where the second one sits and where a jumped-to
-  // member has to land are measured rather than guessed at in the css.
+  // Two things pin themselves: the breadcrumbs, then a type page's header under them, kinds row and
+  // all. Both are as tall as their contents wrap to, so where the second one sits and where a
+  // jumped-to member has to land are measured rather than guessed at in the css.
   var mainSticky = document.querySelector('.main-sticky');
   var stickyHead = document.querySelector('.page-head.sticky-head');
 
@@ -1315,8 +1426,13 @@ const JS = `
       var e = m[2];
       var colour = e[7] || COLORS[e[4]] || 'var(--kind-C)';
       var ns = (index.namespaces || [])[e[6]] || '';
+      // The same outlined mark the tree puts beside a static member. The row has no signature on it
+      // to say so in words, which is what the full results page has and this does not.
+      var staticMark = e[9] ? '<span class="tree-badge tree-badge-static">S</span>' : '';
+
       return '<a class="nav-result" href="' + escapeHtml(e[1]) + '" role="option">' +
         '<span class="tree-badge" style="background:' + colour + '">' + escapeHtml(e[4] || '?') + '</span>' +
+        staticMark +
         '<span class="nav-result-name">' + markMatch(e[0], q) + '</span>' +
         '<span class="nav-result-ns">' + escapeHtml(ns) + '</span></a>';
     });
@@ -1324,7 +1440,7 @@ const JS = `
     if (matches.length > NAV_LIMIT) {
       rows.push(
         '<a class="nav-results-more" href="' + escapeHtml(searchUrl()) + '">' +
-          'All ' + matches.length + ' results' + '</a>'
+          'Show all ' + matches.length + ' matches' + '</a>'
       );
     }
 

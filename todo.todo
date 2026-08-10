@@ -1,11 +1,8 @@
+- appearance colors
+- resizing tree or example panel makes tree items randomly look selecteds
 - namespace/ ?
 - namespace mode when --api is not supplied
-- resizing tree or example panel makes tree items randomly look selecteds
-- use '.Name' to search for members in examples
-- toggle inherited, toggle card details
-- type title wraps when window is small
 - agent md files for each entry
-
 
 dotnet publish Ownl.slnx
 
