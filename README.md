@@ -60,11 +60,11 @@ owl gen <project.csproj...>
 owl serve <project.csproj...>
   -o, --out <dir>     Where to write the model (default .owl/json)
   --port <n>          Port to listen on (default 8080)
-  --docs <dir>        Your hand-written pages (default docs/api)
+  --docs <dir>        Your hand-written pages (default docs/api, when it exists)
 
 owl build <project.csproj...>
   --out <dir>         Where to write the site (default .owl/site)
-  --docs <dir>        Your hand-written pages (default docs/api)
+  --docs <dir>        Your hand-written pages (default docs/api, when it exists)
   --base <path>       Path prefix the site will be served under
   --site-url <url>    Origin for canonical urls and the sitemap
 ```
@@ -143,6 +143,17 @@ page's meta description.
 
 Any page you don't write falls back to a stub telling you where to add it, so a fresh checkout works
 before you have written a word.
+
+Write none at all — no `--docs`, and no `docs/api` directory to default to — and the site becomes an
+API dump instead: no category pages, no stubs asking for prose, and a sidebar that is one group per
+namespace holding its types, the same on every page. That is the right shape for a library with no
+`<category>` tags, which would otherwise open on a single group holding everything it has.
+
+A site that does have hand-written pages offers both ways of reading. The sidebar is the assembly's
+categories, and following the namespace in a type's breadcrumbs switches to the namespace tree,
+where it stays until you click your way back out. The two are two sets of urls — `/type/x/` and
+`/namespace/type/x/` — so a link goes to the reader as the page you were looking at, with no
+JavaScript and nothing remembered between visits.
 
 Supported Markdown: headings with anchors, bold, italic, strikethrough, inline code, fenced code
 blocks with highlighting, links, images, ordered and unordered lists including nesting, blockquotes,

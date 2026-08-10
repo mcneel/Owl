@@ -268,6 +268,12 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-overview .tree-type-label { padding: 0.5rem 0.75rem; }
 .tree-ns-label { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; user-select: none; background: none; border: none; width: 100%; text-align: left; font-family: inherit; }
 .tree-ns-label:hover { background: var(--bg3); color: var(--text); }
+/* A namespace row, which is a step in the nesting rather than a heading over it: written like the
+   type rows under it and marked with the namespace drawing, so the tree reads as one tree. The rule
+   between groups goes with the heading look - forty of them under a list of rows is a grid, not a
+   separation - which leaves category mode's headings as the two modes' visible difference. */
+.tree-ns-plain { border-bottom: none; }
+.tree-ns-plain > .tree-ns-label { gap: 0.35rem; padding: 0.28rem 0.75rem; font-size: 0.82rem; font-weight: 400; color: var(--text2); text-transform: none; letter-spacing: normal; }
 /* A square, so the rotation below turns about its centre and the arrow does not drift sideways. */
 .tree-arrow { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex-shrink: 0; transition: transform 0.15s; }
 .tree-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
@@ -305,7 +311,10 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-badge svg { display: block; width: 0.72rem; height: 0.72rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .tree-type-children { padding-left: 0.25rem; }
 .tree-type-children.collapsed { display: none; }
-.tree-child-link { display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.75rem 0.2rem 1.75rem; color: var(--text3); text-decoration: none; font-size: 0.77rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The tree's own ink, the same one the type rows above them are written in: a member row is a row
+   like any other, and dimming the whole list said 'less important' about every member there is.
+   What dimming is for here is the inherited rows, which are a second list drawn into the first. */
+.tree-child-link { display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.75rem 0.2rem 1.75rem; color: var(--text2); text-decoration: none; font-size: 0.77rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree-child-link:hover { background: var(--bg3); color: var(--text); }
 .tree-child-link.active { color: var(--flash); }
 /* One flex item holding both, so the row's gap does not open between the name and its '('. */
@@ -369,11 +378,32 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    bottom edge, and not agreed on between browsers. Centring asks nothing of either box. */
 .page-title-row { display: flex; align-items: center; column-gap: 0.45rem; }
 .page-title { flex: 0 1 auto; min-width: 0; }
+/* A type's name is one thing however long it runs - 'CodeEditor<TDoc, TView, …>' names one type -
+   so it goes off the side rather than down the page: wrapping it would take the declaration and
+   the description with it, and this line is the top of a header that has a height to keep.
+
+   Scrolled without a bar, because the bar would sit under a heading it is nothing to do with and
+   be visible on every page to serve the few that overflow. The end of a name is decoration
+   compared with its beginning; anyone who wants it can drag the line or shift-wheel it.
+
+   Held to seven tenths of the row, so what the name overruns is its own box and never the chain
+   beside it: a long one starts scrolling at that mark instead of taking the width and leaving the
+   type's ancestry a stub. */
+.page-title-row .page-title { max-width: 70%; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.page-title-row .page-title::-webkit-scrollbar { width: 0; height: 0; }
+/* The edge a long name runs past, faded rather than marked with an ellipsis: an ellipsis says the
+   rest was cut off, and here the rest is a drag away. Worn only while something is actually past
+   the edge - the script takes it off at the end of the run, and never puts it on a name that fits,
+   where a fade over the last letters would read as a defect. */
+.page-title-row .page-title.title-clipped { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
 /* Nudged onto the name's baseline. Centring the row put the chain's own middle level with the
    title's, and small text centred against large reads high - the two sit on a line together only
    once the smaller one comes down. An offset rather than baseline alignment, since the title is a
    row whose baseline browsers do not agree on; relative, so it moves without moving anything else. */
-.type-chain { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 0.78rem; position: relative; top: 0.2rem; }
+/* Ellipsised where it runs out of room: the chain has nowhere to scroll to, so a deep one was
+   being cut mid-word with nothing to say it had been. The mark is the whole difference between a
+   name that ends there and a name that carries on. */
+.type-chain { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; position: relative; top: 0.2rem; }
 /* Dimmer than the name it leads to: this is where the type came from, not what the page is about. */
 .type-chain .see-ref { font-family: inherit; color: var(--text3); }
 .type-chain .see-ref:hover { color: var(--flash); text-decoration: underline; }
@@ -409,7 +439,11 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    what it says about itself - so it holds still while they scroll under it. Capped, because a type
    with six paragraphs of remarks would otherwise pin a headerful of prose over the viewport and
    leave the list nowhere to go; past the cap the head scrolls within itself. */
-.page-head-body { min-height: 0; padding-top: 0.5rem; overflow-y: auto; scrollbar-width: thin; }
+/* A cap of its own, not just the head's: the head's 55vh is shared with the brief, so a detail
+   block long enough to claim what the brief does not - eighteen type parameters, or relations on a
+   type deep in a hierarchy - could still stand half a screen tall before anything stopped it, which
+   is a headerful of context over a list the reader came to read. Past this it scrolls in place. */
+.page-head-body { min-height: 0; max-height: 20vh; padding-top: 0.5rem; overflow-y: auto; scrollbar-width: thin; }
 /* The head is a card the width of the column: the name, the declaration and the description on the
    card's own ground, and everything that details the type - what it relates to, what it is
    parameterised on, its remarks - under a hairline on the page's, exactly as a member card splits.
@@ -430,6 +464,10 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    block and the members follow it. */
 .page-head.sticky-head.intro-open { position: static; max-height: none; }
 .page-head.sticky-head.intro-open .page-head-brief .page-intro { max-height: none; overflow: visible; }
+/* The detail comes off its cap with it. Nothing is being held over the viewport once the head has
+   been unpinned, so a second scrolling box inside a block that now scrolls with the page is only a
+   second place to have to scroll. */
+.page-head.sticky-head.intro-open .page-head-body { max-height: none; overflow: visible; }
 /* At the description's top-right corner rather than under it, and the corner is the one edge of the
    box that opening it does not move: the text grows downwards, so the pointer is still on the
    button afterwards and closing it again is a second click in the same place. The room it sits in
@@ -1163,7 +1201,21 @@ const JS = `
       row.classList.toggle('hidden', Boolean(q) && text.indexOf(q) < 0);
     });
 
+    // A group whose own name matches keeps everything it holds rather than emptying out: in
+    // namespace mode that name is a namespace, and typing one is a way of asking for its types.
     document.querySelectorAll('.tree-ns:not(.tree-overview)').forEach(function (ns) {
+      var label = ns.querySelector('.tree-ns-label');
+      var named = Boolean(q) && Boolean(label) && label.textContent.toLowerCase().indexOf(q) >= 0;
+
+      if (named) {
+        ns.querySelectorAll('.tree-type').forEach(function (el) {
+          el.classList.toggle('hidden', !withinVersion(el));
+        });
+
+        var children = ns.querySelector('.tree-ns-children');
+        if (children) children.classList.remove('collapsed');
+      }
+
       var any = [].slice.call(ns.querySelectorAll('.tree-type')).some(function (t) {
         return !t.classList.contains('hidden');
       });
@@ -1352,6 +1404,33 @@ const JS = `
     window.addEventListener('resize', syncIntroToggle);
   }
 
+  // ---- Page head: a name wider than its box ----
+  // The title scrolls sideways rather than wrapping, and a box that scrolls with no bar on it says
+  // nothing about what is off the end. This asks the box itself, so the fade goes on the names that
+  // overrun and on no others, and comes off again once the end of one has been scrolled to.
+  var pageTitle = stickyHead && stickyHead.querySelector('.page-title');
+
+  if (pageTitle) {
+    var syncTitleFade = function () {
+      var over = pageTitle.scrollWidth > pageTitle.clientWidth + 1;
+      var atEnd = pageTitle.scrollLeft + pageTitle.clientWidth >= pageTitle.scrollWidth - 1;
+      pageTitle.classList.toggle('title-clipped', over && !atEnd);
+    };
+
+    syncTitleFade();
+    pageTitle.addEventListener('scroll', syncTitleFade);
+    // The font lands after this runs, so the name is not its final width yet.
+    window.addEventListener('load', syncTitleFade);
+
+    // The box itself, not the window: the column this sits in is what is left over once the
+    // sidebar has been dragged to wherever the reader wants it, and dragging it fires nothing.
+    if (window.ResizeObserver) {
+      new ResizeObserver(syncTitleFade).observe(pageTitle);
+    } else {
+      window.addEventListener('resize', syncTitleFade);
+    }
+  }
+
   // ---- Tree: the member being read ----
   // The server marks the current type, but which member you are on lives in the fragment, and that
   // changes without a page load. So the tree follows the hash from here rather than from the markup.
@@ -1443,6 +1522,21 @@ const JS = `
   // Focus belongs to the search page's box alone: taking it on every page would pull the caret out
   // of whatever the reader was doing and swallow their next keystroke.
   if (onSearchPage) input.focus();
+
+  // Namespace mode is a url shape, and the index is built once in the plain one. A result opened
+  // from a namespace-mode page therefore has the segment put back, so following it keeps the mode
+  // the way every other link on the page does. Empty everywhere else, where plain is the shape.
+  var nsInsert = input.getAttribute('data-ns') || '';
+
+  function rowUrl(url) {
+    if (!nsInsert) return url;
+
+    // From the right, so a site served under a prefix that happens to contain /type/ is not cut
+    // at the prefix instead of at the page.
+    var at = url.lastIndexOf('/type/');
+    if (at < 0) at = url.lastIndexOf('/example/');
+    return at < 0 ? url : url.slice(0, at) + nsInsert + url.slice(at);
+  }
 
   var index = null;
   var loading = false;
@@ -1610,7 +1704,7 @@ const JS = `
       // to say so in words, which is what the full results page has and this does not.
       var staticMark = e[9] ? '<span class="tree-badge tree-badge-static">S</span>' : '';
 
-      return '<a class="nav-result" href="' + escapeHtml(e[1]) + '" role="option">' +
+      return '<a class="nav-result" href="' + escapeHtml(rowUrl(e[1])) + '" role="option">' +
         kindIcon(e) +
         staticMark +
         '<span class="nav-result-name">' + markMatch(e[0], q) + '</span>' +
@@ -1654,7 +1748,7 @@ const JS = `
         return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
           '<div class="r-head">' +
           kindIcon(e) +
-          '<a class="r-name" href="' + escapeHtml(e[1]) + '">' + markMatch(e[0], q) + '</a>' +
+          '<a class="r-name" href="' + escapeHtml(rowUrl(e[1])) + '">' + markMatch(e[0], q) + '</a>' +
           '</div>' +
           // Already highlighted markup, built by the same highlighter the server uses, which
           // escaped the code on the way in. Escaping it again would print the spans.

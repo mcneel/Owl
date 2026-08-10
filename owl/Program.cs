@@ -53,7 +53,8 @@ static void PrintUsage()
       -o, --out <dir>     Model directory for gen and serve (default .owl/json)
                           Site directory for build (default .owl/site)
       --json <dir>        Reuse an existing model instead of generating one
-      --docs <dir>        Authored markdown pages (default docs/api)
+      --docs <dir>        Authored markdown pages (default docs/api, when it exists)
+                          Without them the site is browsed by namespace alone
       --name <text>       Site name
       --port <n>          Port for serve (default 8080)
       --base <path>       Path prefix the site will be served under

@@ -18,7 +18,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | Option | Applies to | Meaning |
 |---|---|---|
 | `--json <dir>` | all | The generated model. Required. |
-| `--docs <dir>` | all | Authored markdown pages. |
+| `--docs <dir>` | all | Authored markdown pages. Without it the site is browsed by namespace alone — see [Two kinds of site](#two-kinds-of-site). |
 | `--name <text>` | serve, build | Site name, overriding the one in the model. |
 | `--logo <file>` | serve, build | Header icon, overriding `<docs>/logo.svg`. |
 | `--logo-dark <file>` | serve, build | Header icon for the dark theme, overriding `<docs>/logo-dark.svg`. |
@@ -127,15 +127,40 @@ renders anything is harder to adopt than one that does not. Node 18 or newer. Th
 `lib/vendor/`, which is checked in rather than installed for exactly that reason; `d2` is an
 external binary and entirely optional.
 
+## Two kinds of site
+
+`--docs` decides how the site is browsed, because what it names is what there is to browse: prose
+organised into categories, or nothing but the API.
+
+**With authored pages**, the sidebar is the assembly's categories and the reader is in *category
+mode*. Namespaces are still there — a type's breadcrumbs name the one it lives in — and following
+that crumb switches to *namespace mode*, where the sidebar is a group per namespace holding its
+types. The two modes are two sets of urls, so a page cannot be in both: `/type/x/` is the category
+one and `/namespace/type/x/` is the namespace one, and every link a page writes is written in its
+own mode. Clicking through the tree therefore stays where it was, a link can be handed to somebody
+else as the thing they will see, and none of it needs JavaScript or a stored preference.
+
+The marked copies are the same content under a second url, so they carry `noindex` and name the
+plain url as their canonical, and they are absent from the sitemap. The exporter still writes them:
+a static host has no way to render one url as another.
+
+**Without authored pages** there is only namespace mode, so nothing is marked and the urls stay
+plain. Category pages do not exist, the landing page is the namespace index rather than a note
+asking for a `MAIN.md`, and the sidebar is the same namespace tree on every page. This is the shape
+an API dump wants — a library with no `<category>` tags and no prose would otherwise open on a
+single group holding every type it has.
+
 ## URLs
 
 | URL | Page |
 |---|---|
-| `/` | landing page, plus the assembly list |
+| `/` | landing page: the authored one, or the namespace index |
 | `/assembly/<assembly>/` | that assembly's page, its categories and namespaces |
 | `/namespace/<namespace>/` | types in a namespace |
-| `/category/<assembly>/<category>/` | category overview plus its types |
+| `/category/<assembly>/<category>/` | category overview plus its types; only with authored pages |
 | `/type/<type>/` | one type, with its members as `#anchor` sections |
+| `/example/<type>/<member>/` | one member's examples, tabbed by language |
+| `/namespace/type/<type>/`, `/namespace/example/<type>/<member>/` | the same two pages in namespace mode; only on a site that has both modes |
 | `/search/` | search; the dev server also answers `?q=` without JavaScript |
 | `/sitemap.xml`, `/robots.txt` | |
 

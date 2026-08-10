@@ -1,7 +1,7 @@
 'use strict';
 
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
-const { slugify } = require('./routes');
+const { slugify, NAMESPACE_MODE } = require('./routes');
 const { highlight } = require('./highlight');
 const { page, filterBar, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
@@ -43,6 +43,46 @@ function enumValue(member) {
  */
 function genericBrackets(name) {
   return String(name).replace(/``?(\d+)/g, (_, count) => `<${count}>`);
+}
+
+/**
+ * A written type parameter list counted rather than listed: 'CodeEditor&lt;TDoc, TView, …&gt;'
+ * reads as 'CodeEditor&lt;18&gt;'.
+ *
+ * For the breadcrumbs, where the name is one step of a trail and not a declaration. Eighteen
+ * parameter names is a line and a half across the top of the page, pushing the trail it belongs to
+ * out of sight, and none of those names is answering a question the reader has at that point - the
+ * heading below states them in full, and so does the declaration under that.
+ *
+ * The same form the site already writes an arity in, from genericBrackets, so a counted name reads
+ * the same wherever it came from. Nesting is tracked so only the outermost list is counted.
+ */
+function countedGenerics(name) {
+  let out = '';
+  let depth = 0;
+  let commas = 0;
+
+  for (const ch of String(name)) {
+    if (ch === '<') {
+      depth++;
+      if (depth === 1) {
+        commas = 0;
+        continue;
+      }
+    } else if (ch === '>' && depth > 0) {
+      depth--;
+      if (depth === 0) {
+        out += `<${commas + 1}>`;
+        continue;
+      }
+    } else if (ch === ',' && depth === 1) {
+      commas++;
+    }
+
+    if (depth === 0) out += ch;
+  }
+
+  return out;
 }
 
 /**
@@ -356,6 +396,14 @@ class Renderer {
     this.routes = routes;
     this.siteUrl = options.siteUrl || '';
 
+    // No authored pages: the site is one long API dump browsed by namespace, with no categories to
+    // group by and no prose to open with. See Routes' NAMESPACE_MODE for what the other kind does.
+    this.namespaceMode = Boolean(options.namespaceMode);
+
+    // The plain urls, kept aside because this.routes is swapped while a namespace-mode page is
+    // being written and that page still has to name its canonical in the shape crawlers index.
+    this.baseRoutes = routes;
+
     const site = model.index.site || {};
 
     // Named at generation time and recorded in the model, so serving and exporting do not have to
@@ -396,6 +444,40 @@ class Renderer {
   // ------------------------------------------------------------------
   // Shared fragments
   // ------------------------------------------------------------------
+
+  /**
+   * Renders with every url written in `mode`.
+   *
+   * The mode is a property of the url, so the page has to come out self-consistent: the tree rows,
+   * the breadcrumbs, the crefs in the prose and the links in a signature are all written by the one
+   * Routes, and there is no link on a namespace-mode page that quietly leads back out of it.
+   *
+   * Scoped for the length of one render rather than threaded through the hundred places that build
+   * a url, the way docContext.selfType is, since a page is finished before the next one starts.
+   */
+  inMode(mode, render) {
+    const routes = this.routes.withMode(mode);
+    if (routes === this.routes) return render();
+
+    const previous = this.routes;
+    this.routes = routes;
+    this.docContext.routes = routes;
+
+    try {
+      return render();
+    } finally {
+      this.routes = previous;
+      this.docContext.routes = previous;
+    }
+  }
+
+  /**
+   * True while the page being written browses by namespace: either the whole site does, or this
+   * page is the namespace-mode copy of one that reads both ways.
+   */
+  get browsingNamespaces() {
+    return this.namespaceMode || Boolean(this.routes.mode);
+  }
 
   /** Wraps the layout so the site name, routes and origin are not repeated by every page. */
   shell(options) {
@@ -945,11 +1027,22 @@ class Renderer {
     // The authored page is the whole body. site-intro drops the card chrome .cat-doc wears on the
     // assembly and category pages, because here the prose is the page rather than a panel on it,
     // and the assemblies are not listed again below it: the header selector already goes there.
-    const body = main
-      ? `<div class="cat-doc site-intro">${markdown.render(main.markdown, this.markdownContext)}</div>`
-      : `<div class="page-head"><h1 class="page-title">${escape(this.siteName)}</h1>
+    //
+    // A namespace-mode site is never going to have that page, so it opens on the namespace index
+    // instead of on a note asking for prose nobody named a directory for.
+    const heading = `<div class="page-head"><h1 class="page-title">${escape(this.siteName)}</h1>`;
+
+    let body;
+    if (main) {
+      body = `<div class="cat-doc site-intro">${markdown.render(main.markdown, this.markdownContext)}</div>`;
+    } else if (this.namespaceMode) {
+      body = `${heading}</div>
+${this.namespaceListHtml(this.model.sortedNamespaces().map((ns) => ns.name))}`;
+    } else {
+      body = `${heading}
            <p class="page-intro">Add <code>${escape(this.model.docsPath('MAIN.md'))}</code> to author
            this page.</p></div>`;
+    }
 
     const fallback = `API reference for ${this.assemblyNames.join(', ')}.`;
     const description = main
@@ -965,6 +1058,10 @@ class Renderer {
       breadcrumbs: [],
       body,
       bodyClass: 'home',
+      // The dump's landing page carries the tree the rest of it carries; an authored one is prose,
+      // and the reader is meant to read it before picking a direction.
+      sidebar: this.namespaceMode ? this.namespaceTree() : null,
+      treeKey: this.namespaceMode ? 'namespaces' : '',
       assemblies: this.assemblyNames,
       jsonLd: { '@type': 'WebSite', name: this.siteName, url: this.siteUrl || undefined },
     });
@@ -978,34 +1075,30 @@ class Renderer {
     const main = this.model.assemblyMain(assemblyName);
     const namespaces = this.model.namespacesOfAssembly(assemblyName);
 
-    // Authored from docs/api/<AssemblyName>/MAIN.md, with a minimal fallback.
-    const intro = main
-      ? `<div class="cat-doc">${markdown.render(main.markdown, this.markdownContext)}</div>`
-      : `<div class="page-head">
-           <h1 class="page-title">${escape(assemblyName)}<span class="page-kind">assembly</span></h1>
+    // Authored from docs/api/<AssemblyName>/MAIN.md, with a minimal fallback. A namespace-mode site
+    // has no docs directory to put one in, so it is titled and left at that.
+    const title = `<div class="page-head">
+           <h1 class="page-title">${escape(assemblyName)}<span class="page-kind">assembly</span></h1>`;
+
+    let intro;
+    if (main) {
+      intro = `<div class="cat-doc">${markdown.render(main.markdown, this.markdownContext)}</div>`;
+    } else if (this.namespaceMode) {
+      intro = `${title}</div>`;
+    } else {
+      intro = `${title}
            <p class="page-intro">Add
            <code>${escape(this.model.docsPath(assemblyName + '/MAIN.md'))}</code> to author this
            page.</p>
          </div>`;
-
-    const namespaceList = namespaces
-      .map(
-        (ns) =>
-          `<li><a href="${attr(this.routes.namespace(ns.name))}">` +
-          icons.iconHtml('namespace') +
-          `${escape(ns.name || '(global)')}</a></li>`
-      )
-      .join('');
+    }
 
     // Categories are not repeated here: the sidebar is a list of them, and this page is reached
     // from that same sidebar's Overview link.
     const body = `
 ${intro}
 
-<section class="ns-section">
-  <h2 class="ns-heading">Namespaces</h2>
-  <ul class="plain-list">${namespaceList}</ul>
-</section>
+${this.namespaceListHtml(namespaces.map((ns) => ns.name))}
 `;
 
     const description = main
@@ -1022,11 +1115,35 @@ ${intro}
         { label: assemblyName, url: this.routes.assembly(assemblyName) },
       ],
       body,
-      sidebar: this.categoryTree(assemblyName, { activeOverview: true }),
-      treeKey: slugify(assemblyName),
+      sidebar: this.namespaceMode
+        ? this.namespaceTree()
+        : this.categoryTree(assemblyName, { activeOverview: true }),
+      treeKey: this.namespaceMode ? 'namespaces' : slugify(assemblyName),
       assemblies: this.assemblyChoices(assemblyName),
       currentAssembly: assemblyName,
     });
+  }
+
+  /**
+   * A list of namespaces, as the assembly page and a dump's landing page both show them.
+   *
+   * Names only: the counts the model can supply are per assembly, and this list is not always one
+   * assembly's, so a number here would sometimes mean 'in this assembly' and sometimes 'in total'.
+   */
+  namespaceListHtml(names) {
+    const items = names
+      .map(
+        (name) =>
+          `<li><a href="${attr(this.routes.namespace(name))}">` +
+          icons.iconHtml('namespace') +
+          `${escape(name || '(global)')}</a></li>`
+      )
+      .join('');
+
+    return `<section class="ns-section">
+  <h2 class="ns-heading">Namespaces</h2>
+  <ul class="plain-list">${items}</ul>
+</section>`;
   }
 
   // ------------------------------------------------------------------
@@ -1037,6 +1154,15 @@ ${intro}
     const bucket = this.model.namespaces.get(namespaceName);
     if (!bucket) return null;
 
+    // A namespace page is namespace mode - following one out of a type's breadcrumbs is how a
+    // reader enters it - so everything it offers is written in that mode. On a site with no other
+    // mode there is nothing to mark, and the urls stay plain.
+    return this.inMode(this.namespaceMode ? '' : NAMESPACE_MODE, () =>
+      this.namespaceBody(namespaceName, bucket)
+    );
+  }
+
+  namespaceBody(namespaceName, bucket) {
     const label = namespaceName || '(global)';
     const assemblies = [...bucket.assemblies].sort();
     const docs = this.namespaceDocs(namespaceName);
@@ -1158,7 +1284,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
    * lines, usually three of them saying the same thing in three languages, and putting that on the
    * type page would bury every member under it.
    */
-  example(slug, anchor) {
+  example(slug, anchor, mode = '') {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
@@ -1169,6 +1295,10 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
     // Only a file-backed example gets a page; anything else is on the card already.
     if (exampleFileNodes(member.docs).length === 0) return null;
 
+    return this.inMode(mode, () => this.exampleBody(type, assembly, member));
+  }
+
+  exampleBody(type, assembly, member) {
     // Ranked, then by the order the comment listed them, so languages of equal rank keep the
     // sequence the author chose rather than one this decides for them.
     const code = exampleCodeNodes(member.docs)
@@ -1251,18 +1381,21 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     return this.shell({
       title: `${type.name}.${name} examples`,
       description,
-      canonical: this.routes.example(type.slug, member.anchor),
+      canonical: this.baseRoutes.example(type.slug, member.anchor),
+      noindex: Boolean(this.routes.mode),
       breadcrumbs: [
         this.homeCrumb(),
         ...(type.namespace
           ? [{ label: type.namespace, url: this.routes.namespace(type.namespace) }]
           : []),
-        { label: type.name, url: this.routes.type(type.slug) },
+        { label: countedGenerics(type.name), url: this.routes.type(type.slug) },
         { label: 'Examples', url: this.routes.example(type.slug, member.anchor) },
       ],
       body,
-      sidebar: this.categoryTree(assembly, { activeType: type }),
-      treeKey: slugify(assembly),
+      sidebar: this.browsingNamespaces
+        ? this.namespaceTree(type.namespace || '', { activeType: type })
+        : this.categoryTree(assembly, { activeType: type }),
+      treeKey: this.browsingNamespaces ? 'namespaces' : slugify(assembly),
       assemblies: this.assemblyChoices(assembly),
       currentAssembly: assembly,
       jsonLd: {
@@ -1273,7 +1406,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     });
   }
 
-  type(slug) {
+  type(slug, mode = '') {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
@@ -1285,7 +1418,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // begins. The finally is what keeps a thrown render from leaking it into the page after.
     this.docContext.selfType = type.docId;
     try {
-      return this.typeBody(type, assembly);
+      return this.inMode(mode, () => this.typeBody(type, assembly));
     } finally {
       this.docContext.selfType = null;
     }
@@ -1395,7 +1528,7 @@ ${this.seeAlsoHtml(type.docs)}
     if (type.namespace) {
       breadcrumbs.push({ label: type.namespace, url: this.routes.namespace(type.namespace) });
     }
-    breadcrumbs.push({ label: type.name, url: this.routes.type(type.slug) });
+    breadcrumbs.push({ label: countedGenerics(type.name), url: this.routes.type(type.slug) });
 
     return this.shell({
       // Namespace-qualified so titles stay unique: Step exists in both Languages.IronPython2
@@ -1404,11 +1537,16 @@ ${this.seeAlsoHtml(type.docs)}
         ? `${type.name} ${type.kind} (${type.namespace})`
         : `${type.name} ${type.kind}`,
       description,
-      canonical: this.routes.type(type.slug),
+      // The plain url, in both modes: the two pages are the same type read two ways, so only one of
+      // them is worth indexing and the marked one points at it.
+      canonical: this.baseRoutes.type(type.slug),
+      noindex: Boolean(this.routes.mode),
       breadcrumbs,
       body,
-      sidebar: this.categoryTree(assembly, { activeType: type }),
-      treeKey: slugify(assembly),
+      sidebar: this.browsingNamespaces
+        ? this.namespaceTree(type.namespace || '', { activeType: type })
+        : this.categoryTree(assembly, { activeType: type }),
+      treeKey: this.browsingNamespaces ? 'namespaces' : slugify(assembly),
       assemblies: this.assemblyChoices(assembly),
       currentAssembly: assembly,
       jsonLd: {
@@ -2202,13 +2340,25 @@ ${this.seeAlsoHtml(type.docs)}
     return chevronHtml(`tree-arrow${collapsed ? ' collapsed' : ''}`);
   }
 
-  /** Collapsible sidebar group. */
-  treeGroup(id, label, inner, { collapsed = false } = {}) {
+  /**
+   * Collapsible sidebar group.
+   *
+   * Two looks, for the two things a group can be. A category is a heading over a list - small,
+   * bold, upper case - because what it names is a section of the site rather than a page. A
+   * namespace is a row like the rows under it, drawn with the namespace mark and written the way a
+   * type is written, because in namespace mode the tree is one nesting: namespaces hold types and
+   * types hold members, and a heading in the middle of that would read as a break in it.
+   *
+   * @param {object} options  collapsed: start closed
+   *                          icon: kind mark to draw before the label, which also plains the row
+   */
+  treeGroup(id, label, inner, { collapsed = false, icon = '' } = {}) {
     return (
-      '<div class="tree-ns">' +
+      `<div class="tree-ns${icon ? ' tree-ns-plain' : ''}">` +
       `<button class="tree-ns-label" type="button" data-target="ns_${attr(id)}" ` +
       `aria-expanded="${collapsed ? 'false' : 'true'}">` +
       this.treeArrowHtml(collapsed) +
+      (icon ? icons.iconHtml(icon) : '') +
       `<span>${escape(label)}</span></button>` +
       `<div class="tree-ns-children${collapsed ? ' collapsed' : ''}" id="ns_${attr(id)}">${inner}</div>` +
       '</div>'
@@ -2392,35 +2542,50 @@ ${this.seeAlsoHtml(type.docs)}
     return out;
   }
 
-  /** Sidebar for namespace pages: sibling namespaces, then the types in this one. */
-  namespaceTree(namespaceName) {
-    const bucket = this.model.namespaces.get(namespaceName);
+  /**
+   * The sidebar of namespace mode: a group per namespace, holding the types declared in it.
+   *
+   * Every namespace on the site rather than the current assembly's, because a namespace page is
+   * itself the whole site's - Rhino.Geometry is one namespace whichever assemblies contribute to
+   * it - and because a tree that is the same on every page is one the reader can leave open.
+   *
+   * Only the namespace being read is expanded. A dump has a few dozen of them against a few
+   * thousand types, so opening them all would bury the list that makes the column navigable.
+   *
+   * Types and nothing else under a namespace: no Overview row leading to the namespace's own page,
+   * because namespace mode is an API dump and a row that leads to prose is not part of one. That
+   * page is still written, and a type's breadcrumbs still name it.
+   *
+   * @param {string|null} activeNamespace  the namespace being read, expanded
+   * @param {object} options   activeType: the type whose page this is, expanded to show members
+   */
+  namespaceTree(activeNamespace = null, { activeType = null } = {}) {
     let out = this.sidebarToolbar();
-    if (!bucket) return out;
 
-    const siblings = new Set();
-    for (const assemblyName of bucket.assemblies) {
-      for (const ns of this.model.namespacesOfAssembly(assemblyName)) siblings.add(ns.name);
+    for (const bucket of this.model.sortedNamespaces()) {
+      const open = bucket.name === activeNamespace;
+
+      // Members are listed under the type being read and nowhere else, so a namespace the size of
+      // Rhino.Geometry stays a list of types.
+      const rows = bucket.types
+        .map(({ type }) => {
+          const active = activeType !== null && type.docId === activeType.docId;
+          const inherited = active ? this.inheritedMembers(type) : [];
+
+          return this.treeTypeRow(type, {
+            active,
+            children: active ? this.treeMemberLinksHtml(type, inherited) : '',
+            childrenId: `tc_${type.slug}`,
+            inherited: inherited.length > 0,
+          });
+        })
+        .join('');
+
+      out += this.treeGroup(slugify(bucket.name) || 'global', bucket.name || '(global)', rows, {
+        collapsed: !open,
+        icon: 'namespace',
+      });
     }
-
-    const namespaceLinks = [...siblings]
-      .sort()
-      .map((name) => {
-        const active = name === namespaceName;
-        return (
-          '<div class="tree-type"><div class="tree-type-label">' +
-          '<span class="tree-arrow-spacer"></span>' +
-          `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.namespace(name))}">` +
-          icons.iconHtml('namespace') +
-          `${escape(name || '(global)')}</a></div></div>`
-        );
-      })
-      .join('');
-
-    out += this.treeGroup('namespaces', 'Namespaces', namespaceLinks);
-
-    const types = bucket.types.map(({ type }) => this.treeTypeRow(type)).join('');
-    out += this.treeGroup('types', namespaceName || '(global)', types);
 
     return out;
   }
@@ -2434,6 +2599,22 @@ ${this.seeAlsoHtml(type.docs)}
     const scope = assemblyName || '';
     let resultsHtml = '';
     let statusText = '';
+
+    // The tree the reader already knows, which is the assembly's own where there are categories to
+    // browse, and the one tree the whole site carries where there are not.
+    let sidebar;
+    let treeKey;
+
+    if (this.namespaceMode) {
+      sidebar = this.namespaceTree();
+      treeKey = 'namespaces';
+    } else if (scope) {
+      sidebar = this.categoryTree(scope);
+      treeKey = slugify(scope);
+    } else {
+      sidebar = this.assembliesTree();
+      treeKey = 'assemblies';
+    }
 
     if (serverSide && trimmed) {
       const matches = this.searchIndexEntries(trimmed, 200, scope);
@@ -2484,12 +2665,12 @@ ${this.seeAlsoHtml(type.docs)}
       // Every button, unpruned: results are rebuilt in the browser as the query changes, so what
       // is on the page now says nothing about what will be on it next.
       filterBar: filterBar(),
-      // The assembly's own tree, the same one its pages carry. Search is a dead end otherwise:
-      // the way back into the content is the tree, so it should be the tree you already know.
-      // Unscoped there is no single assembly to show, so the list of them stands in.
-      sidebar: scope ? this.categoryTree(scope) : this.assembliesTree(),
-      // Same key as that assembly's own pages, so an expansion survives the trip through search.
-      treeKey: scope ? slugify(scope) : 'assemblies',
+      // Search is a dead end otherwise: the way back into the content is the tree, so it should be
+      // the tree you already know. Unscoped and with categories, there is no single assembly to
+      // show and the list of them stands in.
+      sidebar,
+      // Same key as the pages that tree belongs to, so an expansion survives the trip through search.
+      treeKey,
       assemblies: this.assemblyChoices(scope),
       currentAssembly: scope,
       // The picker re-runs the query in the chosen assembly instead of leaving the results behind.
@@ -2552,7 +2733,9 @@ ${this.seeAlsoHtml(type.docs)}
         rows.push({
           name: type.name,
           kind: type.kind,
-          url: this.routes.type(type.slug),
+          // Plain urls, always: the index is one asset shared by every page, and a namespace-mode
+          // page puts its own segment back on the row it opens. See modeInsert.
+          url: this.baseRoutes.type(type.slug),
           summary,
           // A type's declaration is the closest thing it has to a member's signature.
           signature: this.declarationOf(type),
@@ -2569,7 +2752,7 @@ ${this.seeAlsoHtml(type.docs)}
             name: `${type.name}.${memberDisplayName(member)}`,
             kind: member.kind,
             isStatic: Boolean(member.isStatic),
-            url: this.routes.member(type.slug, member.anchor),
+            url: this.baseRoutes.member(type.slug, member.anchor),
             summary: memberSummary,
             signature: this.memberDeclaration(member),
             assembly: assemblyName,
@@ -2654,13 +2837,46 @@ ${this.seeAlsoHtml(type.docs)}
 
     for (const assembly of this.model.index.assemblies) urls.push(this.routes.assembly(assembly.name));
     for (const ns of this.model.sortedNamespaces()) urls.push(this.routes.namespace(ns.name));
-    for (const c of this.model.allCategories()) urls.push(this.routes.category(c.assembly, c.category));
+
+    // A site with no authored pages has no category pages either: the tags are still in the model,
+    // but nothing links to them and there is no overview to read on one.
+    if (!this.namespaceMode) {
+      for (const c of this.model.allCategories()) urls.push(this.routes.category(c.assembly, c.category));
+    }
+
     for (const { type } of this.model.allTypes()) {
       urls.push(this.routes.type(type.slug));
 
       for (const member of type.members || []) {
         if (exampleFileNodes(member.docs).length > 0) {
           urls.push(this.routes.example(type.slug, member.anchor));
+        }
+      }
+    }
+
+    return urls;
+  }
+
+  /**
+   * The namespace-mode copies of the pages that read both ways: types, and the example pages
+   * hanging off them.
+   *
+   * Kept apart from sitemapUrls because they are the same content under a second url. They are not
+   * in the sitemap and they are not indexed - each names the plain url as its canonical - but the
+   * exporter still has to write them, since a static host cannot make one url render as another.
+   */
+  mirrorUrls() {
+    if (this.namespaceMode) return [];
+
+    const routes = this.routes.withMode(NAMESPACE_MODE);
+    const urls = [];
+
+    for (const { type } of this.model.allTypes()) {
+      urls.push(routes.type(type.slug));
+
+      for (const member of type.members || []) {
+        if (exampleFileNodes(member.docs).length > 0) {
+          urls.push(routes.example(type.slug, member.anchor));
         }
       }
     }

@@ -26,8 +26,11 @@ sealed class Command
   /// <summary>Where an exported site is written. Only build uses it.</summary>
   public string OutDir { get; private set; } = DEFAULT_SITE_DIR;
 
-  /// <summary>Authored markdown pages the site folds in alongside the generated model.</summary>
-  public string DocsDir { get; private set; } = DEFAULT_DOCS_DIR;
+  /// <summary>
+  /// Authored markdown pages the site folds in alongside the generated model, or null when there
+  /// are none and the site is an API dump browsed by namespace.
+  /// </summary>
+  public string? DocsDir { get; private set; }
 
   /// <summary>Port serve listens on. Only serve uses it.</summary>
   public string Port { get; private set; } = "8080";
@@ -64,7 +67,8 @@ sealed class Command
           command.ModelDir = Next(args, ref i, arg);
           break;
 
-        // Read by the site alone; owl-gen never sees the authored pages.
+        // Read by the site alone; owl-gen never sees the authored pages. Naming a directory is also
+        // what asks for the category-and-prose site rather than the namespace dump.
         case "--docs":
           command.DocsDir = Next(args, ref i, arg);
           break;
@@ -148,6 +152,15 @@ sealed class Command
     // A model directory doubles as gen's output and as the site's input, so one default covers both.
     command.ModelDir ??= DEFAULT_MODEL_DIR;
 
+    // The conventional directory counts as naming one, but only if it is there. Whether a site has
+    // authored pages is what decides how it is browsed - by category with them, by namespace
+    // without - so defaulting to a directory that does not exist would put every project with no
+    // prose into the half-empty version of the wrong one.
+    if (command.DocsDir is null && Directory.Exists(DEFAULT_DOCS_DIR))
+    {
+      command.DocsDir = DEFAULT_DOCS_DIR;
+    }
+
     if (name == "build" && !outSet)
     {
       command.OutDir = DEFAULT_SITE_DIR;
@@ -188,7 +201,8 @@ sealed class Command
     };
   }
 
-  string[] Model() => ["--json", ModelDir!, "--docs", DocsDir];
+  string[] Model() =>
+    DocsDir is null ? ["--json", ModelDir!] : ["--json", ModelDir!, "--docs", DocsDir];
 
   static string Next(string[] args, ref int index, string arg)
   {

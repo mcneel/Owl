@@ -9,9 +9,6 @@ const { Diagrams } = require('./diagrams');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
 
-/** Matches owl's own default, so the two agree on where authored pages live. */
-const DEFAULT_DOCS_DIR = 'docs/api';
-
 /**
  * Wires the model, routes and renderer together, and resolves a request path to a response.
  *
@@ -21,7 +18,7 @@ const DEFAULT_DOCS_DIR = 'docs/api';
  *
  * @param {object} options
  *   jsonDir   generated model directory (required)
- *   apiDir    authored markdown directory (default docs/api)
+ *   apiDir    authored markdown directory; without one the site is in namespace mode
  *   siteName  overrides the name recorded in the model
  *   base      path prefix the site is served under
  *   siteUrl   absolute origin for canonical urls and the sitemap
@@ -39,8 +36,10 @@ class Site {
 
     this.jsonDir = options.jsonDir;
 
-    // Defaulted rather than left empty so a missing page can name the file to create.
-    this.apiDir = options.apiDir || DEFAULT_DOCS_DIR;
+    // Left empty when none was named, because that is the whole difference between the two kinds of
+    // site: authored pages mean categories, prose and a category tree, and no authored pages mean
+    // an API dump browsed by namespace. Defaulting this would make the distinction unaskable.
+    this.apiDir = options.apiDir || '';
     this.siteName = options.siteName || '';
     this.base = options.base || '';
     this.siteUrl = options.siteUrl || '';
@@ -51,6 +50,14 @@ class Site {
     this.d2 = options.d2 || 'd2';
 
     this.reload();
+  }
+
+  /**
+   * True when the site browses by namespace alone: no authored pages were named, so there is no
+   * prose to organise, no category to overview, and nothing for a second mode to be about.
+   */
+  get namespaceMode() {
+    return !this.apiDir;
   }
 
   reload() {
@@ -66,11 +73,14 @@ class Site {
     // outside the instance, so nothing is redrawn for the sake of a new warning list.
     const diagrams = new Diagrams({
       command: this.d2,
-      cwd: this.apiDir,
+      // Relative sources in a fence resolve against the authored pages that hold them; with none,
+      // the only sources are in doc comments and they resolve against wherever owl was run.
+      cwd: this.apiDir || process.cwd(),
       warn: (message) => this.model.warnings.push(message),
     });
 
     this.renderer = new Renderer(this.model, this.routes, {
+      namespaceMode: this.namespaceMode,
       siteName: this.siteName,
       siteUrl: this.siteUrl,
       sourceRefs: this.sourceRefs,
@@ -139,6 +149,10 @@ class Site {
       return { status: 404, type: 'text/html; charset=utf-8', body: this.renderer.notFound(pathname) };
     }
 
+    // A site that browses by namespace alone has one url per page, so the marked copies are not
+    // second names for them - they are nothing at all.
+    if (route.mode && this.namespaceMode) return this.notFound(pathname);
+
     switch (route.kind) {
       case 'home':
         return this.html(this.renderer.home());
@@ -166,12 +180,12 @@ class Site {
         return this.asset(route.name);
 
       case 'type': {
-        const html = this.renderer.type(route.slug);
+        const html = this.renderer.type(route.slug, route.mode);
         return html ? this.html(html) : this.notFound(pathname);
       }
 
       case 'example': {
-        const html = this.renderer.example(route.slug, route.anchor);
+        const html = this.renderer.example(route.slug, route.anchor, route.mode);
         return html ? this.html(html) : this.notFound(pathname);
       }
 
@@ -188,6 +202,10 @@ class Site {
       }
 
       case 'category': {
+        // Categories are what the authored pages are organised around, so with none there are no
+        // category pages to serve rather than empty ones.
+        if (this.namespaceMode) return this.notFound(pathname);
+
         const bucket = this.categoryBySlugs(route.assembly, route.category);
         if (!bucket) return this.notFound(pathname);
         const html = this.renderer.category(bucket.assembly, bucket.category);

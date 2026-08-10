@@ -137,10 +137,15 @@ ${icons.spriteHtml()}
 
          The scope is the slug, not the name: the index keys its assemblies by slug, and a name here
          matched none of them, so every page but the search page quietly searched the whole API. -->
+    <!-- data-ns is what keeps a result opened from a namespace-mode page in that mode: the index is
+         built once in the plain shape, and this is the segment put back on the row's url. Absent on
+         every other page, where the plain shape is the right one. -->
     <input type="search" id="search" name="q" placeholder="Search"
            value="${attr(currentQuery)}" autocomplete="off"
            data-index-url="${attr(routes.asset('search.json'))}"
-           data-scope="${attr(currentAssembly ? slugify(currentAssembly) : '')}">
+           data-scope="${attr(currentAssembly ? slugify(currentAssembly) : '')}"${
+             routes.modeInsert ? `\n           data-ns="${attr(routes.modeInsert)}"` : ''
+           }>
     ${
       // Carries the assembly being read into the search, so the box searches what the selector
       // beside it says. Nothing on a page that belongs to no assembly, which searches everything.

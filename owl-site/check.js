@@ -72,7 +72,12 @@ function collectPages() {
 
   const site = new Site({ jsonDir, apiDir, skipUndocumented });
 
-  const urls = site.renderer.sitemapUrls().concat([site.routes.search()]);
+  // The namespace-mode copies too: the namespace pages link at them, so leaving them out would
+  // report every one of those links as broken.
+  const urls = site.renderer
+    .sitemapUrls()
+    .concat(site.renderer.mirrorUrls())
+    .concat([site.routes.search()]);
   for (const url of urls) {
     const result = site.resolve(url.replace(/\?.*$/, ''), null, false);
     if (result.status !== 200) {
@@ -113,19 +118,24 @@ for (const [url, html] of pages) {
   const title = (html.match(/<title>(.*?)<\/title>/s) || [])[1];
   const description = (html.match(/<meta name="description" content="(.*?)">/s) || [])[1];
 
+  // Duplicate titles matter because two indexed pages competing for one query is a page wasted.
+  // A namespace-mode copy is by design the same page under a second url, and says so: it is
+  // noindex and names the plain url as its canonical, so it is not competing with anything.
+  const indexable = !/name="robots" content="noindex/.test(html);
+
   if (!title) fail(`${url}: no <title>`);
-  else {
+  else if (indexable) {
     if (!titles.has(title)) titles.set(title, []);
     titles.get(title).push(url);
   }
 
   if (!description) fail(`${url}: no meta description`);
-  else {
+  else if (indexable) {
     if (!descriptions.has(description)) descriptions.set(description, []);
     descriptions.get(description).push(url);
   }
 
-  if (!/rel="canonical"/.test(html) && !/name="robots" content="noindex/.test(html)) {
+  if (!/rel="canonical"/.test(html) && indexable) {
     fail(`${url}: no canonical link`);
   }
 

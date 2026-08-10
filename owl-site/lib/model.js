@@ -50,7 +50,11 @@ function loadAuthoredDocs(apiDir, warnings) {
   let siteLogo = '';
   let siteLogoDark = '';
 
-  if (!fs.existsSync(apiDir)) return { categories, mains, siteMain, siteLogo, siteLogoDark };
+  // No directory named at all is the namespace-mode site, which has no authored pages by
+  // definition; a named one that is not there yet is a site whose first page is still to be written.
+  if (!apiDir || !fs.existsSync(apiDir)) {
+    return { categories, mains, siteMain, siteLogo, siteLogoDark };
+  }
 
   const read = (file) => {
     try {

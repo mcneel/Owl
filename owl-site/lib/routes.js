@@ -8,6 +8,20 @@
  * from the model rather than recomputed here, so there is only one slug rule to keep correct.
  */
 
+/**
+ * The segment that marks the namespace-mode copy of a page.
+ *
+ * A site with authored pages browses two ways - by category, which is what the prose is organised
+ * around, and by namespace, which is the shape the compiler sees - and a type reads the same in
+ * both. Which one a reader is in therefore cannot be a property of the reader, because a static
+ * host serves one file per url and that file has to carry a sidebar: it is a property of the url.
+ * '/type/x/' is the category-mode page and '/namespace/type/x/' is the namespace-mode one, and
+ * every link a page writes is written in its own mode, so no click falls out of it.
+ *
+ * A site with no authored pages has only the one mode, so it needs no marker and gets none.
+ */
+const NAMESPACE_MODE = 'namespace';
+
 /** Normalizes a base path to the form '' or '/prefix'. */
 function normalizeBase(base) {
   if (!base || base === '/') return '';
@@ -34,8 +48,29 @@ function slugify(value) {
 }
 
 class Routes {
-  constructor(base = '') {
+  /**
+   * @param {string} base  path prefix the site is served under
+   * @param {string} mode  '' for the plain urls, 'namespace' for the namespace-mode ones
+   */
+  constructor(base = '', mode = '') {
     this.base = normalizeBase(base);
+    this.mode = mode === NAMESPACE_MODE ? NAMESPACE_MODE : '';
+  }
+
+  /** The same routes writing urls for another mode. Returns this one when it is already that mode. */
+  withMode(mode) {
+    const wanted = mode === NAMESPACE_MODE ? NAMESPACE_MODE : '';
+    return wanted === this.mode ? this : new Routes(this.base, wanted);
+  }
+
+  /**
+   * What namespace mode puts in front of the pages it has a copy of, and '' outside it.
+   *
+   * Public because the browser needs it too: the search index is built once, in the plain shape,
+   * so a result opened from a namespace-mode page has the segment put back on the way out.
+   */
+  get modeInsert() {
+    return this.mode ? `/${this.mode}` : '';
   }
 
   home() {
@@ -46,23 +81,28 @@ class Routes {
     return `${this.base}/assembly/${slugify(assemblyName)}/`;
   }
 
+  /**
+   * A namespace's own page. Unmarked in either mode, because it only exists in the one: a namespace
+   * page is namespace mode, and following one is how a reader enters it.
+   */
   namespace(namespaceName) {
     const slug = namespaceName ? slugify(namespaceName) : 'global';
-    return `${this.base}/namespace/${slug}/`;
+    return `${this.base}/${NAMESPACE_MODE}/${slug}/`;
   }
 
+  /** A category's page, which likewise exists in category mode alone. */
   category(assemblyName, categoryName) {
     return `${this.base}/category/${slugify(assemblyName)}/${slugify(categoryName)}/`;
   }
 
   /** Page url for a type, from the slug in the model. */
   type(typeSlug) {
-    return `${this.base}/type/${typeSlug}/`;
+    return `${this.base}${this.modeInsert}/type/${typeSlug}/`;
   }
 
   /** Url for a member, which lives as a fragment on its type's page. */
   member(typeSlug, anchor) {
-    return anchor ? `${this.base}/type/${typeSlug}/#${anchor}` : this.type(typeSlug);
+    return anchor ? `${this.type(typeSlug)}#${anchor}` : this.type(typeSlug);
   }
 
   /**
@@ -72,7 +112,7 @@ class Routes {
    * example is the normal case, so inlining them would bury the member list they belong to.
    */
   example(typeSlug, anchor) {
-    return `${this.base}/example/${typeSlug}/${anchor}/`;
+    return `${this.base}${this.modeInsert}/example/${typeSlug}/${anchor}/`;
   }
 
   /**
@@ -133,7 +173,18 @@ class Routes {
       return { kind: 'example', slug: parts[1], anchor: parts[2] };
     }
 
-    if (parts[0] === 'namespace' && parts.length === 2) {
+    // Namespace mode's copies, before the namespace page itself. They cannot be confused with it -
+    // a namespace page is two segments and these are three and four - so a namespace really called
+    // Type still gets its page at /namespace/type/.
+    if (parts[0] === NAMESPACE_MODE && parts[1] === 'type' && parts.length === 3) {
+      return { kind: 'type', slug: parts[2], mode: NAMESPACE_MODE };
+    }
+
+    if (parts[0] === NAMESPACE_MODE && parts[1] === 'example' && parts.length === 4) {
+      return { kind: 'example', slug: parts[2], anchor: parts[3], mode: NAMESPACE_MODE };
+    }
+
+    if (parts[0] === NAMESPACE_MODE && parts.length === 2) {
       return { kind: 'namespace', slug: parts[1] };
     }
 
@@ -149,4 +200,4 @@ class Routes {
   }
 }
 
-module.exports = { Routes, slugify, normalizeBase };
+module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE };

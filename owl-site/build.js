@@ -93,7 +93,7 @@ Usage:
 Options:
   --json <dir>      Location of the generated model (required)
   --out <dir>       Output directory (required)
-  --docs <dir>      Authored markdown pages
+  --docs <dir>      Authored markdown pages; without them the site is browsed by namespace
   --name <text>     Site name, overriding the one recorded in the model
   --logo <file>     Header icon, overriding <docs>/logo.svg
   --logo-dark <file>  Header icon for the dark theme; optional, --logo covers both
@@ -177,7 +177,11 @@ let bytes = 0;
 
 // Static export cannot answer ?q=, so the search page ships the client-side path plus a
 // noscript fallback that links into the browse hierarchy.
-const urls = site.renderer.sitemapUrls();
+//
+// The mirrors are the namespace-mode copies of the type and example pages. They are files like any
+// other - a static host has no way to render one url as another - but they are not in the sitemap,
+// so they are written from a list of their own.
+const urls = site.renderer.sitemapUrls().concat(site.renderer.mirrorUrls());
 
 for (const url of urls) {
   const result = site.resolve(url, null, false);

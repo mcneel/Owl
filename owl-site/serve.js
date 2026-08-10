@@ -101,7 +101,7 @@ Usage:
 
 Options:
   --json <dir>      Location of the generated model (required)
-  --docs <dir>      Authored markdown pages
+  --docs <dir>      Authored markdown pages; without them the site is browsed by namespace
   --name <text>     Site name, overriding the one recorded in the model
   --logo <file>     Header icon, overriding <docs>/logo.svg
   --logo-dark <file>  Header icon for the dark theme; optional, --logo covers both
