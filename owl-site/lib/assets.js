@@ -239,6 +239,9 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    them shows, and one shape for the two is one thing to learn. The kind's colour goes on the marker
    rather than the label, because a constructor's grey reads as a marker and not as legible text. */
 .filter-bar { margin-bottom: 1.1rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+/* A display of its own outranks the browser's rule for the attribute, so hidden has to be said here
+   or the bar the search page hides stays on the page as an empty rule across the column. */
+.filter-bar[hidden], .filter-btn[hidden] { display: none; }
 .filter-btn { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); cursor: pointer; }
 .filter-btn:hover { color: var(--text); }
 /* A kind's tab is underlined in the ink the marks it filters are drawn in, so the tab and its rows
@@ -259,7 +262,12 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    than it tells you. The three properties cover Firefox, old Edge and the WebKit/Blink family. */
 .sidebar { width: 280px; min-width: 150px; max-width: 600px; background: var(--bg2); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 0; }
 .sidebar::-webkit-scrollbar { display: none; }
-.sidebar-toolbar { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; align-items: center; }
+/* Pinned, like the rows under it: it filters the whole tree, so it is no use only while the top of
+   the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
+   written on rather than left to the contents, because those rows pin against it - see --tree-bar.
+   Anything added here that makes the bar taller - a second row of controls, a taller field - is a
+   change to --tree-bar and nothing else: the rows read their offsets from it. */
+.sidebar-toolbar { position: sticky; top: 0; z-index: 3; height: var(--tree-bar); background: var(--bg2); padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; align-items: center; }
 #tree-search { flex: 1; min-width: 0; padding: 0.35rem 0.6rem; border-radius: 5px; border: 1px solid var(--border2); background: var(--bg); color: var(--text); font-size: 0.8rem; outline: none; }
 #tree-search::placeholder { color: var(--text4); }
 #collapse-all-btn { flex-shrink: 0; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); width: 1.8rem; height: 1.8rem; padding: 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -360,8 +368,10 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    shapes are not the same height - a category heading is text and an arrow at 0.5rem padding, a
    namespace row is a kind drawing at 0.28rem - so the number is written per shape, and written onto
    the row as a height as well, which is what keeps the offset and the height from drifting apart
-   into a gap or an overlap. */
-.sidebar { --tree-head: 2rem; }
+   into a gap or an overlap. The filter bar is the first of the pinned slots and stacks the same way,
+   so both offsets are measured from the bottom of it. --tree-bar carries a little slack over what
+   the field and the button need, since a clipped control costs more than a hair of extra bar. */
+.sidebar { --tree-bar: 2.9rem; --tree-head: 2rem; }
 .tree-ns-plain { --tree-head: 1.66rem; }
 .tree-ns-label { min-height: var(--tree-head); }
 .tree-ns-plain > .tree-type-label { min-height: var(--tree-head); }
@@ -369,8 +379,8 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    The Overview row is left out: it is a group of one row with nothing under it, so pinning it buys
    no name and only puts it over the row below. */
 .tree-ns > .tree-ns-label,
-.tree-ns:not(.tree-overview) > .tree-type-label { position: sticky; top: 0; z-index: 2; }
-.tree-type > .tree-type-label { position: sticky; top: var(--tree-head); z-index: 1; }
+.tree-ns:not(.tree-overview) > .tree-type-label { position: sticky; top: var(--tree-bar); z-index: 2; }
+.tree-type > .tree-type-label { position: sticky; top: calc(var(--tree-bar) + var(--tree-head)); z-index: 1; }
 
 /* ---- Main content ---- */
 /* No padding at the top. It sits inside the scrollport, so a sticky child stops below it and
@@ -1117,6 +1127,38 @@ const JS = `
     });
   });
 
+  /**
+   * The bar, narrowed to what a query actually found: a button that would take nothing out of the
+   * list is a button with nothing to say, and on the search page the list is a different one every
+   * few keystrokes. Only the search page calls this - every other bar is written for a list that was
+   * built with the page and cannot change under it.
+   *
+   * Two kinds is where a bar starts being worth its line: All and the single kind present are the
+   * same list under two names. Same rule tabsHtml applies in lib/layout.js when it builds one.
+   *
+   * @param {object} keys  the letters present, as a lookup
+   */
+  function offerKinds(keys) {
+    if (filterButtons.length === 0) return;
+
+    var offered = 0;
+    filterButtons.forEach(function (button) {
+      var key = button.getAttribute('data-kind');
+      if (key === 'all') return;
+
+      var has = Boolean(keys[key]);
+      button.hidden = !has;
+      if (has) offered++;
+    });
+
+    var bar = filterButtons[0].closest('.filter-bar');
+    if (bar) bar.hidden = offered < 2;
+
+    // A tab whose rows are gone would otherwise stay pressed over an empty list, which reads as a
+    // query that found nothing.
+    if (activeKind !== 'all' && !keys[activeKind]) selectKind('all');
+  }
+
   // The tab the url asks for, restored before anything else reads the page - revealTarget below
   // decides what to do about a hidden anchor and needs the filter already settled to see one.
   //
@@ -1825,19 +1867,40 @@ const JS = `
     // means no scope, or a name this build does not know, which searches everything.
     var scope = (index.assemblies || []).indexOf(searchScope());
 
+    // A dotted query is a qualified one, so it is matched against the displayed name as well: a
+    // member's haystack holds the member alone, and 'sphere.center' names the type it is declared
+    // on. Mirrors searchIndexEntries in lib/pages.js, which answers the ?q= form of the same search.
+    var qualified = q.indexOf('.') >= 0;
+
+    // A finalizer answers only a query written the way its name is. Constructors are not in the index
+    // at all, having no name but their type's; a finalizer has one, and this keeps it from answering
+    // for the type the way they did. See isFinalizerName in lib/pages.js.
+    var finalizers = q.charAt(0) === '~';
+
     var matches = [];
     for (var i = 0; i < index.entries.length; i++) {
       var e = index.entries[i];
       if (scope >= 0 && e[7] !== scope) continue;
-      var pos = e[2].indexOf(q);
-      if (pos < 0) continue;
       var name = e[0].toLowerCase();
-      var rank = name === q ? 0 : (name.indexOf(q) === 0 ? 1 : (name.indexOf(q) >= 0 ? 2 : 3));
+      if (!finalizers && name.charAt(name.lastIndexOf('.') + 1) === '~') continue;
+      var pos = e[2].indexOf(q);
+      if (pos < 0) {
+        if (!qualified) continue;
+        pos = name.indexOf(q);
+        if (pos < 0) continue;
+      }
+      // Ranked on the name that was searched, which for a member is its own: see searchRank in
+      // lib/pages.js, which ranks the server's answer to the same query the same way.
+      var subject = qualified ? name : name.slice(name.lastIndexOf('.') + 1);
+      var rank = subject === q ? 0 : (subject.indexOf(q) === 0 ? 1 : (subject.indexOf(q) >= 0 ? 2 : 3));
       matches.push([rank, pos, e]);
     }
 
+    // Rank, then the earliest match, then the shortest name - the row with the least around what was
+    // matched. The same order searchIndexEntries puts the ?q= answer in.
     matches.sort(function (a, b) {
-      return a[0] - b[0] || a[1] - b[1] || a[2][0].localeCompare(b[2][0]);
+      return a[0] - b[0] || a[1] - b[1] ||
+        a[2][0].length - b[2][0].length || a[2][0].localeCompare(b[2][0]);
     });
 
     return matches;
@@ -1875,7 +1938,7 @@ const JS = `
       var ns = (index.namespaces || [])[e[6]] || '';
       // The same outlined mark the tree puts beside a static member. The row has no signature on it
       // to say so in words, which is what the full results page has and this does not.
-      var staticMark = e[9] ? '<span class="tree-badge tree-badge-static">S</span>' : '';
+      var staticMark = e[9] & 1 ? '<span class="tree-badge tree-badge-static">S</span>' : '';
 
       return '<a class="nav-result" href="' + escapeHtml(rowUrl(e[1])) + '" role="option">' +
         kindIcon(e) +
@@ -1913,10 +1976,20 @@ const JS = `
   var watcher = null;
 
   // One result. Same shape the server builds in Renderer.searchResultHtml.
-  // [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static]
+  // [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, flags]
   function resultRow(m, q) {
     var e = m[2];
     var ns = (index.namespaces || [])[e[6]] || '';
+
+    // One mark to a row, in the first line of it the word appears in: the name, then the summary, then
+    // the declaration, each a better answer to why this row is listed than the one under it. Flag 2
+    // says the declaration was never searched - a type's - so it is never the answer there. The same
+    // rule searchResultHtml applies in lib/pages.js, which answers the ?q= form of this list.
+    var summary = String(e[3] || '');
+    var inName = e[0].toLowerCase().indexOf(q) >= 0;
+    var inSummary = !inName && summary.toLowerCase().indexOf(q) >= 0;
+    var inSig = e[5] && !(e[9] & 2) && !inName && !inSummary;
+
     return '<li data-filter="' + escapeHtml(e[4] || '?') + '">' +
       '<div class="r-head">' +
       kindIcon(e) +
@@ -1924,8 +1997,12 @@ const JS = `
       '</div>' +
       // Already highlighted markup, built by the same highlighter the server uses, which
       // escaped the code on the way in. Escaping it again would print the spans.
-      (e[5] ? '<div class="r-sig">' + markMarkup(e[5], escapeHtml(q).toLowerCase()) + '</div>' : '') +
-      (e[3] ? '<div class="r-summary">' + markMatch(e[3], q) + '</div>' : '') +
+      (e[5]
+        ? '<div class="r-sig">' + (inSig ? markMarkup(e[5], escapeHtml(q).toLowerCase()) : e[5]) + '</div>'
+        : '') +
+      (summary
+        ? '<div class="r-summary">' + (inSummary ? markMatch(summary, q) : escapeHtml(summary)) + '</div>'
+        : '') +
       '<div class="r-ns">' + escapeHtml(ns) + '</div>' +
       '</li>';
   }
@@ -2022,6 +2099,16 @@ const JS = `
       // applies on the way to drawing - there is no separate pass over the rows to hide any.
       matched = matches;
       listedQuery = q;
+
+      // Which kinds this answer has, for the bar to offer. Read off the rows rather than counted per
+      // button, so one pass over the matches answers for all of them. Null-prototype, so a letter is
+      // never confused with something every object already has.
+      var kinds = Object.create(null);
+      for (var i = 0; i < matches.length; i++) kinds[matches[i][2][4] || '?'] = true;
+
+      // Before the draw: a tab this answer has nothing under is widened back first, so the rows that
+      // arrive are the ones the bar now claims to be showing.
+      offerKinds(kinds);
       showResults();
 
       // Only now, with a list to narrow. Handing the filter bar this any earlier would have it

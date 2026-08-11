@@ -235,7 +235,13 @@ function siteLogo(logo, logoDark) {
  * page and nothing else: the state resets on navigation, and the script it drives only ever looks
  * inside .main-content.
  */
-function filterBar({ kinds = null, extra = '' } = {}) {
+function filterBar({ kinds = null, live = false, extra = '' } = {}) {
+  // A bar the script maintains, because what is under it is a query's answer and the next query has
+  // a different set of kinds in it. Every button is rendered and the ones this answer has nothing
+  // under are marked hidden: a button that has to come back when the query changes has to be in the
+  // page to come back, which is the one thing leaving it out would make impossible.
+  if (live) return tabsHtml(FILTER_KINDS, extra, kinds || new Set());
+
   // Only the letters this page actually renders. A namespace holds no methods, so offering every
   // button everywhere means most of them do nothing when pressed.
   const available = FILTER_KINDS.filter((kind) => kind.key === 'all' || !kinds || kinds.has(kind.key));
@@ -257,7 +263,13 @@ function memberFilterBar({ kinds = new Set(), extra = '' } = {}) {
   return tabsHtml(memberFilterTabs(kinds), extra);
 }
 
-function tabsHtml(tabs, extra) {
+/**
+ * @param {Array}       tabs     the buttons to write, in the order they are read
+ * @param {string}      extra    markup that shares the bar - a legend, a picker
+ * @param {Set<string>} offered  which keys have anything under them, where that is not every one
+ *                               rendered; the rest are written hidden for a script to reveal
+ */
+function tabsHtml(tabs, extra, offered = null) {
   // 'All' plus one kind is not a choice, so there is nothing to put a bar around.
   if (tabs.length < 3) return '';
 
@@ -265,13 +277,18 @@ function tabsHtml(tabs, extra) {
   // The kinds are coloured by the script, from the same palette their badges are drawn from.
   const buttons = tabs.map((kind) => {
     const active = kind.key === 'all';
+    const empty = offered !== null && !active && !offered.has(kind.key);
     return (
-      `<button type="button" class="filter-btn${active ? ' active' : ''}" ` +
+      `<button type="button" class="filter-btn${active ? ' active' : ''}"${empty ? ' hidden' : ''} ` +
       `data-kind="${attr(kind.key)}">${escape(kind.label)}</button>`
     );
   }).join('');
 
-  return `<div class="filter-bar">
+  // The same rule as above, applied to what is on the page rather than to what was built: one kind
+  // and All narrow to the same list, so the bar waits until there are two to choose between.
+  const idle = offered !== null && offered.size < 2;
+
+  return `<div class="filter-bar"${idle ? ' hidden' : ''}>
   ${buttons}
   ${extra}
 </div>`;

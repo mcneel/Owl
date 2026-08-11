@@ -104,6 +104,38 @@ function lastSegment(name) {
   return name.slice(name.lastIndexOf('.') + 1);
 }
 
+/**
+ * Where a row belongs among the results for a query: the name itself first, then the names that
+ * start with it, then the ones that contain it, then the rows that matched on something else - a
+ * signature, a summary.
+ *
+ * The name ranked on is the row's own, without the type a member is declared on. Ranked qualified,
+ * every member of Sphere counted as a name starting with 'sphere' and the struct arrived with forty
+ * rows behind it; what the reader typed was the type, and the type is one result. A dotted query is
+ * asking for the qualified form, so there the whole name is the subject.
+ *
+ * @param {string}  name       lowercased, as displayed: 'sphere.center' for a member
+ * @param {string}  q          lowercased query
+ * @param {boolean} qualified  whether the query names something qualified, i.e. has a dot in it
+ */
+/**
+ * Whether a row is a finalizer, which its name says: '~Sphere' is the only member written with one.
+ *
+ * Read off the name rather than the kind because app.js has to ask the same question of an index
+ * entry, where the name is what it has. Both gate on the answer, so the two agree on what a query
+ * reaches.
+ */
+function isFinalizerName(name) {
+  return lastSegment(name).charAt(0) === '~';
+}
+
+function searchRank(name, q, qualified) {
+  const subject = qualified ? name : lastSegment(name);
+  if (subject === q) return 0;
+  if (subject.indexOf(q) === 0) return 1;
+  return subject.indexOf(q) >= 0 ? 2 : 3;
+}
+
 /** The '&lt;T, TOut&gt;' a generic method writes after its name. Empty for everything else. */
 function genericSuffix(member) {
   const names = (member.typeParameters || []).map((tp) => tp.name);
@@ -2670,6 +2702,11 @@ ${this.seeAlsoHtml(type.docs)}
       treeKey = 'assemblies';
     }
 
+    // Which buttons the bar opens with. Nothing is listed until there is a query, so nothing is
+    // offered either; a ?q= knows its answer and says so, and from then on the script keeps the bar
+    // to whatever the query in the box has found.
+    let kinds = null;
+
     if (serverSide && trimmed) {
       const matches = this.searchIndexEntries(trimmed, FIRST_PAINT_RESULTS, scope);
       // Only the empty result says anything; a hit count is noise above the hits themselves.
@@ -2679,6 +2716,7 @@ ${this.seeAlsoHtml(type.docs)}
           : '';
 
       resultsHtml = matches.rows.map((row) => this.searchResultHtml(row, trimmed)).join('');
+      kinds = matches.kinds;
     }
 
     // No heading and no field of its own: the header carries a search box on every page, and a
@@ -2716,9 +2754,10 @@ ${this.seeAlsoHtml(type.docs)}
         { label: 'Search', url: this.routes.search() },
       ],
       body,
-      // Every button, unpruned: results are rebuilt in the browser as the query changes, so what
-      // is on the page now says nothing about what will be on it next.
-      filterBar: filterBar(),
+      // Every button is written, and the ones this query found nothing of are written hidden: the
+      // results are rebuilt in the browser as the query changes, so a button left out of the page
+      // could not come back when the next query needed it. See offerKinds in app.js.
+      filterBar: filterBar({ kinds, live: true }),
       // Search is a dead end otherwise: the way back into the content is the tree, so it should be
       // the tree you already know. Unscoped and with categories, there is no single assembly to
       // show and the list of them stands in.
@@ -2740,8 +2779,34 @@ ${this.seeAlsoHtml(type.docs)}
    *
    * The browser builds the same shape in app.js. Both read the same row fields, so the server's
    * ?q= answer and the client's live one cannot drift apart.
+   *
+   * One mark to a row, in the first place the word appears reading down it: the name, then the
+   * summary, then the declaration. A mark answers the question of why this row is in the list, and
+   * the answer is wanted once - 'sphere' used to come back with the word lit in the name, twice in
+   * the summary and three times across the parameters, which is a row shouting a word the reader
+   * typed rather than one showing where it was found.
+   *
+   * The order is what a reader reads first, and each line is a better answer than the one under it: a
+   * name is what the thing is called, a summary is what it does, a declaration is what it is made of.
+   * So the lines below the answer are drawn plain, and a row whose name matched is a row with one
+   * mark on it.
+   *
+   * A type's declaration is not searched at all - see searchRows - so it is never the answer: marking
+   * it made a promise the row could not keep, since 'curve' would light up the base type of every
+   * class derived from Curve, none of which was matched against. A member's is searched, and on 655
+   * of the rows a search for 'point3d' returns it is the only place the word appears - a parameter
+   * type, named nowhere else on the row - which is exactly when it is worth marking.
    */
   searchResultHtml(row, query) {
+    const declaration = row.signature
+      ? this.signatureHtml(row.signature, row.assembly, '', lastSegment(row.name))
+      : '';
+
+    const needle = (query || '').toLowerCase();
+    const inName = row.name.toLowerCase().includes(needle);
+    const inSummary = !inName && (row.summary || '').toLowerCase().includes(needle);
+    const inDeclaration = row.declarationSearched && !inName && !inSummary;
+
     return (
       // data-filter is what the kind filter above the results matches on.
       `<li data-filter="${attr(theme.filterLetter(row.kind))}">` +
@@ -2749,13 +2814,14 @@ ${this.seeAlsoHtml(type.docs)}
       this.kindIconHtml(row.kind) +
       `<a class="r-name" href="${attr(row.url)}">${markMatch(row.name, query)}</a>` +
       '</div>' +
-      (row.signature
-        ? `<div class="r-sig">${markMarkup(
-            this.signatureHtml(row.signature, row.assembly, '', lastSegment(row.name)),
-            query
-          )}</div>`
+      (declaration
+        ? `<div class="r-sig">${inDeclaration ? markMarkup(declaration, query) : declaration}</div>`
         : '') +
-      (row.summary ? `<div class="r-summary">${markMatch(row.summary, query)}</div>` : '') +
+      (row.summary
+        ? `<div class="r-summary">${
+            inSummary ? markMatch(row.summary, query) : escape(row.summary)
+          }</div>`
+        : '') +
       `<div class="r-ns">${escape(row.namespace || '(global)')}</div>` +
       '</li>'
     );
@@ -2763,17 +2829,56 @@ ${this.seeAlsoHtml(type.docs)}
 
   searchIndexEntries(query, limit, assemblyName) {
     const q = query.toLowerCase();
-    const rows = [];
-    let total = 0;
+    // A query with a dot in it is asking for something qualified - 'sphere.center' is a member of a
+    // type, not a word - so that is the one case matched against the displayed name, which is where
+    // the type a member belongs to is still written. app.js matches the same way.
+    const qualified = q.indexOf('.') >= 0;
+    const hits = [];
+
+    // A finalizer is written '~Sphere' and read as part of the type, not looked up beside it, so it
+    // answers only a query that starts the way its name does. Its declaration and its summary name
+    // the type as well, and without this gate that is enough to put it in front of anyone searching
+    // for the type - the same thing dropping the constructors set out to stop. app.js gates the same.
+    const finalizers = q.charAt(0) === '~';
 
     for (const row of this.searchRows()) {
       if (assemblyName && row.assembly !== assemblyName) continue;
-      if (row.haystack.indexOf(q) < 0) continue;
-      total++;
-      if (rows.length < limit) rows.push(row);
+      if (!finalizers && isFinalizerName(row.name)) continue;
+
+      const name = row.name.toLowerCase();
+      let pos = row.haystack.indexOf(q);
+
+      if (pos < 0) {
+        if (!qualified) continue;
+        pos = name.indexOf(q);
+        if (pos < 0) continue;
+      }
+
+      hits.push({ rank: searchRank(name, q, qualified), pos, row });
     }
 
-    return { rows, total };
+    // Ordered rather than handed back in the order the model happens to hold: the first hundred rows
+    // of a scan are the first hundred types the assembly declares, which for a common word is a
+    // hundred rows nobody asked about. Sorted the way app.js sorts, so the ?q= answer and the list
+    // the browser draws over it are the same list in the same order.
+    // Then the shortest name, which is the one with the least around the match: 'Sphere' the struct
+    // ahead of the enum values also called Sphere. Alphabetical last, so the order is settled and
+    // does not depend on where in the model a row was found.
+    hits.sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        a.pos - b.pos ||
+        a.row.name.length - b.row.name.length ||
+        a.row.name.localeCompare(b.row.name)
+    );
+
+    return {
+      rows: hits.slice(0, limit).map((hit) => hit.row),
+      total: hits.length,
+      // Every match, not the page of them handed back: the bar narrows the whole answer, so a kind
+      // that only appears past the first hundred rows still has a button worth pressing.
+      kinds: this.filterLettersOf(hits, (hit) => hit.row.kind),
+    };
   }
 
   searchRows() {
@@ -2791,27 +2896,50 @@ ${this.seeAlsoHtml(type.docs)}
           // page puts its own segment back on the row it opens. See modeInsert.
           url: this.baseRoutes.type(type.slug),
           summary,
-          // A type's declaration is the closest thing it has to a member's signature.
+          // A type's declaration is the closest thing it has to a member's signature. Shown, not
+          // searched: what it adds over the name is the base type and the interfaces, and those are
+          // rows of their own - a search for an interface should find the interface, not the hundred
+          // types that implement it. Which is why nothing in it is ever marked.
           signature: this.declarationOf(type),
+          declarationSearched: false,
           assembly: assemblyName,
           namespace: type.namespace || '',
-          haystack: `${type.fullName} ${type.name} ${type.category || ''} ${summary}`.toLowerCase(),
+          // Name first, then the qualified form. Both are searched either way; the order is what the
+          // position of the match means, and a type whose name is the query should read as a match at
+          // the start of its row rather than one twenty characters in behind its namespace.
+          haystack: `${type.name} ${type.fullName} ${type.category || ''} ${summary}`.toLowerCase(),
         });
 
         for (const member of type.members) {
+          // A constructor is not searchable, because it has no name of its own to search: it is
+          // called what its type is called, so every one of them answered a search for the type and
+          // 'Sphere.Sphere' was a result that said nothing the row above it had not. The type is the
+          // way in, and its page lists what it can be built from. A finalizer stays - see the gate in
+          // searchIndexEntries, which is what keeps it out of the way until it is asked for by name.
+          if (member.kind === 'constructor') continue;
+
           const memberSummary = truncate(this.summaryText(member.docs), 140);
           rows.push({
-            // Shortened the way the page shortens it, while the haystack below keeps the qualified
-            // form so a search for the interface's namespace still reaches the member.
+            // Shown qualified, because a member name on its own does not say whose it is. What is
+            // searched is the member alone - see the haystack below.
             name: `${type.name}.${memberDisplayName(member)}`,
             kind: member.kind,
             isStatic: Boolean(member.isStatic),
             url: this.baseRoutes.member(type.slug, member.anchor),
             summary: memberSummary,
+            // Searched, unlike a type's: the parameters and the return are what a member is, and the
+            // haystack below carries them. The modifiers this puts on the front are the exception -
+            // they are not in the haystack, so 'static' can still mark a word it did not match.
             signature: this.memberDeclaration(member),
+            declarationSearched: true,
             assembly: assemblyName,
             namespace: type.namespace || '',
-            haystack: `${type.fullName}.${member.name} ${member.signature} ${memberSummary}`.toLowerCase(),
+            // The member alone, without the type it is declared on. Qualified, every one of a type's
+            // members answered a search for the type's name: 'sphere' returned the struct and then
+            // its forty properties, which is the type page's list reprinted as search results. The
+            // type is one row now, and a member earns its own by what it is called, what it takes
+            // and what it says. A dotted query is the exception - see searchIndexEntries.
+            haystack: `${member.name} ${member.signature} ${memberSummary}`.toLowerCase(),
           });
         }
       }
@@ -2823,7 +2951,7 @@ ${this.seeAlsoHtml(type.docs)}
 
   /**
    * Compact rows:
-   * [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static].
+   * [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, flags].
    *
    * The letter here is the one the row filters under, not one it shows: what a row shows is its
    * kind's drawing, which is why the icon travels with it and cannot be worked out from the letter -
@@ -2831,8 +2959,10 @@ ${this.seeAlsoHtml(type.docs)}
    * is drawn in one ink: a property naming it on every row would be the same string tens of thousands
    * of times, and the stylesheet already paints it once.
    *
-   * The last is there only on a static member, so the flag costs two bytes on the rows that carry it
-   * and nothing at all on the rest; a row without it simply ends one element short.
+   * The last is two facts in one number - 1 static, 2 declaration not searched - and is there only on
+   * a row with something to say, so it costs two bytes on those and nothing at all on the rest; a row
+   * without it simply ends one element short. One slot rather than two, because the alternative is a
+   * second flag written on every row in the index to say nothing about most of them.
    *
    * Namespace names go in a table the entries index into. There are a few dozen of them against
    * tens of thousands of entries, so repeating the name on every row would cost more than the
@@ -2858,7 +2988,7 @@ ${this.seeAlsoHtml(type.docs)}
     const assemblyIndex = new Map(this.assemblyNames.map((name, i) => [name, i]));
 
     return {
-      schema: 5,
+      schema: 6,
       namespaces,
       assemblies,
       entries: rows.map((r) => {
@@ -2874,7 +3004,8 @@ ${this.seeAlsoHtml(type.docs)}
           theme.kindIcon(r.kind),
         ];
 
-        if (r.isStatic) entry.push(1);
+        const flags = (r.isStatic ? 1 : 0) | (r.declarationSearched ? 0 : 2);
+        if (flags) entry.push(flags);
         return entry;
       }),
     };
