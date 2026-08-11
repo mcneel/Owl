@@ -3,7 +3,7 @@
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
 const { slugify, NAMESPACE_MODE } = require('./routes');
 const { highlight } = require('./highlight');
-const { page, filterBar, memberFilterBar, DEFAULT_SITE_NAME } = require('./layout');
+const { page, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
 const icons = require('./icons');
 const { Links } = require('./links');
@@ -462,6 +462,10 @@ class Renderer {
     this.logo = options.logo || model.siteLogo || '';
     this.logoDark = options.logoDark || model.siteLogoDark || '';
 
+    // The versions the header offers, from --api-versions. Empty unless it named some, which is
+    // what leaves a site that has never said what version it is without a picker to answer with.
+    this.versions = options.versions || [];
+
     // Diagrams are drawn by an outside binary, so the one renderer is built by the Site and passed
     // through to wherever a fenced block can appear: authored markdown, and doc comments alike.
     this.diagrams = options.diagrams || null;
@@ -543,6 +547,7 @@ class Renderer {
       routes: this.routes,
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),
+      versions: this.versions,
       ...options,
       // Where the rows this page left out of its tree are to be fetched from. Named by the same
       // key the tree's remembered state is kept under, and left off the trees that have no asset -
@@ -605,6 +610,19 @@ class Renderer {
    */
   sinceAttr(docs) {
     return docs && docs.since ? ` data-since="${attr(docs.since)}"` : '';
+  }
+
+  /**
+   * The same version as a chip at the end of a card's header row.
+   *
+   * Written whether or not the header offers a picker: when an API arrived is worth reading on a
+   * site that has no versions to filter by, and on one that has, it says what the filter is acting
+   * on. Spelled by the same rule the picker spells its own entries with, so the chip and the
+   * control a reader is comparing it against do not name one version two ways.
+   */
+  sinceChipHtml(docs) {
+    if (!docs || !docs.since) return '';
+    return `<span class="chip chip-since">Since ${escape(versionLabel(docs.since))}</span>`;
   }
 
   /**
@@ -993,6 +1011,7 @@ class Renderer {
         ? `<span class="chip">${escape(type.accessibility)}</span>`
         : '') +
       (showAssembly ? this.assemblyNameHtml(assemblyName) : '') +
+      this.sinceChipHtml(type.docs) +
       '</div>' +
       `<div class="member-fullname">${escape(type.fullName)}</div>` +
       (summary ? `<div class="summary">${summary}</div>` : '') +
@@ -1564,7 +1583,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <article>
 <div class="page-head sticky-head">
   <div class="page-head-brief">
-    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}</div>
+    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly, type.slug)}</div>
     ${
       summaryHtml
@@ -2336,6 +2355,7 @@ ${this.seeAlsoHtml(type.docs)}
       // Named as the heading beside it is, so the two do not read as different members.
       `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>` +
       exampleButton +
+      this.sinceChipHtml(member.docs) +
       '</div>' +
       // The accessors ride on the declaration rather than sitting beside it as chips: 'get; set;'
       // is how the property is written, and a reader looking for whether one can be assigned to

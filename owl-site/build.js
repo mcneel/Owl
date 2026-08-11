@@ -16,6 +16,7 @@ const { stub: sandcastleStub } = require('./lib/sandcastle');
  *
  * Usage:
  *   node build.js --json .owl/json --out dist [--base /prefix] [--site-url https://host]
+ *   node build.js --json .owl/json --out dist [--api-versions 9,8]
  */
 
 function parseArgs(argv) {
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     links: [],
     logo: '',
     logoDark: '',
+    apiVersions: '',
     d2: '',
     skipUndocumented: false,
     sandcastle: false,
@@ -50,6 +52,9 @@ function parseArgs(argv) {
         break;
       case '--source-refs':
         options.sourceRefs = argv[++i];
+        break;
+      case '--api-versions':
+        options.apiVersions = argv[++i];
         break;
       case '--link':
         options.links.push(argv[++i]);

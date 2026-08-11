@@ -29,6 +29,8 @@ const { inlineSvg } = require('./html');
  *             only references; without them those types stay text. See lib/links.js
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
+ *   apiVersions  comma-separated versions the header's picker offers, newest first; without them
+ *             there is no picker and every API is shown whatever its <since> says
  *   skipUndocumented  leave out anything with no <summary>
  *   sandcastle  answer the Sandcastle urls this documentation set used to be published at
  *   d2        the d2 binary that draws ```d2 fences, 'd2' from PATH by default
@@ -56,6 +58,22 @@ class Site {
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
+
+    // Split here for the same reason --link is: the list is a mistake in the command line or it is
+    // not, and either way it is settled before the first page rather than on each reload.
+    this.versions = (options.apiVersions || '')
+      .split(',')
+      .map((version) => version.trim())
+      .filter(Boolean);
+
+    // A version with no digit in it is compared as zero, which shows every API rather than filtering
+    // any: the picker would be there and do nothing. Worth stopping for, as a missing --d2 is.
+    const unnumbered = this.versions.find((version) => !/\d/.test(version));
+    if (unnumbered) {
+      throw new Error(
+        `--api-versions ${unnumbered}: a version needs a number in it to compare against <since>.`
+      );
+    }
 
     // Off unless asked for: most sites were never published anywhere else, and one that was would
     // rather say so than have owl guess from the shape of a request that missed.
@@ -114,6 +132,7 @@ class Site {
       links: this.links,
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
+      versions: this.versions,
       diagrams,
       // Where a page says something went wrong while it was being made: an equation that would not
       // typeset, alongside the diagrams that would not draw.

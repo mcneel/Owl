@@ -15,6 +15,7 @@ const fs = require('node:fs');
  * Usage:
  *   node serve.js --json .owl/json [port]
  *   node serve.js --json .owl/json --docs docs/api --port 8080
+ *   node serve.js --json .owl/json --api-versions 9,8
  */
 
 /** The renderer's source, watched alongside the content it renders. */
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     links: [],
     logo: '',
     logoDark: '',
+    apiVersions: '',
     d2: '',
     skipUndocumented: false,
     sandcastle: false,
@@ -61,6 +63,9 @@ function parseArgs(argv) {
         break;
       case '--source-refs':
         options.sourceRefs = argv[++i];
+        break;
+      case '--api-versions':
+        options.apiVersions = argv[++i];
         break;
       case '--link':
         options.links.push(argv[++i]);

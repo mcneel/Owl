@@ -192,7 +192,7 @@ header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellips
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #theme-toggle { height: 30px; }
+#asm-filter, #search, #version-filter, #version-current, #theme-toggle { height: 30px; }
 
 /* The magnifier sits inside the field, so the field owns the position it is measured against. */
 header form[role="search"] { position: relative; display: flex; align-items: center; flex-shrink: 0; }
@@ -225,12 +225,15 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 
 /* ---- Header selects ---- */
 /* appearance:none drops the platform arrow so both selects can carry the same chevron; the popup
-   itself is still drawn by the OS, which is the one part of docify's menu a <select> cannot copy. */
+   itself is still drawn by the OS, which is the one part a <select> cannot be styled into. */
 #asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
 #asm-filter { max-width: 18rem; }
 #asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
 /* The popup is an OS menu, so its options need colours that do not assume the dark bar. */
 #asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
+/* A site offering one version says so here instead. The same face as the select it stands in for,
+   without the chevron or the hover, since there is nothing to open. */
+#version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
 
 /* ---- Theme toggle ---- */
 /* Given the same face as the search field, so it reads as a control rather than a loose glyph. */
@@ -569,6 +572,21 @@ a.chip:hover { color: var(--flash); }
 /* A chip like the rest of them rather than a pill of its own size: it sits in the same run, and a
    label a size smaller or larger than the ones either side of it reads as an afterthought. */
 .chip-obsolete { background: var(--chip-obsolete); color: var(--oc-white); }
+/* When an API arrived, at the far end of the row rather than in the run of modifiers: it says
+   something about the API's history rather than about how it is written, and the left of the row is
+   where a reader scanning down a list of members is already looking. The same chip closes a type
+   page's title row, so the fact is in the same place whether the type is being read or listed.
+
+   Quieter than the chips it shares a row with, in the grey the assembly name and the anchor use:
+   the modifiers beside it say how a member is written and are read down the column, while this is
+   a fact to be looked up on the one row that raised the question. Never shrunk: it is a handful of
+   characters, and a long chain or signature beside it has somewhere else to give. Where something
+   already claims the end of the row
+   - the assembly name on a type card, the Examples button on a member's - it sits beside that
+   instead, because two auto margins in one row split the free space between them and leave both
+   adrift. */
+.chip-since { margin-left: auto; flex-shrink: 0; color: var(--text4); background: transparent; }
+.asm-name ~ .chip-since, .chip-action ~ .chip-since { margin-left: 0; }
 
 /* ---- Category overview doc ---- */
 .cat-doc { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; line-height: 1.7; font-size: 0.88rem; color: var(--text2); scroll-margin-top: 1rem; }
@@ -810,8 +828,16 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
 .op-table .op-mark { text-align: center; padding-left: 0.3rem; padding-right: 0.3rem; color: var(--tok-keyword); }
 .op-table .op-right { text-align: left; padding-left: 0.1rem; }
 .enum-table .enum-value { font-family: monospace; white-space: nowrap; text-align: right; }
-/* The operand and result columns are types, and read as the signatures they came out of. */
-.op-table .op-types { font-family: monospace; font-size: 0.8rem; color: var(--text2); }
+/* The operand and result columns are types, and read as the signatures they came out of. Kept on
+   one line like the operand cells beside them: a generic broken at its comma reads as two types. */
+.op-table .op-types { font-family: monospace; font-size: 0.8rem; color: var(--text2); white-space: nowrap; }
+/* Both tables end in the description, which is the only column with prose to wrap, so every column
+   before it is shrunk to what it holds - 1% against the nowrap above, the way table.params does it.
+   Left to share the width evenly, five columns of short strings take most of the row and the one
+   column that had something to say gets what is left. A type too long for the room scrolls, which
+   is what the .table-scroll around it is for. */
+.enum-table .enum-name, .enum-table .enum-value { width: 1%; }
+.op-table .op-left, .op-table .op-mark, .op-table .op-right, .op-table .op-types { width: 1%; }
 /* Rows are what the sidebar links at, so a jumped-to value marks itself the way a card does. */
 .enum-table tbody tr, .op-table tbody tr { scroll-margin-top: var(--anchor-offset, 1rem); }
 .enum-table tbody tr:target, .op-table tbody tr:target { background: var(--bg3); }
@@ -910,10 +936,17 @@ const JS = `
   // predates every version on the list, which is why the absence of the attribute shows it.
   var VERSION_KEY = 'docs-version';
   var versionSelect = document.getElementById('version-filter');
-  var activeVersion = versionSelect ? versionSelect.value : '';
+  // A site offering one version writes it as a label rather than a menu. There is nothing to
+  // choose, but the page is still filtered to it, so the version is read off the label instead.
+  var versionFixed = document.getElementById('version-current');
+  var activeVersion = '';
+  if (versionSelect) activeVersion = versionSelect.value;
+  else if (versionFixed) activeVersion = versionFixed.getAttribute('data-version') || '';
 
+  // A leading prefix is dropped before the number is read, since a version offered as 'V9' is
+  // labelled the way the reader knows it while a <since> is written as the bare 8.0.
   function majorOf(value) {
-    var n = parseInt(String(value || '').split('.')[0], 10);
+    var n = parseInt(String(value || '').replace(/^[^0-9]*/, '').split('.')[0], 10);
     return isNaN(n) ? 0 : n;
   }
 
@@ -1590,6 +1623,11 @@ const JS = `
       applyTreeFilter();
     });
 
+    applyFilter();
+    applyTreeFilter();
+  } else if (activeVersion) {
+    // The one-version label: nothing to remember and nothing to listen to, but what came after that
+    // version is hidden here exactly as the menu would hide it.
     applyFilter();
     applyTreeFilter();
   }

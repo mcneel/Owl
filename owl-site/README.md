@@ -27,6 +27,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--base <path>` | serve, build | Path prefix the site is served under. |
 | `--site-url <url>` | serve, build | Origin for canonical urls, Open Graph tags and the sitemap. |
 | `--source-refs <path>` | serve, build | Root the "declared in" references hang from. Without it, none are shown. |
+| `--api-versions <list>` | serve, build | Versions the header's picker offers, newest first. Without it there is no picker. |
 | `--link <asm>=<url>` | serve, build, check | Site documenting a referenced assembly. Repeatable; `<asm>` may end in `*` to cover a family. `check` takes it so those links are counted as leaving rather than as broken. |
 | `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
@@ -74,6 +75,27 @@ The model records the file and line every member was declared at, but nothing is
 `--source-refs` gives a root to hang those paths from — the recorded path is relative to the tree
 the projects were built from and means nothing on its own. An `http`/`https` root turns each into a
 link with a `#L<line>` anchor; anything else, such as a local checkout, is rendered as plain text.
+
+`--api-versions 9,8` is what draws the header's version picker, and the only thing that makes a
+`<since>` tag do anything. Choosing a version hides every API a `<since>` puts after it — in the
+page and in the tree beside it — which is why an untagged API belongs to every version rather than
+to none. The list is given newest first and the first entry is what a reader arrives on; their
+choice is remembered, and one naming a version a later build no longer offers falls back to that
+build's default.
+
+Each entry is the comparison as well as the label. A number is drawn with a `v` in front of it, so
+`9,8` reads as `v9` and `v8`; an entry starting with a letter is a spelling somebody chose and is
+left as written, so `V9,V8` stays `V9` and `V8` rather than becoming `vV9`. Only the leading number
+is compared and only its major part, so a `<since>8.0</since>` belongs to `v8`. That is also why an
+entry with no number in it is rejected rather than accepted as a version nothing can be older than.
+
+One version is drawn as a label rather than a menu: a menu of one offers a choice already made.
+It still filters, which is what lets a site be pinned to an older version and hide what came after
+it, and it keeps the header saying which version is being read. Without the option there is no
+picker at all and every API is shown, which is what a library that has never tagged anything wants.
+
+Wherever a `<since>` is set it also shows as a `Since v8.0` chip at the right of that type's or
+member's card — on a site with no picker too, since when an API arrived is worth reading either way.
 
 A `logo.svg` at the root of the docs directory is inlined into the header, before the site name.
 Draw it with `currentColor` and it follows the theme, and the link hover, on its own; give it its own
@@ -190,8 +212,9 @@ single group holding every type it has.
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
 JSON-LD, and every link is a real `href`. The site works with JavaScript disabled; JavaScript adds
 the theme toggle, the kind filter, the collapsible tree, the resizable sidebar, the assembly
-selector and client-side search. Syntax highlighting, diagrams and math all happen at render time
-and nothing loads from a CDN, so an exported site works with no network at all.
+selector, the version picker where there is one, and client-side search. Syntax highlighting,
+diagrams and math all happen at render time and nothing loads from a CDN, so an exported site works
+with no network at all.
 
 A page is written with only the tree group it is standing in; the rest arrive from
 `/assets/tree-<tree>.json`, once per read rather than once per page. Without JavaScript the reader

@@ -94,6 +94,8 @@ static void PrintUsage()
       --logo <file>         Header icon, overriding <docs>/logo.svg
       --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
       --source-refs <path>  Root for "declared in" references; without it there are none
+      --api-versions <list> Versions the header's picker offers, newest first, comma separated;
+                            without it there is no picker and <since> filters nothing
       --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
                             sitting there as text. Repeatable; <asm> may end in '*'
       --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)

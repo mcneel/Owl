@@ -19,7 +19,7 @@ Owl uses semantic analysis so the documentation it writes knows:
 - **doc comments kept structured**, so a `<see cref="..."/>` carries what it points at and renders as
   a working link instead of styled text
 - **`<category>` xml tag**, so classes and interfaces can be logically grouped (e.g. `/// <category>Storage</category>`)
-- **`<since>` xml tag**, so classes and interfaces mark which API version they were added in (e.g. `/// <since>8.0</since>`)
+- **`<since>` xml tag**, so a type or a member marks which API version it was added in (e.g. `/// <since>8.0</since>`), and readers can filter the site down to the version they are on
 - **Main Markdown**, so the site and each assembly have a hand-written entry page
 - **Category Markdowns**, so each category has a hand-written overview page
 
@@ -143,6 +143,8 @@ owl serve and owl build, both
   --base <path>         Path prefix the site will be served under
   --site-url <url>      Origin for canonical urls and the sitemap
   --source-refs <path>  Root for "declared in" references; without it there are none
+  --api-versions <list> Versions the header's picker offers, newest first, comma separated;
+                        without it there is no picker and <since> filters nothing
   --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
                         sitting there as text. Repeatable; <asm> may end in '*'
   --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
@@ -155,6 +157,26 @@ instead of projects to reuse a model.
 
 `--name` is recorded in the model, so you set it once at generation time rather than repeating it
 every time you serve or export. Passing it to `serve` or `build` overrides it for that run.
+
+`--api-versions` puts a version picker in the header, and is what makes the `<since>` tag do
+anything: choosing a version hides everything a `<since>` puts after it, so an untagged API belongs
+to every version. Pass them newest first — the first is what the site opens on:
+
+```bash
+owl build MyLib.csproj --api-versions 9,8,7    # picker reads v9, v8, v7
+owl build MyLib.csproj --api-versions V9,V8    # your own spelling, left as written
+owl build MyLib.csproj --api-versions 9        # a label rather than a menu, still filtering
+```
+
+A number is written with a `v` in front of it, since a bare `9` in a header reads as a count of
+something. An entry that starts with a letter is your spelling and is left alone. Either way the
+entry itself is what a `<since>` is compared against, and only the major part is read, so
+`<since>8.9</since>` and `<since>8.0</since>` both belong to `8`.
+
+Name one version and the header states it instead of offering a menu — there is nothing to choose,
+but the page is still filtered, which is how you publish the v8 surface of a library that has since
+moved on. Without the option there is no picker at all and every API is shown whatever its
+`<since>` says, which is the right shape for a library on its first release.
 
 A set documents the assemblies it was generated from, so every type it merely *references* — the
 library it is built on — is a name with nowhere to go. `--link` says where those live:
@@ -197,7 +219,7 @@ never shows up in a normal build; `--verify` is where it surfaces, along with an
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
 JSON-LD, and every link is a real `href`. The site works with JavaScript disabled; JavaScript adds
 the theme toggle, the kind filter, the collapsible navigation tree, the resizable sidebar, the
-assembly selector and client-side search.
+assembly selector, the version picker where there is one, and client-side search.
 
 The tree is sent once rather than with every page: a page carries the group it is standing in, and
 the rest arrive from an asset the browser then has cached for the read. See
@@ -224,8 +246,10 @@ public interface IStorage { }
 ```
 
 `<category>` groups types on the site, which is how you get a reading order that isn't just
-alphabetical namespaces. `<since>` records the version a type appeared in and shows as a chip on its
-page.
+alphabetical namespaces. `<since>` records the version an API appeared in, and shows as a `Since
+v2.1` chip on that type's or member's card. It also feeds the header's version picker, once
+[`--api-versions`](#options) says which versions the site offers: choosing an older one then hides
+everything tagged after it.
 
 ### Hand-written pages
 

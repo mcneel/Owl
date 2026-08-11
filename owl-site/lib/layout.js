@@ -16,14 +16,6 @@ const { FILTER_KINDS, memberFilterTabs } = require('./theme');
 const DEFAULT_SITE_NAME = 'API Reference';
 
 /**
- * Versions the header offers, newest first; the first is the default.
- *
- * Selecting a version hides anything a <since> puts after it, so an untagged API belongs to every
- * version. Adding an older one back is this list plus nothing else.
- */
-const VERSIONS = ['9'];
-
-/**
  * @param {object} options
  *   title        page title, without the site suffix
  *   siteName     site name, used as the title suffix and in the header
@@ -46,6 +38,10 @@ const VERSIONS = ['9'];
  *   noindex      keep this page out of search results
  *   bodyClass    class on <body>, for the few rules that are page-specific
  *   currentQuery prefill for the header search box
+ *   assemblies   names for the header's assembly picker; fewer than two draws none
+ *   currentAssembly  which of them this page belongs to, or '' for the whole API
+ *   assemblyUrl  where choosing an assembly goes, when it is not that assembly's page
+ *   versions     versions for the header's API version picker, newest first; none draws no picker
  */
 function page(options) {
   const {
@@ -71,6 +67,7 @@ function page(options) {
     assemblies = [],
     currentAssembly = '',
     assemblyUrl = null,
+    versions = [],
   } = options;
 
   const stickyTop = renderBreadcrumbs(breadcrumbs) + (filterBar || '');
@@ -163,7 +160,7 @@ ${icons.spriteHtml()}
     <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
   </form>
   ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
-  ${versionSelector()}
+  ${versionSelector(versions)}
   <button id="theme-toggle" type="button" aria-label="Switch to light theme">
     <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>
@@ -313,8 +310,13 @@ function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
 
   const target = urlFor || ((name) => (name ? routes.assembly(name) : routes.home()));
 
+  // Alphabetical, on a copy: the model's order is the order the projects were named in, which is a
+  // fact about the command line rather than anything a reader looking for a name can use. Entire
+  // API is prepended after the sort, so it stays at the top where it is the widest choice.
+  const sorted = [...assemblies].sort((a, b) => a.localeCompare(b));
+
   const options = [`<option value="${attr(target(''))}">Entire API</option>`].concat(
-    assemblies.map((name) => {
+    sorted.map((name) => {
       const selected = name === currentAssembly ? ' selected' : '';
       return `<option value="${attr(target(name))}"${selected}>${escape(name)}</option>`;
     })
@@ -327,18 +329,51 @@ function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
 }
 
 /**
- * The header's API version picker.
+ * A version as the site writes it: 'v' and the number, since a bare 9 in the header reads as a
+ * count of something rather than as a version.
+ *
+ * A version that already starts with a letter is left as it was written - '--api-versions V9' is a
+ * deliberate spelling, and prefixing it again would give 'vV9'. Only what is shown changes; what a
+ * <since> is compared against is the entry itself.
+ */
+function versionLabel(version) {
+  return /^\d/.test(version) ? `v${version}` : version;
+}
+
+/**
+ * The header's API version picker: the versions --api-versions named, newest first, the first of
+ * them selected. Nothing at all where none were named, which is most sites.
+ *
+ * Each entry is the label and what a <since> is compared against both, so naming them '9' or '2.1'
+ * is a matter of what the reader should see rather than of what owl will accept. Selecting one
+ * hides anything a <since> puts after it, which is why an untagged API belongs to every version
+ * rather than to none.
+ *
+ * One version is written as a label rather than a menu. A menu of one offers the reader a choice
+ * they have already been given, but dropping it altogether would drop the filtering with it - a
+ * site pinned to a single older version still has to hide what came after it - and would leave the
+ * header saying nothing about which version is being read.
  *
  * A native select rather than a scripted menu, so it keeps the platform's keyboard and touch
- * behaviour; only the closed control is styled to match docify's, since the popup belongs to the OS.
+ * behaviour; only the closed control is styled, since the popup belongs to the OS.
  */
-function versionSelector() {
-  if (VERSIONS.length === 0) return '';
+function versionSelector(versions) {
+  if (versions.length === 0) return '';
 
-  const options = VERSIONS.map(
-    (version, i) =>
-      `<option value="${attr(version)}"${i === 0 ? ' selected' : ''}>V${escape(version)}</option>`
-  ).join('');
+  if (versions.length === 1) {
+    return (
+      `<span id="version-current" title="API version" data-version="${attr(versions[0])}">` +
+      `${escape(versionLabel(versions[0]))}</span>`
+    );
+  }
+
+  const options = versions
+    .map(
+      (version, i) =>
+        `<option value="${attr(version)}"${i === 0 ? ' selected' : ''}>` +
+        `${escape(versionLabel(version))}</option>`
+    )
+    .join('');
 
   return (
     '<label class="skip-link" for="version-filter">API version</label>' +
@@ -372,4 +407,11 @@ function renderBreadcrumbs(breadcrumbs) {
   return `<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${items}</ol></nav>`;
 }
 
-module.exports = { page, filterBar, memberFilterBar, assemblySelector, DEFAULT_SITE_NAME };
+module.exports = {
+  page,
+  filterBar,
+  memberFilterBar,
+  assemblySelector,
+  versionLabel,
+  DEFAULT_SITE_NAME,
+};
