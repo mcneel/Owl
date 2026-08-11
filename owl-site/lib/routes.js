@@ -22,6 +22,18 @@
  */
 const NAMESPACE_MODE = 'namespace';
 
+/**
+ * The directory Sandcastle put its topics in, and where owl writes the redirects that replace them.
+ *
+ * Fixed rather than configurable: it is the folder SHFB's website output has always used, so it is
+ * the folder the links owl is answering were written against.
+ */
+const SANDCASTLE_DIR = 'html';
+
+/** How a Sandcastle topic name begins, which is the kind of api it documented. */
+const SANDCASTLE_PREFIX =
+  /^(?:T|M|P|F|E|N|R|Overload|Methods|Properties|Fields|Events|Operators|AllMembers)_/i;
+
 /** Normalizes a base path to the form '' or '/prefix'. */
 function normalizeBase(base) {
   if (!base || base === '/') return '';
@@ -133,6 +145,11 @@ class Routes {
     return `${this.base}/assets/${name}`;
   }
 
+  /** Where the redirect for one Sandcastle topic lives. */
+  sandcastle(name) {
+    return `${this.base}/${SANDCASTLE_DIR}/${name}.htm`;
+  }
+
   sitemap() {
     return `${this.base}/sitemap.xml`;
   }
@@ -196,8 +213,31 @@ class Routes {
       return { kind: 'category', assembly: parts[1], category: parts[2] };
     }
 
+    // Sandcastle's own urls, matched last so that nothing owl serves can be shadowed by one.
+    const topic = matchSandcastle(parts);
+    if (topic) return { kind: 'sandcastle', name: topic };
+
     return null;
   }
 }
 
-module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE };
+/**
+ * The topic name in a Sandcastle url, or '' when the path is not one.
+ *
+ * Inside html/ any name counts, because that folder was Sandcastle's and holds nothing else. At the
+ * root a name has to look like a topic, so that an index.html sitting beside the exported site is
+ * not read as a request for one.
+ */
+function matchSandcastle(parts) {
+  const file = parts.length > 0 ? parts[parts.length - 1] : '';
+  const name = file.replace(/\.html?$/i, '');
+
+  if (name === file || name === '') return '';
+
+  if (parts.length === 2 && parts[0].toLowerCase() === SANDCASTLE_DIR) return name;
+  if (parts.length === 1 && SANDCASTLE_PREFIX.test(name)) return name;
+
+  return '';
+}
+
+module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, SANDCASTLE_DIR };

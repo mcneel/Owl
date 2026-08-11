@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { Site } = require('./lib/site');
+const { stub: sandcastleStub } = require('./lib/sandcastle');
 
 /**
  * Exports the docs as a static site.
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     logoDark: '',
     d2: '',
     skipUndocumented: false,
+    sandcastle: false,
     quiet: false,
   };
 
@@ -67,6 +69,9 @@ function parseArgs(argv) {
         break;
       case '--skip-undocumented':
         options.skipUndocumented = true;
+        break;
+      case '--sandcastle':
+        options.sandcastle = true;
         break;
       case '--quiet':
         options.quiet = true;
@@ -178,6 +183,21 @@ if (!urls.includes(site.routes.home())) {
   const rootResult = site.resolve(site.routes.home(), null, false);
   write(site.routes.home(), rootResult.body);
   pages++;
+}
+
+// The urls this documentation set used to be published at, when it was published by Sandcastle. A
+// file host cannot be asked to answer one url with another, so each becomes a page that redirects
+// itself; they are not in the sitemap, because the page they point at is.
+if (site.sandcastle) {
+  let redirects = 0;
+
+  for (const [url, target] of site.sandcastle.stubs()) {
+    write(url, sandcastleStub(target));
+    redirects++;
+  }
+
+  if (!options.quiet) console.log(`  ${redirects} sandcastle redirects`);
+  pages += redirects;
 }
 
 for (const asset of ['app.css', 'app.js', 'search.json']) {

@@ -111,8 +111,9 @@ sealed class Command
           command.SiteArgs.Add(Next(args, ref i, arg));
           break;
 
-        // Also the site's, but a switch rather than a setting: it takes no value.
+        // Also the site's, but switches rather than settings: they take no value.
         case "--skip-undocumented":
+        case "--sandcastle":
           command.SiteArgs.Add(arg);
           break;
 

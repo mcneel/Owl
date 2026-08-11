@@ -119,6 +119,7 @@ owl serve and owl build, both
   --source-refs <path>  Root for "declared in" references; without it there are none
   --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
   --skip-undocumented   Leave anything with no <summary> out of the site
+  --sandcastle          Also answer the Sandcastle urls this set was published at
 ```
 
 `serve` and `build` generate first, so they take everything `gen` does. Give them `--json <dir>`

@@ -1924,6 +1924,13 @@ const JS = `
 
   var NAV_LIMIT = 8;
 
+  // Rank 3 is the row the query was never found in the name of - see findMatches, which ranks on the
+  // name it searched. Those are the rows matched through a summary or a parameter type, and the
+  // dropdown leaves them to the results page: eight rows is a shortcut to the thing you have named,
+  // and a name typed into the box is the reader saying they know what it is called. 'point' returned
+  // eight summaries mentioning points ahead of Point3d, which is the one row the eight were for.
+  var NAMELESS_RANK = 3;
+
   function renderNav(matches, q) {
     if (!navResults) return;
 
@@ -1933,7 +1940,14 @@ const JS = `
       return;
     }
 
-    var rows = matches.slice(0, NAV_LIMIT).map(function (m) {
+    // Sorted by rank, so the name matches are already the front of the list; the scan is what stops
+    // once there are enough of them.
+    var named = [];
+    for (var i = 0; i < matches.length && named.length < NAV_LIMIT; i++) {
+      if (matches[i][0] < NAMELESS_RANK) named.push(matches[i]);
+    }
+
+    var rows = named.map(function (m) {
       var e = m[2];
       var ns = (index.namespaces || [])[e[6]] || '';
       // The same outlined mark the tree puts beside a static member. The row has no signature on it
@@ -1947,7 +1961,11 @@ const JS = `
         '<span class="nav-result-ns">' + escapeHtml(ns) + '</span></a>';
     });
 
-    if (matches.length > NAV_LIMIT) {
+    // Counted over every match rather than the named ones, because that is what the page it opens
+    // lists. With nothing named it is the only row there, and says so first: a query answered only by
+    // summaries is still answered, and the dropdown should not read as though it found nothing.
+    if (matches.length > rows.length) {
+      if (rows.length === 0) rows.push('<div class="nav-empty">No name matches</div>');
       rows.push(
         '<a class="nav-results-more" href="' + escapeHtml(searchUrl()) + '">' +
           'Show all ' + matches.length + ' matches' + '</a>'

@@ -36,6 +36,7 @@ function parseArgs(argv) {
     logoDark: '',
     d2: '',
     skipUndocumented: false,
+    sandcastle: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -79,6 +80,9 @@ function parseArgs(argv) {
         break;
       case '--skip-undocumented':
         options.skipUndocumented = true;
+        break;
+      case '--sandcastle':
+        options.sandcastle = true;
         break;
       default:
         throw new Error(`Unknown argument '${arg}'. Try 'owl --help'.`);
@@ -201,6 +205,7 @@ const server = http.createServer((request, response) => {
   response.writeHead(result.status, {
     'Content-Type': result.type,
     'Content-Length': body.length,
+    ...(result.location ? { Location: result.location } : {}),
     // no-store, not no-cache: app.css and app.js live at fixed urls with no digest in them, and
     // no-cache only asks the browser to revalidate - with no ETag or Last-Modified to revalidate
     // against, a memory-cached stylesheet can survive an edit and a restart. This is the dev

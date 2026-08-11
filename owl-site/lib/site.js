@@ -6,6 +6,7 @@ const { Model } = require('./model');
 const { Routes, slugify } = require('./routes');
 const { Renderer } = require('./pages');
 const { Diagrams, probe } = require('./diagrams');
+const { Sandcastle, stub } = require('./sandcastle');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
 
@@ -26,6 +27,7 @@ const { inlineSvg } = require('./html');
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
  *   skipUndocumented  leave out anything with no <summary>
+ *   sandcastle  answer the Sandcastle urls this documentation set used to be published at
  *   d2        the d2 binary that draws ```d2 fences, 'd2' from PATH by default
  */
 class Site {
@@ -47,6 +49,11 @@ class Site {
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
+
+    // Off unless asked for: most sites were never published anywhere else, and one that was would
+    // rather say so than have owl guess from the shape of a request that missed.
+    this.sandcastleUrls = Boolean(options.sandcastle);
+
     this.d2 = options.d2 || 'd2';
 
     // Naming a d2 that is not there is a mistake worth stopping for. The default is what makes
@@ -74,6 +81,12 @@ class Site {
       skipUndocumented: this.skipUndocumented,
     });
     this.routes = new Routes(this.base);
+
+    // Built from the model, so what it can answer for is exactly what the site has pages for: a
+    // regenerate that drops a type drops the old url that pointed at it in the same pass.
+    this.sandcastle = this.sandcastleUrls
+      ? new Sandcastle(this.model, this.routes, (message) => this.model.warnings.push(message))
+      : null;
 
     // Rebuilt with the model, so a diagram that failed to draw is reported again on the reload that
     // follows the fix rather than staying quiet about it. What it has already drawn is cached
@@ -208,6 +221,11 @@ class Site {
         return html ? this.html(html) : this.notFound(pathname);
       }
 
+      case 'sandcastle': {
+        const url = this.sandcastle ? this.sandcastle.lookup(route.name) : null;
+        return url ? this.redirect(url) : this.notFound(pathname);
+      }
+
       case 'category': {
         // Categories are what the authored pages are organised around, so with none there are no
         // category pages to serve rather than empty ones.
@@ -243,6 +261,16 @@ class Site {
 
   html(body) {
     return { status: 200, type: 'text/html; charset=utf-8', body };
+  }
+
+  /**
+   * A permanent move, carrying the same page the export writes as its body.
+   *
+   * The body of a 301 is rarely read, but writing it here is what keeps the served answer and the
+   * exported file the one thing rather than two that have to be kept in step.
+   */
+  redirect(location) {
+    return { status: 301, type: 'text/html; charset=utf-8', location, body: stub(location) };
   }
 
   notFound(pathname) {
