@@ -15,11 +15,39 @@ property sheets the project imports. One project in the RhinoCode set resolves
 to 6 source files, 180 references and 23 defines, and names none of them.
 
 So `owl-gen` shells out once per project to `dotnet msbuild` with a target of
-its own, `WriteOwlInputs` (in `owl-gen/owl.targets`), and asks for the thirteen
-values in `Load/ProjectInputs.cs`. Eight of them shape the compilation —
-`compile`, `reference`, `define`, `langVersion`, `nullable`, `allowUnsafe`,
-`outputType`, `assemblyName` — and two more, `targetFramework` and
+its own, `WriteOwlInputs` (in `owl-gen/owl.targets`), and asks for the values in
+`Load/ProjectInputs.cs`. Most of them shape the compilation — `compile`,
+`reference`, `define`, `langVersion`, `nullable`, `allowUnsafe`, `outputType`,
+`assemblyName`, `keyFile` — and two more, `targetFramework` and
 `assemblyVersion`, are recorded in the model.
+
+`keyFile` is there for reading rather than for signing. A compilation's assembly
+identity includes its public key, and identity is what an `InternalsVisibleTo`
+in a dependency is matched against, so an unsigned compilation of a signed
+assembly loses access to every internal a friend legitimately reaches into.
+Grasshopper produced thirteen inaccessibility errors from exactly this before
+the key was captured, in code that builds without complaint.
+
+`language` is `$(Language)`, and it is what decides which compiler the rest is
+handed to. VB disagrees with C# about enough of the answer to need its own
+lines: constants come from `FinalDefineConstants` as comma-joined `name=value`
+pairs rather than from `DefineConstants` as semicolon-joined names, and they are
+passed through verbatim because Roslyn ships the same parser `vbc` uses for that
+string. `RootNamespace` stops being an IDE default and becomes a compiler option
+that wraps every declaration. `Import` items are namespaces handed to the
+compiler on the command line, appearing in no source file at all — the SDK
+supplies eight before the project adds any, so a capture without them fails to
+bind most of a normal VB assembly. `OptionStrict`, `OptionExplicit`,
+`OptionInfer` and `OptionCompare` decide whether the rest binds at all.
+
+The hook is `CustomAfterMicrosoftCommonTargets` rather than
+`Microsoft.CSharp.targets`' own, because one target serves both languages.
+`--tfm` names a preference rather than an instruction: `TargetFramework` is a
+global property, so setting it selects the inner build of a multi-targeting
+project but *overrides* a single-target one. A set mixing the two is ordinary —
+a `net8.0;net48` library beside a `net48`-only one — so the capture first asks
+`-getProperty:TargetFrameworks` and passes `TargetFramework` only where there is
+a choice to make.
 
 Shelling out is deliberate. MSBuildLocator and MSBuildWorkspace do the same
 evaluation in-process, but couple owl to a particular MSBuild version and
@@ -70,6 +98,49 @@ projects, so restoring with `net8.0` also forces `net8.0` onto a
 `netstandard2.0` dependency, whose assets file then comes back with no usable
 target. `--no-restore` skips the pass; `--skip-msbuild` skips capture entirely
 and reuses the previously written inputs files.
+
+## One parser, two languages
+
+Everything past the compilation works on `ISymbol`, which is language-neutral,
+so adding VB touched almost none of it: `ApiBuilder` needed its
+`CSharpCompilation` widened to `Compilation` and nothing else.
+
+Syntax is where the two languages genuinely diverge, and they diverge in a
+particularly unhelpful way. C# and VB each have their own `XmlElementSyntax`,
+`XmlTextSyntax`, `DocumentationCommentTriviaSyntax` and the rest, describing the
+same XML, and *neither set derives from the other* — they meet only at
+`SyntaxNode`. So `DocCommentParser`, a thousand lines of judgement about what a
+doc tag means, could not be shared by widening a type.
+
+It is shared through `IDocXmlReader` (`Parse/DocXmlReader.cs`) instead: eight
+questions the parser asks — what kind is this node, what is its tag name, its
+content, its `name` attribute, its `cref` — with one implementation per language.
+The parser matches no syntax types at all now. The C# reader is a transcription
+of the private helpers the parser used to carry, which made the change checkable:
+regenerating a real C# assembly's model before and after produced byte-identical
+JSON.
+
+Crefs still resolve semantically in both languages, which was not a given.
+`VisualBasicExtensions.GetSymbolInfo` has an overload for `CrefReferenceSyntax`,
+so a VB `<see cref="..."/>` reaches a real symbol the same way a C# one does,
+rather than being reduced to a string.
+
+Declarations needed a second walker rather than an abstraction —
+`VisualBasicWalker` beside `CSharpWalker`, both reporting the same
+`DeclaredSymbol` list. VB's shape is different enough to be worth stating: every
+override is on a *statement* rather than the block around it, because a
+`Function` with a body is a `MethodBlock` wrapping a `MethodStatement` while the
+same function on an interface is a `MethodStatement` alone. Recording statements
+covers both; recording blocks would miss half of them and recording both would
+report every implemented member twice.
+
+Two places rendered in the wrong language until told otherwise.
+`ISymbol.ToDisplayString` renders in the *symbol's* language, so every signature
+went through `Microsoft.CodeAnalysis.CSharp.SymbolDisplay.ToDisplayString`, which
+renders any symbol in C# style — the one call the whole "C# signatures" decision
+rests on. It is not quite total: a VB `Declare Function` is a `MethodKind` C# has
+no name for, and the C# renderer throws rather than guess, so that one is spelled
+out from its parts.
 
 ## Shipping
 

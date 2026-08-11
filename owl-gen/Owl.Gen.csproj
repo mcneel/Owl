@@ -15,7 +15,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Both languages, pinned together: they share Microsoft.CodeAnalysis underneath, and a
+         mismatched pair resolves to one of the two and fails at load rather than at restore. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic" Version="4.12.0" />
   </ItemGroup>
 
   <ItemGroup>

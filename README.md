@@ -23,6 +23,29 @@ Owl uses semantic analysis so the documentation it writes knows:
 - **Main Markdown**, so the site and each assembly have a hand-written entry page
 - **Category Markdowns**, so each category has a hand-written overview page
 
+## C# and Visual Basic
+
+Both languages are read the same way, through the compiler, and land in one model — so a C# project
+and a Visual Basic one documented together cross-reference each other as though they were one.
+
+Signatures are written in C# whichever language declared them: `string Name` rather than
+`Property Name As String`, `List<T>` rather than `List(Of T)`. A site that mixed the two would ask
+its readers to switch dialects between pages, and most of them are writing C# against whatever the
+assembly happens to be written in. What Visual Basic has and C# does not keeps its own name — a
+`Module` is titled and badged as a Module, not dressed up as a static class.
+
+Three things about a VB project are worth knowing, because all three are silent when they go wrong:
+
+- **`RootNamespace` is honored.** It is a compiler option in VB, not an IDE default, so it wraps
+  every declaration in the assembly.
+- **Project-level `Imports` are honored**, including the ones the SDK adds. They appear in no source
+  file, so without them almost nothing in a normal VB assembly binds.
+- **A `Public Event Changed(...)` is documented along with the `ChangedEventHandler` delegate it
+  mints.** No source line declares that delegate, but it is the type any handler must have, and the
+  name a C# caller writes.
+
+F# is not supported: there is no Roslyn compilation to build for it.
+
 ## Installing
 
 owl is published from `main` as a .NET tool package — one ~3.5 MB `.nupkg` that serves Linux,
@@ -60,17 +83,17 @@ with `actions: read` on this repository. A repository's own
 ## Commands
 
 ```bash
-owl gen   <project.csproj...>   # write the documentation model
-owl serve <project.csproj...>   # write it, then serve it locally
-owl build <project.csproj...>   # write it, then export a static site
+owl gen   <project...>   # write the documentation model
+owl serve <project...>   # write it, then serve it locally
+owl build <project...>   # write it, then export a static site
 ```
 
-Pass several projects to document them as one set. This matters: a `<see cref="..."/>` pointing at
+A project is a `.csproj` or a `.vbproj`. Pass several to document them as one set. This matters: a `<see cref="..."/>` pointing at
 another project in the set becomes a link, derived types are found across the whole set, and anything
 outside it is left as plain text rather than a dead link.
 
 ```bash
-owl gen src/MyLib/MyLib.csproj src/MyLib.Extras/MyLib.Extras.csproj --name "MyLib API"
+owl gen src/MyLib/MyLib.csproj src/MyLib.Extras/MyLib.Extras.vbproj --name "MyLib API"
 ```
 
 `serve` and `build` regenerate the model first. Point them at an existing one to skip that:
@@ -87,24 +110,27 @@ owl <command> ...
   -h, --help            Show this help
   --version             Print owl's version
 
-owl gen <project.csproj...>
+owl gen <project...>
   -o, --out <dir>       Where to write the model (default .owl/json)
   --name <text>         Site name, recorded in the model
-  --tfm <tfm>           Target framework to document (default net8.0)
+  --tfm <tfm>           Which framework to document, for a project that multi-targets
+                        (default net8.0); a project that targets one is documented as it is
   -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
   --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
   --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
                         directory and the repo root
   --skip-msbuild        Reuse previously captured project inputs
   --no-restore          Skip the restore pass before capturing inputs
+  --no-build-refs       Reuse referenced projects as they were last built, rather than building
+                        them; much faster where they are already there
   --verify              Report undocumented public API and unresolved crefs
   -v, --verbose         Full diagnostics
 
-owl serve <project.csproj...>
+owl serve <project...>
   -o, --out <dir>       Where to write the model (default .owl/json)
   --port <n>            Port to listen on (default 8080)
 
-owl build <project.csproj...>
+owl build <project...>
   -o, --out <dir>       Where to write the site (default .owl/site)
   --quiet               Only print the summary, not per-page progress
 

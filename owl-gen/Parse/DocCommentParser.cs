@@ -1,7 +1,5 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Owl.Gen.Model;
 
 namespace Owl.Gen.Parse;
@@ -33,14 +31,23 @@ sealed class DocCommentParser
       parameterOptions: SymbolDisplayParameterOptions.IncludeType,
       miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
 
+  readonly IDocXmlReader _xml;
   readonly HashSet<string> _ownedAssemblies;
   readonly List<string> _unresolvedCrefs;
   readonly IReadOnlyList<string> _exampleRoots;
   readonly List<string> _missingExamples;
 
   /// <summary>
-  /// Creates a parser for one documented set.
+  /// Creates a parser for one project's compilation.
   /// </summary>
+  /// <remarks>
+  /// One parser per compilation, because the reader is fixed at construction and a compilation is
+  /// written in one language. A set that mixes the two gets a parser each, which is already how
+  /// <see cref="ApiBuilder"/> builds them.
+  /// </remarks>
+  /// <param name="language">
+  /// The compilation's language, from <see cref="Compilation.Language"/>.
+  /// </param>
   /// <param name="ownedAssemblies">
   /// Assembly names that count as internal. This is what decides whether a
   /// resolved cref becomes a link or plain text.
@@ -58,11 +65,16 @@ sealed class DocCommentParser
   /// Paths that no root resolved accumulate here.
   /// </param>
   public DocCommentParser(
+      string language,
       IEnumerable<string> ownedAssemblies,
       List<string> unresolvedCrefs,
       IReadOnlyList<string>? exampleRoots = null,
       List<string>? missingExamples = null)
   {
+    _xml = language == LanguageNames.VisualBasic
+        ? VisualBasicDocXmlReader.Instance
+        : CSharpDocXmlReader.Instance;
+
     _ownedAssemblies = new HashSet<string>(ownedAssemblies, StringComparer.Ordinal);
     _unresolvedCrefs = unresolvedCrefs;
     _exampleRoots = exampleRoots ?? [];
@@ -80,10 +92,10 @@ sealed class DocCommentParser
   /// <param name="trivia">The doc comment, or null.</param>
   /// <param name="model">
   /// The model for the tree the comment was written in, which is what crefs
-  /// resolve against.
+  /// resolve against, and whose language decides how the comment is read.
   /// </param>
   /// <param name="owner">The symbol the comment documents.</param>
-  public DocBlock Parse(DocumentationCommentTriviaSyntax? trivia, SemanticModel model, ISymbol owner)
+  public DocBlock Parse(SyntaxNode? trivia, SemanticModel model, ISymbol owner)
   {
     var block = new DocBlock();
     if (trivia is null)
@@ -91,9 +103,9 @@ sealed class DocCommentParser
       return block;
     }
 
-    foreach (XmlNodeSyntax node in trivia.Content)
+    foreach (SyntaxNode node in _xml.Content(trivia))
     {
-      string? name = ElementName(node);
+      string? name = _xml.ElementName(node);
       if (name is null)
       {
         continue;
@@ -104,39 +116,39 @@ sealed class DocCommentParser
       switch (name.ToLowerInvariant())
       {
         case "summary":
-          block.Summary = Merge(block.Summary, Inline(ContentOf(node), model, owner, keepSpaces: false));
+          block.Summary = Merge(block.Summary, Inline(_xml.Content(node), model, owner, keepSpaces: false));
           break;
         case "remarks":
-          block.Remarks = Merge(block.Remarks, Inline(ContentOf(node), model, owner, keepSpaces: false));
+          block.Remarks = Merge(block.Remarks, Inline(_xml.Content(node), model, owner, keepSpaces: false));
           break;
         case "returns":
-          block.Returns = Merge(block.Returns, Inline(ContentOf(node), model, owner, keepSpaces: false));
+          block.Returns = Merge(block.Returns, Inline(_xml.Content(node), model, owner, keepSpaces: false));
           break;
         case "value":
-          block.Value = Merge(block.Value, Inline(ContentOf(node), model, owner, keepSpaces: false));
+          block.Value = Merge(block.Value, Inline(_xml.Content(node), model, owner, keepSpaces: false));
           break;
         case "example":
-          block.Example = Merge(block.Example, Inline(ContentOf(node), model, owner, keepSpaces: false));
+          block.Example = Merge(block.Example, Inline(_xml.Content(node), model, owner, keepSpaces: false));
           break;
 
         case "param":
         {
-          string? paramName = NameAttribute(node);
+          string? paramName = _xml.NameAttribute(node);
           if (paramName is not null)
           {
             block.Params ??= [];
-            block.Params[paramName] = Inline(ContentOf(node), model, owner, keepSpaces: false);
+            block.Params[paramName] = Inline(_xml.Content(node), model, owner, keepSpaces: false);
           }
           break;
         }
 
         case "typeparam":
         {
-          string? typeParamName = NameAttribute(node);
+          string? typeParamName = _xml.NameAttribute(node);
           if (typeParamName is not null)
           {
             block.TypeParams ??= [];
-            block.TypeParams[typeParamName] = Inline(ContentOf(node), model, owner, keepSpaces: false);
+            block.TypeParams[typeParamName] = Inline(_xml.Content(node), model, owner, keepSpaces: false);
           }
           break;
         }
@@ -149,7 +161,7 @@ sealed class DocCommentParser
           {
             DocId = reference.DocId,
             Label = reference.Label,
-            Doc = Inline(ContentOf(node), model, owner, keepSpaces: false),
+            Doc = Inline(_xml.Content(node), model, owner, keepSpaces: false),
           });
           break;
         }
@@ -162,13 +174,13 @@ sealed class DocCommentParser
         }
 
         case "category":
-          block.Category = PlainText(ContentOf(node));
+          block.Category = PlainText(_xml.Content(node));
           break;
         case "since":
-          block.Since = PlainText(ContentOf(node));
+          block.Since = PlainText(_xml.Content(node));
           break;
         case "deprecated":
-          block.Deprecated = PlainText(ContentOf(node));
+          block.Deprecated = PlainText(_xml.Content(node));
           break;
 
         case "inheritdoc":
@@ -180,11 +192,11 @@ sealed class DocCommentParser
     return block;
   }
 
-  List<DocNode> Inline(SyntaxList<XmlNodeSyntax> content, SemanticModel model, ISymbol owner, bool keepSpaces)
+  List<DocNode> Inline(IReadOnlyList<SyntaxNode> content, SemanticModel model, ISymbol owner, bool keepSpaces)
   {
     var nodes = new List<DocNode>();
 
-    foreach (XmlNodeSyntax child in content)
+    foreach (SyntaxNode child in content)
     {
       AppendInline(child, nodes, model, owner, keepSpaces);
     }
@@ -192,27 +204,20 @@ sealed class DocCommentParser
     return Tidy(nodes, keepSpaces);
   }
 
-  void AppendInline(XmlNodeSyntax node, List<DocNode> output, SemanticModel model, ISymbol owner, bool keepSpaces)
+  void AppendInline(SyntaxNode node, List<DocNode> output, SemanticModel model, ISymbol owner, bool keepSpaces)
   {
-    switch (node)
+    switch (_xml.KindOf(node))
     {
-      case XmlTextSyntax text:
-        AppendText(output, TextOf(text));
+      case DocXmlKind.Text:
+        AppendText(output, _xml.TextOf(node));
         return;
 
-      case XmlCDataSectionSyntax cdata:
-        AppendText(output, string.Concat(cdata.TextTokens.Select(t => t.ValueText)));
-        return;
-
-      case XmlEmptyElementSyntax empty:
-        AppendElement(empty.Name.ToString(), empty, default, output, model, owner, keepSpaces);
-        return;
-
-      case XmlElementSyntax element:
+      case DocXmlKind.EmptyElement:
+      case DocXmlKind.Element:
         AppendElement(
-            element.StartTag.Name.ToString(),
-            element,
-            element.Content,
+            _xml.ElementName(node)!,
+            node,
+            _xml.Content(node),
             output,
             model,
             owner,
@@ -221,7 +226,7 @@ sealed class DocCommentParser
     }
   }
 
-  void AppendElement(string rawName, XmlNodeSyntax node, SyntaxList<XmlNodeSyntax> content, List<DocNode> output, SemanticModel model, ISymbol owner, bool keepSpaces)
+  void AppendElement(string rawName, SyntaxNode node, IReadOnlyList<SyntaxNode> content, List<DocNode> output, SemanticModel model, ISymbol owner, bool keepSpaces)
   {
     switch (rawName.ToLowerInvariant())
     {
@@ -230,14 +235,14 @@ sealed class DocCommentParser
       {
         // <see> carries its target in an attribute, never as content. Walking only
         // text and children, as a naive flattener does, loses it completely.
-        string? langword = TextAttribute(node, "langword");
+        string? langword = _xml.TextAttribute(node, "langword");
         if (langword is not null)
         {
           output.Add(new DocNode { Kind = "langword", Value = langword });
           return;
         }
 
-        string? href = TextAttribute(node, "href");
+        string? href = _xml.TextAttribute(node, "href");
         if (href is not null)
         {
           output.Add(new DocNode
@@ -262,11 +267,11 @@ sealed class DocCommentParser
       }
 
       case "paramref":
-        output.Add(new DocNode { Kind = "paramref", Name = NameAttribute(node) });
+        output.Add(new DocNode { Kind = "paramref", Name = _xml.NameAttribute(node) });
         return;
 
       case "typeparamref":
-        output.Add(new DocNode { Kind = "typeparamref", Name = NameAttribute(node) });
+        output.Add(new DocNode { Kind = "typeparamref", Name = _xml.NameAttribute(node) });
         return;
 
       case "c":
@@ -275,9 +280,9 @@ sealed class DocCommentParser
 
       case "code":
         output.Add(CodeNode(
-            TextAttribute(node, "language") ?? TextAttribute(node, "lang"),
-            TextAttribute(node, "source"),
-            TextAttribute(node, "region"),
+            _xml.TextAttribute(node, "language") ?? _xml.TextAttribute(node, "lang"),
+            _xml.TextAttribute(node, "source"),
+            _xml.TextAttribute(node, "region"),
             RawText(content)));
         return;
 
@@ -297,7 +302,7 @@ sealed class DocCommentParser
         output.Add(new DocNode
         {
           Kind = "note",
-          NoteKind = TextAttribute(node, "type"),
+          NoteKind = _xml.TextAttribute(node, "type"),
           Children = Inline(content, model, owner, keepSpaces),
         });
         return;
@@ -312,7 +317,7 @@ sealed class DocCommentParser
       default:
         // Unknown or structural tag: recurse so its text is not dropped. This is what
         // keeps a <para> wrapping a <see> from losing everything after the leading text.
-        foreach (XmlNodeSyntax child in content)
+        foreach (SyntaxNode child in content)
         {
           AppendInline(child, output, model, owner, keepSpaces);
         }
@@ -321,33 +326,33 @@ sealed class DocCommentParser
     }
   }
 
-  DocNode BuildList(XmlNodeSyntax node, SyntaxList<XmlNodeSyntax> content, SemanticModel model, ISymbol owner)
+  DocNode BuildList(SyntaxNode node, IReadOnlyList<SyntaxNode> content, SemanticModel model, ISymbol owner)
   {
-    string style = TextAttribute(node, "type") ?? "bullet";
+    string style = _xml.TextAttribute(node, "type") ?? "bullet";
     var items = new List<DocListItem>();
 
-    foreach (XmlNodeSyntax child in content)
+    foreach (SyntaxNode child in content)
     {
-      string? name = ElementName(child)?.ToLowerInvariant();
+      string? name = _xml.ElementName(child)?.ToLowerInvariant();
       if (name != "item" && name != "listheader")
       {
         continue;
       }
 
-      SyntaxList<XmlNodeSyntax> itemContent = ContentOf(child);
+      IReadOnlyList<SyntaxNode> itemContent = _xml.Content(child);
       List<DocNode>? term = null;
       List<DocNode>? description = null;
       var loose = new List<DocNode>();
 
-      foreach (XmlNodeSyntax part in itemContent)
+      foreach (SyntaxNode part in itemContent)
       {
-        switch (ElementName(part)?.ToLowerInvariant())
+        switch (_xml.ElementName(part)?.ToLowerInvariant())
         {
           case "term":
-            term = Inline(ContentOf(part), model, owner, keepSpaces: false);
+            term = Inline(_xml.Content(part), model, owner, keepSpaces: false);
             break;
           case "description":
-            description = Inline(ContentOf(part), model, owner, keepSpaces: false);
+            description = Inline(_xml.Content(part), model, owner, keepSpaces: false);
             break;
           default:
             AppendInline(part, loose, model, owner, keepSpaces: false);
@@ -379,31 +384,40 @@ sealed class DocCommentParser
     };
   }
 
-  DocRef ResolveCref(XmlNodeSyntax node, SemanticModel model, ISymbol owner)
+  DocRef ResolveCref(SyntaxNode node, SemanticModel model, ISymbol owner)
   {
-    CrefSyntax? cref = node switch
-    {
-      XmlEmptyElementSyntax empty => empty.Attributes.OfType<XmlCrefAttributeSyntax>().FirstOrDefault()?.Cref,
-      XmlElementSyntax element => element.StartTag.Attributes.OfType<XmlCrefAttributeSyntax>().FirstOrDefault()?.Cref,
-      _ => null,
-    };
+    SyntaxNode? cref = _xml.Cref(node);
 
     if (cref is null)
     {
-      string? href = TextAttribute(node, "href");
-      return href is not null
-          ? new DocRef { Href = href, Label = href }
-          : new DocRef { Label = "" };
+      string? href = _xml.TextAttribute(node, "href");
+      if (href is not null)
+      {
+        return new DocRef { Href = href, Label = href };
+      }
+
+      // A cref the language would not parse as a reference at all, so it never became a cref node.
+      // Nearly always a doc id written out by hand - cref="E:Some.Type.SomeEvent" - which C# still
+      // hands over as an erroneous cref but VB quietly demotes to an ordinary attribute. Left as
+      // nothing it renders as a hole in the middle of a sentence, so the name the author wrote
+      // stands in, shortened the way the metadata path already shortens a doc id.
+      if (_xml.TextAttribute(node, "cref") is { Length: > 0 } written)
+      {
+        _unresolvedCrefs.Add($"{CSharpDisplay.Of(owner)}: unparsed cref '{written}'");
+        return new DocRef { Label = ShortLabel(written) };
+      }
+
+      return new DocRef { Label = "" };
     }
 
-    SymbolInfo info = model.GetSymbolInfo(cref);
+    SymbolInfo info = _xml.Bind(model, cref);
     ISymbol? symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
 
     if (symbol is null)
     {
       // Not fatal: report it and fall back to the text the author wrote. This list is
       // useful on its own, which is why --verify surfaces it.
-      _unresolvedCrefs.Add($"{owner.ToDisplayString()}: unresolved cref '{cref}'");
+      _unresolvedCrefs.Add($"{CSharpDisplay.Of(owner)}: unresolved cref '{cref}'");
       return new DocRef { Label = cref.ToString() };
     }
 
@@ -414,7 +428,7 @@ sealed class DocCommentParser
     return new DocRef
     {
       DocId = docId,
-      Label = symbol.ToDisplayString(s_crefLabelFormat),
+      Label = CSharpDisplay.Of(symbol, s_crefLabelFormat),
       External = external ? true : null,
     };
   }
@@ -644,91 +658,31 @@ sealed class DocCommentParser
   // Text helpers
   // ------------------------------------------------------------------
 
-  static string? ElementName(XmlNodeSyntax node) => node switch
-  {
-    XmlElementSyntax element => element.StartTag.Name.ToString(),
-    XmlEmptyElementSyntax empty => empty.Name.ToString(),
-    _ => null,
-  };
-
-  static SyntaxList<XmlNodeSyntax> ContentOf(XmlNodeSyntax node) => node switch
-  {
-    XmlElementSyntax element => element.Content,
-    _ => default,
-  };
-
-  static string? NameAttribute(XmlNodeSyntax node)
-  {
-    SyntaxList<XmlAttributeSyntax> attributes = node switch
-    {
-      XmlElementSyntax element => element.StartTag.Attributes,
-      XmlEmptyElementSyntax empty => empty.Attributes,
-      _ => default,
-    };
-
-    foreach (XmlAttributeSyntax attribute in attributes)
-    {
-      if (attribute is XmlNameAttributeSyntax named)
-      {
-        return named.Identifier.Identifier.ValueText;
-      }
-    }
-
-    return TextAttribute(node, "name");
-  }
-
-  static string? TextAttribute(XmlNodeSyntax node, string attributeName)
-  {
-    SyntaxList<XmlAttributeSyntax> attributes = node switch
-    {
-      XmlElementSyntax element => element.StartTag.Attributes,
-      XmlEmptyElementSyntax empty => empty.Attributes,
-      _ => default,
-    };
-
-    foreach (XmlAttributeSyntax attribute in attributes)
-    {
-      if (attribute is XmlTextAttributeSyntax text &&
-          text.Name.ToString().Equals(attributeName, StringComparison.OrdinalIgnoreCase))
-      {
-        return string.Concat(text.TextTokens.Select(t => t.ValueText)).Trim();
-      }
-    }
-
-    return null;
-  }
-
   /// <summary>
-  /// Text of an XmlTextSyntax with the '///' exterior trivia already stripped,
-  /// which is what ValueText gives us for free.
+  /// Every scrap of text under a run of nodes, markup discarded but whitespace
+  /// intact, which is what a &lt;code&gt; block needs.
   /// </summary>
-  static string TextOf(XmlTextSyntax text)
-  {
-    return string.Concat(text.TextTokens.Select(t => t.ValueText));
-  }
-
-  static string RawText(SyntaxList<XmlNodeSyntax> content)
+  string RawText(IReadOnlyList<SyntaxNode> content)
   {
     var sb = new StringBuilder();
-    foreach (XmlNodeSyntax node in content)
+
+    foreach (SyntaxNode node in content)
     {
-      switch (node)
+      switch (_xml.KindOf(node))
       {
-        case XmlTextSyntax text:
-          sb.Append(TextOf(text));
+        case DocXmlKind.Text:
+          sb.Append(_xml.TextOf(node));
           break;
-        case XmlCDataSectionSyntax cdata:
-          sb.Append(string.Concat(cdata.TextTokens.Select(t => t.ValueText)));
-          break;
-        case XmlElementSyntax element:
-          sb.Append(RawText(element.Content));
+        case DocXmlKind.Element:
+          sb.Append(RawText(_xml.Content(node)));
           break;
       }
     }
+
     return sb.ToString();
   }
 
-  static string PlainText(SyntaxList<XmlNodeSyntax> content) => Collapse(RawText(content));
+  string PlainText(IReadOnlyList<SyntaxNode> content) => Collapse(RawText(content));
 
   /// <summary>
   /// Collapses whitespace runs to single spaces.

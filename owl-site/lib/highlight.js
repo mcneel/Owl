@@ -13,6 +13,11 @@ const { escape } = require('./html');
  * with a capital is a type, anything else is a value. That is wrong for a PascalCase member name,
  * which reads as a type - the same trade every highlighter without a parser makes, and worth it for
  * signatures where the alternative is a wall of one colour.
+ *
+ * 'module' sits at the end of the C# list without being C#. Signatures are rendered in C# whatever
+ * language declared them, and a Visual Basic Module has no C# spelling, so the word survives into
+ * the one line on its page that is a declaration - where leaving it uncoloured beside a highlighted
+ * 'public' reads as a bug. Nothing else in either language needs the same allowance.
  */
 
 const KEYWORDS = {
@@ -23,7 +28,8 @@ const KEYWORDS = {
     readonly record ref return sbyte sealed set short sizeof stackalloc static string struct switch
     this
     throw true try typeof uint ulong unchecked unsafe ushort using var virtual void volatile when
-    where while with yield`.split(/\s+/)),
+    where while with yield
+    module`.split(/\s+/)),
 
   python: new Set(`and as assert async await break class continue def del elif else except False
     finally for from global if import in is lambda None nonlocal not or pass raise return True try

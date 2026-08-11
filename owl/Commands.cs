@@ -1,3 +1,5 @@
+using Owl.Gen;
+
 namespace Owl;
 
 /// <summary>
@@ -129,7 +131,7 @@ sealed class Command
 
         // A project, serve's bare port form, or a flag only owl-gen understands.
         default:
-          if (arg.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+          if (OwlGen.IsProjectPath(arg))
           {
             command.Projects.Add(arg);
           }
@@ -148,7 +150,9 @@ sealed class Command
 
     if (command.Projects.Count == 0 && command.ModelDir is null)
     {
-      throw new OwlError($"owl {name}: pass one or more .csproj paths, or --json <dir> to reuse an existing model.");
+      throw new OwlError(
+        $"owl {name}: pass one or more .csproj or .vbproj paths, or --json <dir> to reuse an " +
+        "existing model.");
     }
 
     // A model directory doubles as gen's output and as the site's input, so one default covers both.

@@ -55,12 +55,12 @@ static void PrintUsage()
     owl - API documentation generator and website builder for .NET
 
     Usage:
-      owl gen   <project.csproj...>   Write the documentation model
-      owl serve <project.csproj...>   Write it, then serve it locally
-      owl build <project.csproj...>   Write it, then export a static site
+      owl gen   <project...>   Write the documentation model
+      owl serve <project...>   Write it, then serve it locally
+      owl build <project...>   Write it, then export a static site
 
-    Pass several projects to document them as one set, so crefs between them become links and
-    derived types are found across the whole set.
+    A project is a .csproj or a .vbproj. Pass several to document them as one set, so crefs between
+    them become links and derived types are found across the whole set.
 
     Options:
       -o, --out <dir>       Model directory for gen and serve (default .owl/json)
@@ -73,13 +73,16 @@ static void PrintUsage()
       --version             Print owl's version
 
     Model options, for what the documentation is generated from:
-      --tfm <tfm>           Target framework to document (default net8.0)
+      --tfm <tfm>           Which framework to document, for a project that multi-targets
+                            (default net8.0); a project that targets one is documented as it is
       -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
       --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
       --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
                             directory and the repo root
       --skip-msbuild        Reuse previously captured project inputs
       --no-restore          Skip the restore pass before capturing inputs
+      --no-build-refs       Reuse referenced projects as they were last built, rather than
+                            building them; much faster where they are already there
       --verify              Report undocumented public API and unresolved crefs; non-zero exit
                             on unresolved crefs or compilation errors
       -v, --verbose         Full diagnostics
@@ -104,7 +107,7 @@ static void PrintUsage()
     Examples:
       owl serve src/MyLib/MyLib.csproj
       owl gen src/MyLib/MyLib.csproj --name "MyLib API" --verify
-      owl gen src/A/A.csproj src/B/B.csproj
+      owl gen src/A/A.csproj src/B/B.vbproj
       owl build src/MyLib/MyLib.csproj --out ./public --site-url https://docs.example.com
       owl serve --json .owl/json
     """);

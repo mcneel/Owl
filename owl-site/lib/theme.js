@@ -82,6 +82,10 @@ const KIND_MAP = {
   enum: ['E', 'Enum'],
   delegate: ['T', 'Delegate'],
   record: ['T', 'Record'],
+  // Visual Basic's Module: a class that is all shared members and cannot be instantiated. Named as
+  // the language names it, because that is what its page is titled and what a reader went looking
+  // for - but it groups and draws with the classes, being one in everything but the keyword.
+  module: ['T', 'Module'],
 
   // Members
   method: ['M', 'Method'],
@@ -119,6 +123,7 @@ const KIND_ICONS = {
   enum: 'enum',
   delegate: 'method',
   record: 'class',
+  module: 'class',
 
   method: 'method',
   operator: 'method',

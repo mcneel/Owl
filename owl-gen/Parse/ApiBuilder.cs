@@ -40,7 +40,7 @@ sealed class ApiBuilder
       "System.Diagnostics.DebuggerStepThroughAttribute",
   };
 
-  readonly CSharpCompilation _compilation;
+  readonly Compilation _compilation;
   readonly ProjectInputs _inputs;
   readonly string _repoRoot;
   readonly DocCommentParser _docParser;
@@ -72,7 +72,7 @@ sealed class ApiBuilder
   /// project directory and the repo root, when one was given.
   /// </param>
   public ApiBuilder(
-      CSharpCompilation cmpl,
+      Compilation cmpl,
       ProjectInputs inputs,
       string root,
       IEnumerable<string> apis,
@@ -93,6 +93,7 @@ sealed class ApiBuilder
         : [examplesRoot, inputs.ProjectDir, root];
 
     _docParser = new DocCommentParser(
+        cmpl.Language,
         apis,
         findings.UnresolvedCrefs,
         exampleRoots.Where(dir => !string.IsNullOrEmpty(dir)).Distinct(StringComparer.Ordinal).ToList(),
@@ -224,7 +225,12 @@ sealed class ApiBuilder
     }
 
     // Compiler-generated helpers and <PrivateImplementationDetails>.
-    if (type.IsImplicitlyDeclared || type.Name.Length == 0 || type.Name.Contains('<'))
+    if (type.Name.Length == 0 || type.Name.Contains('<'))
+    {
+      return false;
+    }
+
+    if (type.IsImplicitlyDeclared && !IsEventHandler(type))
     {
       return false;
     }
@@ -241,6 +247,39 @@ sealed class ApiBuilder
     }
 
     return true;
+  }
+
+  /// <summary>
+  /// Whether an implicitly-declared type is the delegate behind an event
+  /// declared with a parameter list.
+  /// </summary>
+  /// <remarks>
+  /// <para>
+  /// <c>Public Event Changed(sender As Object)</c> in Visual Basic mints a
+  /// nested <c>ChangedEventHandler</c> delegate, which Roslyn reports as
+  /// implicitly declared because no source line spells it out. It is public API
+  /// all the same: it is the type any handler must have, and the name a C#
+  /// caller writes. Excluding it leaves every such event pointing at a type with
+  /// no page - 164 of them in Grasshopper alone.
+  /// </para>
+  /// <para>
+  /// Recognised by what it is rather than by the "EventHandler" suffix
+  /// convention: the containing type has an event whose type is exactly this
+  /// delegate. Compared on original definitions, so a generic container's
+  /// constructed event type still matches the nested definition.
+  /// </para>
+  /// </remarks>
+  static bool IsEventHandler(INamedTypeSymbol type)
+  {
+    if (type.TypeKind != TypeKind.Delegate || type.ContainingType is null)
+    {
+      return false;
+    }
+
+    return type.ContainingType
+        .GetMembers()
+        .OfType<IEventSymbol>()
+        .Any(e => SymbolEqualityComparer.Default.Equals(e.Type.OriginalDefinition, type.OriginalDefinition));
   }
 
   static IEnumerable<ISymbol> DocumentableMembers(INamedTypeSymbol type)
@@ -324,7 +363,7 @@ sealed class ApiBuilder
 
   ApiType BuildType(INamedTypeSymbol type)
   {
-    string docId = DocIds.Of(type) ?? "T:" + type.ToDisplayString(DisplayFormats.TypeFullName);
+    string docId = DocIds.Of(type) ?? "T:" + CSharpDisplay.Of(type, DisplayFormats.TypeFullName);
     DocBlock docs = ResolveInheritDoc(type, _docs[type]);
 
     var apiType = new ApiType
@@ -333,16 +372,20 @@ sealed class ApiBuilder
       Slug = Slug.ForType(docId),
       Namespace = type.ContainingNamespace.IsGlobalNamespace
             ? ""
-            : type.ContainingNamespace.ToDisplayString(),
-      Name = type.ToDisplayString(DisplayFormats.TypeShortName),
-      FullName = type.ToDisplayString(DisplayFormats.TypeFullName),
+            : CSharpDisplay.Of(type.ContainingNamespace),
+      Name = CSharpDisplay.Of(type, DisplayFormats.TypeShortName),
+      FullName = CSharpDisplay.Of(type, DisplayFormats.TypeFullName),
       Kind = TypeKindOf(type),
       ContainingType = DocIds.Of(type.ContainingType),
       Accessibility = AccessibilityOf(type.DeclaredAccessibility),
       Category = docs.Category,
       IsStatic = type.IsStatic,
-      IsAbstract = type.IsAbstract && type.TypeKind != TypeKind.Interface,
-      IsSealed = type.IsSealed && type.TypeKind is not (TypeKind.Struct or TypeKind.Enum),
+      // A Visual Basic Module compiles to a type that is both abstract and sealed, which is how IL
+      // spells "no instances of this, ever". Neither word tells a reader anything the keyword has
+      // not already said, and "abstract module" says something untrue, so both are dropped the way
+      // they already are for a struct or an enum.
+      IsAbstract = type.IsAbstract && type.TypeKind is not (TypeKind.Interface or TypeKind.Module),
+      IsSealed = type.IsSealed && type.TypeKind is not (TypeKind.Struct or TypeKind.Enum or TypeKind.Module),
       IsReadOnly = type.IsReadOnly,
       IsRefLikeType = type.IsRefLikeType,
       TypeParameters = BuildTypeParameters(type.TypeParameters, docs),
@@ -361,10 +404,10 @@ sealed class ApiBuilder
         apiType.Parameters = BuildParameters(invoke.Parameters, docs);
         string parameters = string.Join(
             ", ",
-            invoke.Parameters.Select(p => p.ToDisplayString(DisplayFormats.MemberNameAndParameters)));
+            invoke.Parameters.Select(p => CSharpDisplay.Of(p, DisplayFormats.MemberNameAndParameters)));
 
         apiType.Signature =
-            $"{apiType.ReturnType.Display} {type.ToDisplayString(DisplayFormats.TypeShortName)}({parameters})";
+            $"{apiType.ReturnType.Display} {CSharpDisplay.Of(type, DisplayFormats.TypeShortName)}({parameters})";
       }
     }
     else
@@ -433,6 +476,10 @@ sealed class ApiBuilder
       TypeKind.Interface => "interface",
       TypeKind.Enum => "enum",
       TypeKind.Delegate => "delegate",
+      // Visual Basic's Module, which has no C# spelling. Named rather than left to the fallback
+      // because the site keys a badge, an icon and a filter tab off this string, and a kind it has
+      // never heard of gets the class drawing and a '?' for a badge.
+      TypeKind.Module => "module",
       _ => type.TypeKind.ToString().ToLowerInvariant(),
     };
   }
@@ -498,7 +545,7 @@ sealed class ApiBuilder
     target.Parameters = BuildParameters(method.Parameters, docs);
     target.TypeParameters = BuildTypeParameters(method.TypeParameters, docs);
 
-    string nameAndParameters = method.ToDisplayString(DisplayFormats.MemberNameAndParameters);
+    string nameAndParameters = CSharpDisplay.Of(method, DisplayFormats.MemberNameAndParameters);
 
     if (method.MethodKind is MethodKind.Constructor)
     {
@@ -539,7 +586,7 @@ sealed class ApiBuilder
     target.ReturnType = BuildTypeRef(property.Type);
     target.Parameters = property.Parameters.Length == 0 ? null : BuildParameters(property.Parameters, docs);
 
-    string nameAndParameters = property.ToDisplayString(DisplayFormats.MemberNameAndParameters);
+    string nameAndParameters = CSharpDisplay.Of(property, DisplayFormats.MemberNameAndParameters);
     target.Signature = $"{target.ReturnType.Display} {nameAndParameters}";
 
     target.Accessors = new AccessorInfo
@@ -751,7 +798,7 @@ sealed class ApiBuilder
     return new TypeRef
     {
       DocId = docId,
-      Display = type.ToDisplayString(DisplayFormats.TypeReference),
+      Display = CSharpDisplay.Of(type, DisplayFormats.TypeReference),
       External = external,
     };
   }
@@ -829,7 +876,7 @@ sealed class ApiBuilder
 
       foreach (ITypeSymbol constraintType in parameter.ConstraintTypes)
       {
-        constraints.Add(constraintType.ToDisplayString(DisplayFormats.TypeReference));
+        constraints.Add(CSharpDisplay.Of(constraintType, DisplayFormats.TypeReference));
       }
 
       if (parameter.HasConstructorConstraint)
@@ -869,7 +916,7 @@ sealed class ApiBuilder
         continue;
       }
 
-      string fullName = attributeClass.ToDisplayString(DisplayFormats.TypeFullName);
+      string fullName = CSharpDisplay.Of(attributeClass, DisplayFormats.TypeFullName);
       if (s_hiddenAttributes.Contains(fullName))
       {
         continue;
@@ -907,7 +954,7 @@ sealed class ApiBuilder
   {
     foreach (AttributeData attribute in symbol.GetAttributes())
     {
-      if (attribute.AttributeClass?.ToDisplayString() != "System.ObsoleteAttribute")
+      if (attribute.AttributeClass is null || CSharpDisplay.Of(attribute.AttributeClass) != "System.ObsoleteAttribute")
       {
         continue;
       }
@@ -1181,7 +1228,7 @@ sealed class ApiBuilder
         DocBlock block = _docParser.Parse(entry.Value.Doc, entry.Value.Model, entry.Key);
         if (!block.IsEmpty)
         {
-          namespaceDocs[ns.ToDisplayString()] = block;
+          namespaceDocs[CSharpDisplay.Of(ns)] = block;
         }
       }
     }
@@ -1253,7 +1300,7 @@ sealed class ApiBuilder
     if (constant.Kind == TypedConstantKind.Type)
     {
       return constant.Value is ITypeSymbol type
-          ? type.ToDisplayString(DisplayFormats.TypeReference)
+          ? CSharpDisplay.Of(type, DisplayFormats.TypeReference)
           : "null";
     }
 

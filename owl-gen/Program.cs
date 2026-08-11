@@ -21,6 +21,29 @@ namespace Owl.Gen;
 public static class OwlGen
 {
   /// <summary>
+  /// The project files owl can document, by extension.
+  /// </summary>
+  /// <remarks>
+  /// Both languages reach Roslyn through the same MSBuild capture, so what owl supports is decided
+  /// here and nowhere else. F# is absent because it has no Roslyn compilation to build.
+  /// </remarks>
+  static readonly string[] PROJECT_EXTENSIONS = [".csproj", ".vbproj"];
+
+  /// <summary>
+  /// Whether an argument names a project owl can document.
+  /// </summary>
+  /// <remarks>
+  /// Public because owl's own front-end has to tell a project from a flag before it forwards
+  /// anything here, and two lists of extensions would drift apart - leaving one of them rejecting a
+  /// project the other had already accepted.
+  /// </remarks>
+  /// <param name="arg">A command-line argument.</param>
+  public static bool IsProjectPath(string arg)
+  {
+    return PROJECT_EXTENSIONS.Any(ext => arg.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+  }
+
+  /// <summary>
   /// Runs owl-gen for one command line and returns the process exit code.
   /// </summary>
   /// <remarks>
@@ -92,14 +115,21 @@ public static class OwlGen
             options.Configuration,
             options.InputsDirectory,
             restore: !options.NoRestore,
+            buildReferences: !options.NoBuildRefs,
             log);
 
       log.WriteLine($"  {inputs.Compile.Count} source files, {inputs.References.Count} references");
 
-      CSharpCompilation compilation = CompilationBuilder.Build(inputs, log);
+      Compilation compilation = CompilationBuilder.Build(inputs, log);
 
+      // Declaration diagnostics rather than all of them, for two reasons. What the model is built
+      // from is the declared surface - types, signatures, base types - so a declaration error is
+      // exactly the kind that makes the output wrong, while an error inside a method body cannot
+      // change a single line of it. And the full set binds every body in the assembly, which on a
+      // large project is the most expensive thing the run does, spent entirely on answering a
+      // question nobody asked.
       Diagnostic[] errors = compilation
-        .GetDiagnostics()
+        .GetDeclarationDiagnostics()
         .Where(d => d.Severity == DiagnosticSeverity.Error)
         .ToArray();
 
@@ -262,6 +292,18 @@ sealed class CommandLineOptions
   /// <summary>Skip the restore pass that normally precedes capture.</summary>
   public bool NoRestore { get; private set; }
 
+  /// <summary>
+  /// Reuse whatever the project's references have already been built to,
+  /// instead of building them.
+  /// </summary>
+  /// <remarks>
+  /// Capturing a project's references means resolving them, and resolving a
+  /// ProjectReference means building it. For a project sitting deep in a large
+  /// tree that is most of the wall clock and the only part that can fail for
+  /// reasons that have nothing to do with documentation.
+  /// </remarks>
+  public bool NoBuildRefs { get; private set; }
+
   /// <summary>Report undocumented public API and unresolved crefs.</summary>
   public bool Verify { get; private set; }
 
@@ -285,7 +327,7 @@ sealed class CommandLineOptions
   /// <param name="args">Everything after the executable name.</param>
   /// <exception cref="ArgumentException">
   /// An argument is unrecognised, missing its value, or names a project that
-  /// is not an existing .csproj.
+  /// is not an existing .csproj or .vbproj.
   /// </exception>
   public static CommandLineOptions Parse(string[] args)
   {
@@ -332,6 +374,10 @@ sealed class CommandLineOptions
           options.NoRestore = true;
           break;
 
+        case "--no-build-refs":
+          options.NoBuildRefs = true;
+          break;
+
         case "--verify":
           options.Verify = true;
           break;
@@ -354,7 +400,8 @@ sealed class CommandLineOptions
 
     if (options.Projects.Count == 0)
     {
-      throw new ArgumentException("No project given. Pass one or more .csproj paths. Try 'owl --help'.");
+      throw new ArgumentException(
+          "No project given. Pass one or more .csproj or .vbproj paths. Try 'owl --help'.");
     }
 
     if (options.OutputDirectory.Length == 0)
@@ -383,9 +430,9 @@ sealed class CommandLineOptions
 
   static string ResolveProject(string arg)
   {
-    if (!arg.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+    if (!OwlGen.IsProjectPath(arg))
     {
-      throw new ArgumentException($"'{arg}' is not a .csproj path.");
+      throw new ArgumentException($"'{arg}' is not a .csproj or .vbproj path.");
     }
 
     string full = Path.GetFullPath(arg);

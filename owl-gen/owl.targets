@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Captures the real compiler inputs for a project so owl can build an equivalent Roslyn
-  CSharpCompilation without taking on MSBuildLocator / MSBuildWorkspace. Letting MSBuild answer the
-  question means every conditional property in the consuming project is honored for free: whatever
-  it does with multi-targeting, platform defines and per-configuration property sheets.
+  Captures the real compiler inputs for a project so owl can build an equivalent Roslyn compilation
+  without taking on MSBuildLocator / MSBuildWorkspace. Letting MSBuild answer the question means
+  every conditional property in the consuming project is honored for free: whatever it does with
+  multi-targeting, platform defines and per-configuration property sheets.
 
   Invoked per project by owl-gen (see Load/MSBuildInputCapture.cs):
 
     dotnet msbuild <proj> -t:Restore;WriteOwlInputs \
       -p:TargetFramework=net8.0 \
       -p:OwlInputsFile=<out.txt> \
-      -p:CustomAfterMicrosoftCSharpTargets=<this file>
+      -p:CustomAfterMicrosoftCommonTargets=<this file>
+
+  The hook is the common one rather than Microsoft.CSharp.targets' own, because the same capture
+  serves C# and VB. $(Language) says which, and the two languages disagree about enough of what
+  follows that owl-gen has to be told.
 
   Output is a line-based key=value format, NOT JSON. File paths need no escaping here and cannot
   contain newlines, whereas MSBuild cannot escape Windows backslashes for JSON without contortions.
@@ -29,9 +33,15 @@
     <ItemGroup>
       <!-- Include= splits on ';', which is exactly what we want: one item per constant. -->
       <_OwlDefine Include="$(DefineConstants)" />
+
+      <!-- An item purely to have %(FullPath) resolve it against the project directory, since the
+           project states it relative and $(KeyOriginatorFile) is not set this early. -->
+      <_OwlKeyFile Include="$(AssemblyOriginatorKeyFile)"
+                   Condition="'$(SignAssembly)' == 'true' and '$(AssemblyOriginatorKeyFile)' != ''" />
     </ItemGroup>
 
     <ItemGroup>
+      <_OwlLine Include="language=$(Language)" />
       <_OwlLine Include="projectFile=$(MSBuildProjectFullPath)" />
       <_OwlLine Include="projectDir=$(MSBuildProjectDirectory)" />
       <_OwlLine Include="assemblyName=$(AssemblyName)" />
@@ -43,6 +53,31 @@
       <_OwlLine Include="outputType=$(OutputType)" />
       <_OwlLine Include="assemblyVersion=$(Version)" />
       <_OwlLine Include="@(_OwlDefine->'define=%(Identity)')" />
+
+      <!-- The signing key, because it is part of the assembly's identity and identity is what
+           decides whether an InternalsVisibleTo naming this assembly applies to it. A dependency
+           that opens its internals to a signed friend closes them again to an unsigned
+           compilation of that same friend, which reads as a wall of inaccessibility errors in code
+           that builds perfectly well. -->
+      <_OwlLine Include="@(_OwlKeyFile->'keyFile=%(FullPath)')" />
+
+      <!-- VB only, and none of it optional. RootNamespace above is a compiler option in VB rather
+           than an IDE default, so it wraps every declaration in the assembly; the Import items are
+           namespaces vbc is handed on the command line and that appear in no source file; and the
+           Option* settings decide whether the code binds at all. Getting any of them wrong does not
+           fail loudly - it silently produces a model of a different assembly. -->
+      <_OwlLine Include="@(Import->'import=%(Identity)')" />
+      <_OwlLine Include="optionStrict=$(OptionStrict)" />
+      <_OwlLine Include="optionExplicit=$(OptionExplicit)" />
+      <_OwlLine Include="optionInfer=$(OptionInfer)" />
+      <_OwlLine Include="optionCompare=$(OptionCompare)" />
+      <_OwlLine Include="vbRuntime=$(VBRuntime)" />
+
+      <!-- VB's constants are name=value pairs joined by ',', not the bare ';'-joined names C# uses,
+           and they live in a differently-named property. Emitted raw on one line because Include=
+           splits on ';' and never on ',': splitting it here would need string surgery MSBuild has
+           no good way to do, while Roslyn ships the same parser vbc uses for exactly this string. -->
+      <_OwlLine Include="vbDefines=$(FinalDefineConstants)" />
       <_OwlLine Include="@(Compile->'compile=%(FullPath)')" />
       <!-- ReferencePath, not ReferencePathWithRefAssemblies: the latter is populated by
            FindReferenceAssembliesForReferences (part of the CoreCompile chain), not by

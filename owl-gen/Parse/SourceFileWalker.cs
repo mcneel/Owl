@@ -13,8 +13,16 @@ sealed class DeclaredSymbol
   /// <summary>The symbol this declaration introduces.</summary>
   public required ISymbol Symbol { get; init; }
 
-  /// <summary>Its doc comment, or null when it carries none.</summary>
-  public DocumentationCommentTriviaSyntax? Doc { get; init; }
+  /// <summary>
+  /// Its doc comment, or null when it carries none.
+  /// </summary>
+  /// <remarks>
+  /// Held as a plain <see cref="SyntaxNode"/> because the two languages have
+  /// their own <c>DocumentationCommentTriviaSyntax</c> and neither derives from
+  /// the other. <see cref="DocCommentParser"/> is what reads one, through the
+  /// language's <see cref="IDocXmlReader"/>.
+  /// </remarks>
+  public SyntaxNode? Doc { get; init; }
 
   /// <summary>The declaring syntax node, which fixes the source line.</summary>
   public required SyntaxNode Node { get; init; }
@@ -33,7 +41,28 @@ sealed class DeclaredSymbol
 }
 
 /// <summary>
-/// Harvests documentation comments and source locations from one syntax tree.
+/// Harvests documentation comments and source locations from one syntax tree,
+/// whichever language it is written in.
+/// </summary>
+static class SourceFileWalker
+{
+  /// <summary>
+  /// Walks one tree and returns every documented declaration found in it.
+  /// </summary>
+  /// <remarks>
+  /// Dispatching on the model's own language rather than on anything owl was told keeps this honest
+  /// for a compilation assembled from somewhere other than a capture.
+  /// </remarks>
+  public static List<DeclaredSymbol> Walk(SemanticModel model)
+  {
+    return model.Language == LanguageNames.VisualBasic
+        ? VisualBasicWalker.Walk(model)
+        : CSharpWalker.Walk(model);
+  }
+}
+
+/// <summary>
+/// The C# pass: documentation comments and source locations from one tree.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -57,12 +86,12 @@ sealed class DeclaredSymbol
 /// be the documented one.
 /// </para>
 /// </remarks>
-sealed class SourceFileWalker : CSharpSyntaxWalker
+sealed class CSharpWalker : CSharpSyntaxWalker
 {
   readonly SemanticModel _model;
   readonly List<DeclaredSymbol> _declarations = [];
 
-  SourceFileWalker(SemanticModel model) : base(SyntaxWalkerDepth.StructuredTrivia)
+  CSharpWalker(SemanticModel model) : base(SyntaxWalkerDepth.StructuredTrivia)
   {
     _model = model;
   }
@@ -72,7 +101,7 @@ sealed class SourceFileWalker : CSharpSyntaxWalker
   /// </summary>
   public static List<DeclaredSymbol> Walk(SemanticModel model)
   {
-    var walker = new SourceFileWalker(model);
+    var walker = new CSharpWalker(model);
     walker.Visit(model.SyntaxTree.GetRoot());
     return walker._declarations;
   }

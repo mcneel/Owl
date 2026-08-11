@@ -12,6 +12,18 @@ namespace Owl.Gen.Load;
 /// </remarks>
 sealed class ProjectInputs
 {
+  /// <summary>
+  /// The language MSBuild compiles this project with: "C#" or "VB".
+  /// </summary>
+  /// <remarks>
+  /// Read from $(Language) rather than the project's extension, so it is the build's own answer and
+  /// not a guess from a file name.
+  /// </remarks>
+  public string Language { get; private set; } = "";
+
+  /// <summary>Whether this project is Visual Basic.</summary>
+  public bool IsVisualBasic => Language.Equals("VB", StringComparison.OrdinalIgnoreCase);
+
   /// <summary>Full path of the project file these inputs came from.</summary>
   public string ProjectFile { get; private set; } = "";
 
@@ -23,7 +35,14 @@ sealed class ProjectInputs
   /// </summary>
   public string AssemblyName { get; private set; } = "";
 
-  /// <summary>The project's default namespace.</summary>
+  /// <summary>
+  /// The project's default namespace.
+  /// </summary>
+  /// <remarks>
+  /// Only C# treats this as a default. In VB it is a compiler option that wraps every declaration in
+  /// the assembly, so dropping it there does not lose a fallback - it renames every namespace in the
+  /// model.
+  /// </remarks>
   public string RootNamespace { get; private set; } = "";
 
   /// <summary>
@@ -42,6 +61,19 @@ sealed class ProjectInputs
   /// <summary>Assembly version, recorded in the model.</summary>
   public string? AssemblyVersion { get; private set; }
 
+  /// <summary>
+  /// Full path of the strong-name key this assembly is signed with, or "" when
+  /// it is not signed.
+  /// </summary>
+  /// <remarks>
+  /// Needed for reading, not for emitting: the key decides the compilation's
+  /// assembly identity, and identity is what an
+  /// <c>InternalsVisibleTo</c> in a dependency is matched against. Without it,
+  /// every internal a friend assembly legitimately reaches into comes back
+  /// inaccessible.
+  /// </remarks>
+  public string KeyFile { get; private set; } = "";
+
   /// <summary>Whether unsafe blocks parse.</summary>
   public bool AllowUnsafe { get; private set; }
 
@@ -51,10 +83,51 @@ sealed class ProjectInputs
   public string? Nullable { get; private set; }
 
   /// <summary>
-  /// Preprocessor constants. Getting these wrong silently drops whole
+  /// Preprocessor constants, for C#. Getting these wrong silently drops whole
   /// <c>#if</c> regions from the output, with no diagnostic.
   /// </summary>
   public List<string> Defines { get; } = [];
+
+  /// <summary>
+  /// The same thing for VB, still in the form vbc is handed: name=value pairs
+  /// joined by commas.
+  /// </summary>
+  /// <remarks>
+  /// Left unparsed on purpose. VB constants carry values - <c>DEBUG=-1</c>,
+  /// <c>_MyType="Empty"</c> - and Roslyn exposes the very parser vbc uses for
+  /// this string, so splitting it here would only be a second, worse
+  /// implementation of it. See <see cref="CompilationBuilder"/>.
+  /// </remarks>
+  public string VbDefines { get; private set; } = "";
+
+  /// <summary>
+  /// Namespaces vbc is told to import for every file, from the project's
+  /// <c>Import</c> items.
+  /// </summary>
+  /// <remarks>
+  /// These appear in no source file, so without them a VB project that leans on
+  /// them - which is most of them, since the SDK supplies eight by default -
+  /// fails to bind almost everything.
+  /// </remarks>
+  public List<string> Imports { get; } = [];
+
+  /// <summary>Off, On, or Custom. Empty means the compiler's default.</summary>
+  public string OptionStrict { get; private set; } = "";
+
+  /// <summary>Whether undeclared locals are an error. Default On.</summary>
+  public string OptionExplicit { get; private set; } = "";
+
+  /// <summary>Whether local types are inferred. Default On.</summary>
+  public string OptionInfer { get; private set; } = "";
+
+  /// <summary>Binary or Text, for how strings compare. Default Binary.</summary>
+  public string OptionCompare { get; private set; } = "";
+
+  /// <summary>
+  /// How the VB runtime is supplied: "Embed", a path, or empty for the one among
+  /// the references.
+  /// </summary>
+  public string VbRuntime { get; private set; } = "";
 
   /// <summary>Source files to parse, as full paths.</summary>
   public List<string> Compile { get; } = [];
@@ -103,6 +176,7 @@ sealed class ProjectInputs
       // breaking an older owl-gen that is reusing captured inputs.
       switch (key)
       {
+        case "language": inputs.Language = value; break;
         case "projectFile": inputs.ProjectFile = value; break;
         case "projectDir": inputs.ProjectDir = value; break;
         case "assemblyName": inputs.AssemblyName = value; break;
@@ -111,11 +185,19 @@ sealed class ProjectInputs
         case "langVersion": inputs.LangVersion = value; break;
         case "outputType": inputs.OutputType = value; break;
         case "assemblyVersion": inputs.AssemblyVersion = value; break;
+        case "keyFile": inputs.KeyFile = value; break;
         case "allowUnsafe": inputs.AllowUnsafe = value.Equals("true", StringComparison.OrdinalIgnoreCase); break;
         case "nullable": inputs.Nullable = value; break;
         case "define": inputs.Defines.Add(value); break;
         case "compile": inputs.Compile.Add(value); break;
         case "reference": inputs.References.Add(value); break;
+        case "vbDefines": inputs.VbDefines = value; break;
+        case "import": inputs.Imports.Add(value); break;
+        case "optionStrict": inputs.OptionStrict = value; break;
+        case "optionExplicit": inputs.OptionExplicit = value; break;
+        case "optionInfer": inputs.OptionInfer = value; break;
+        case "optionCompare": inputs.OptionCompare = value; break;
+        case "vbRuntime": inputs.VbRuntime = value; break;
       }
     }
 
@@ -129,6 +211,10 @@ sealed class ProjectInputs
     // would give Roslyn duplicate declarations.
     Dedupe(inputs.Compile);
     Dedupe(inputs.References);
+
+    // The SDK supplies its own Import items on top of the project's, so a project that spells out one
+    // of the eight it already gets lists it twice.
+    Dedupe(inputs.Imports);
 
     return inputs;
   }
