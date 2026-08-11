@@ -164,3 +164,179 @@ holds a diagram, so owl-site probes on meeting the first one and leaves the
 fence as a code block otherwise; requiring it up front would stop every project
 that has never drawn anything. Naming one with `--d2` is different, and does
 stop the run — asking for a particular binary is asking for it to work.
+
+## Owl vs docify
+
+[docify](https://github.com/mcneel/docify) is the generator owl replaces: a
+Roslyn syntax walker over a directory of `.cs` files, feeding a hand-built JSON
+string to a Vue app. It works, and it has run RhinoCommon's published API docs
+for years. The difference is not that owl parses more carefully — it is that
+owl parses a *compilation* and docify parses *text*, and almost everything
+below follows from that one choice. File references are `docify/src/Parse/…`
+for docify and paths relative to the repo root for owl.
+
+### Symbols instead of syntax
+
+Docify calls `CSharpSyntaxTree.ParseText` on one file at a time, with no
+references and no semantic model (`SourceFileWalker.cs:10`). Every question
+after that has to be answered from the characters the author typed, and the
+answers are approximations:
+
+- **Type names are whatever was written.** `ParsedMember.FullTypeName` maps the
+  fourteen C# keywords by hand, then tries three hard-coded assemblies —
+  `System.Runtime`, `System.Collections`, `System.Collections.Specialized`
+  (`ParsedMember.cs:60`) — and otherwise returns the raw source string.
+  `Point3d`, `IEnumerable<Brep>` and any `using`-aliased name come out
+  unresolved. Owl gets qualified, generic-aware displays from a
+  `SymbolDisplayFormat` (`owl-gen/Parse/DisplayFormats.cs`).
+- **Accessibility is string matching.** `modifier.Text == "public"`
+  (`CodeAnalysisExtensions.cs:19`), every interface member reported as protected
+  (`ParsedMember.cs:199`), no `protected internal` or `private protected`, and
+  type filtering that checks only the type's own modifiers
+  (`Program.cs:176`) — so `internal class Outer { public class Inner { } }`
+  publishes `Inner`. Owl reads `DeclaredAccessibility`, recurses containing
+  types (`owl-gen/Parse/ApiBuilder.cs:238`), and deliberately re-surfaces
+  explicit interface implementations, which report as private but are part of
+  the contract (`ApiBuilder.cs:264`).
+- **Signatures are built by slicing.** Hunting `'<'` and `'.'` positions in type
+  text (`ParsedMember.cs:316`), `LastIndexOf('\n')` for fields (`:371`),
+  `Replace("public ", "")` for operators (`:394`), and a
+  `NotImplementedException` for anything unmatched (`:508`). `[Obsolete]`
+  messages come from splitting the attribute's source text on `(` and `)` and
+  taking element 1 (`CodeAnalysisExtensions.cs:54`), so
+  `[Obsolete("Use Bar(int) instead")]` yields `Use Bar`. Owl emits ref kinds,
+  `params`, optional flags and default values, generic constraints and variance,
+  const values, `init`-only setters, per-accessor accessibility, and structured
+  obsolete data with its `isError` (`ApiBuilder.cs:495`, `:759`).
+- **Partial types need a merge heuristic.** Docify merges by name, last writer
+  wins on documentation, and throws on mismatch (`ParsedType.cs:37`) — so which
+  file wins depends on directory enumeration order. One `INamedTypeSymbol`
+  already *is* every declaration, so owl needs no merge at all; the walker
+  records each declaration and the builder keeps whichever one carries a doc
+  comment rather than trusting `DeclaringSyntaxReferences[0]`
+  (`ApiBuilder.cs:160`).
+- **Whole declaration forms are invisible.** Docify's walker has no override for
+  file-scoped namespaces, records, destructors, conversion operators, or the
+  individual variables of a multi-declarator field. The first of those is not
+  cosmetic: with only `NamespaceDeclarationSyntax` visited, every type in a
+  `namespace Foo;` file resolves with an empty namespace and is then dropped
+  outright (`JsonBuilder.cs:196`). Owl covers all five
+  (`owl-gen/Parse/SourceFileWalker.cs:124`, `:154`, `:191`, `:233`, `:257`).
+
+Source locations are the one piece of the model that only a compilation can
+supply, and owl carries a repo-relative file and line for every symbol
+(`ApiBuilder.cs:932`). Docify keeps a raw `SpanStart` int.
+
+### The input set is captured, not guessed
+
+The section on `WriteOwlInputs` above covers why owl asks MSBuild. Docify
+guesses, in three places that each drop API silently:
+
+- Preprocessor symbols are hard-coded to a single `RHINO_SDK`
+  (`SourceFileWalker.cs:12`), so anything behind another `#if` is invisible.
+- Sources are every `*.cs` under a directory, filtered by heuristics — including
+  `file.Contains("\\obj\\")` (`Program.cs:207`), which never matches on macOS or
+  Linux, so build intermediates are parsed there.
+- There are no references at all, which is what makes everything in the previous
+  section approximate.
+
+### Documentation comments
+
+This is the widest gap. Docify stringifies the comment, strips `///`, and
+`LoadXml`s the result (`XmlDocumentedItem.cs:221`):
+
+- Prose is rewritten before parsing: `"null " → "None "`, `"true " → "True "`,
+  `"false " → "False "` (`:228`). Every summary in the corpus is edited.
+- `LoadXml` is uncaught, so one unescaped `&` or `<` takes the run down. Owl
+  reads Roslyn's XML *syntax* and never a raw string; the one string-XML path,
+  for metadata symbols, is guarded (`owl-gen/Parse/DocCommentParser.cs:441`).
+- Crefs are discarded. `<see>` becomes bold text from `child.Attributes[0]` —
+  the first attribute, whatever it happens to be — under a literal
+  `// TODO: linkify` (`XmlDocumentedItem.cs:111`). Owl binds the cref through
+  the semantic model to a symbol, keeps its doc id, and marks it internal or
+  external so the site can render an anchor (`DocCommentParser.cs:382`), with
+  the `langword` and `href` forms handled separately (`:234`).
+- `inheritdoc`, `paramref`, `typeparamref`, `typeparam`, `exception`, `value`,
+  `note` and `br` are not implemented at all — they render as nothing. Owl
+  handles each, plus `list`/`listheader`/`term`/`description`, and recurses into
+  unknown tags so their text is not dropped (`DocCommentParser.cs:104`).
+- Tag lookup is `GetElementsByTagName`, which matches anywhere in the document
+  (`XmlDocumentedItem.cs:82`), so a `<returns>` or `<param>` written inside an
+  `<example>` can be picked up as the member's own.
+- Whitespace is trimmed per fragment (`:180`), which welds words to links. Owl's
+  `Collapse(keepEdges: true)` exists precisely to keep
+  `implementation of <see cref="IStorage"/> interface` readable
+  (`DocCommentParser.cs:733`).
+- `<code source="…">` is read, but only as a side channel: a separate pass
+  collects the `source` attributes under `<example>`
+  (`XmlDocumentedItem.cs:195`) and writes them to a second file, keyed by path,
+  with a bare `ReadAllText` and no existence check (`JsonBuilder.cs:662`).
+  `region` is not supported anywhere. Owl resolves the path against several
+  roots, extracts the named region with nesting handled, dedents, and on failure
+  still emits a node carrying the path so the page can name the missing example
+  (`DocCommentParser.cs:798`).
+
+`<inheritdoc/>` deserves its own note. Owl resolves it against base types,
+overridden members, and both explicit and *implicit* interface implementations,
+with cycle and depth guards, preferring blocks parsed in this run so crefs stay
+structured, and falling back to `GetDocumentationCommentXml()` only for
+genuinely external bases (`ApiBuilder.cs:990`). That fallback is why the capture
+insists on `ReferencePath`: implementation assemblies ship the sibling `.xml`
+files.
+
+### Relationships and identity
+
+Owl emits the inheritance chain, `Interfaces` and `AllInterfaces`, `Overrides`,
+and `Implements` — including implicit interface satisfaction found through
+`FindImplementationForInterfaceMember`, which is invisible in the compiler's own
+doc XML (`ApiBuilder.cs:376`, `:602`). Derived types are linked across the whole
+documented set at emit time, so a type can list subclasses declared in a sibling
+project (`owl-gen/Emit/JsonEmitter.cs:77`).
+
+Docify's equivalent is `GetBaseList` returning raw source strings with a
+`"Runtime.CommonObject" → "CommonObject"` hack (`ParsedType.cs:233`), and
+base-vs-interface classification by naming convention — starts with `I`, next
+character uppercase — annotated `// TODO: guessing based on .Net naming
+conventions` (`JsonBuilder.cs:236`). Types are keyed by short name, last one
+wins across namespaces (`JsonBuilder.cs:59`), and that dictionary is what base
+references resolve against. Owl keys everything by ECMA doc id, routed through
+`OriginalDefinition` both to dodge a real Roslyn `NullReferenceException` on
+constructed generics and because documentation lives on the open definition
+(`owl-gen/Model/DocIds.cs:5`), unwraps arrays and pointers so `Brep[]` links to
+`Brep` (`:58`), and dedupes page anchors (`ApiBuilder.cs:718`).
+
+The clearest single measure of the gap: because a syntactic parser cannot see
+through a BCL base type, docify needed a separate 523-line reflection subsystem
+that re-resolves base types out of the reference assemblies and keys them by a
+normalized short-name token (`BclMetadata.cs:26`). Owl gets inherited BCL
+members from metadata references it has already loaded.
+
+### Failure behavior
+
+Owl accumulates findings — compilation errors, unresolved crefs, missing example
+files, undocumented public members — prints them, and turns them into an exit
+code under `--verify` (`owl-gen/Program.cs:100`, `:155`). The undocumented list
+is the only place that information surfaces at all, since projects routinely
+suppress CS1591; it is reported but deliberately does not fail the run, or the
+gate would be useless on any real codebase. Docify has no diagnostics path.
+
+Output integrity differs the same way. Owl serializes with `System.Text.Json`
+into a temp file and moves it into place, so a crashed run never leaves a
+half-written document for the site to choke on (`JsonEmitter.cs:54`). Docify
+concatenates JSON — or JS with backtick template literals — by hand, with a
+bespoke `JsonQuote` that drops `\r`, trims lines conditionally on whether the
+string contains `<pre>`, and never escapes control characters
+(`JsonBuilder.cs:97`); comma placement is ten hand-maintained "is any later
+section non-null" chains (`:288`).
+
+### What docify buys for that
+
+Worth stating plainly, because it is the one thing owl gives up: docify runs
+over any folder of `.cs` with no restore, no references and no build. That is
+why it survived on a source tree that cannot always be built. Owl needs the
+project to restore and its project references to compile, which costs
+wall-clock time per run and makes fidelity depend on a clean build — it reports
+errors and carries on rather than stopping, but a project full of them yields
+correspondingly less. Docify's own README names the price of the other
+approach: some namespaces need `methodgen` run over the source first, and the
+BCL subsystem exists only because the parser cannot see inherited members.
