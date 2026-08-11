@@ -80,49 +80,15 @@ function parseArgs(argv) {
       case '--skip-undocumented':
         options.skipUndocumented = true;
         break;
-      case '-h':
-      case '--help':
-        options.help = true;
-        break;
       default:
-        throw new Error(`Unknown argument '${arg}'. Try --help.`);
+        throw new Error(`Unknown argument '${arg}'. Try 'owl --help'.`);
     }
   }
 
   return options;
 }
 
-function usage() {
-  console.log(`
-Serve a generated API documentation model.
-
-Usage:
-  node serve.js --json <dir> [port]
-
-Options:
-  --json <dir>      Location of the generated model (required)
-  --docs <dir>      Authored markdown pages; without them the site is browsed by namespace
-  --name <text>     Site name, overriding the one recorded in the model
-  --logo <file>     Header icon, overriding <docs>/logo.svg
-  --logo-dark <file>  Header icon for the dark theme; optional, --logo covers both
-  --port <n>        Port to listen on (default 8080)
-  --base <path>     Serve under a path prefix
-  --site-url <url>  Origin used for canonical and Open Graph urls
-  --source-refs <path>  Root for "declared in" references; omitted, there are none
-  --d2 <path>       The d2 binary that draws diagram fences (default: d2 from PATH)
-  --skip-undocumented   Leave out anything with no <summary>
-  -h, --help        Show this help
-
-Generate the model first with: owl gen <project.csproj>
-`);
-}
-
 const options = parseArgs(process.argv.slice(2));
-
-if (options.help) {
-  usage();
-  process.exit(0);
-}
 
 let site;
 

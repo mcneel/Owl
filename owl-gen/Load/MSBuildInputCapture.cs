@@ -74,7 +74,7 @@ static class MSBuildInputCapture
     string path = Path.Combine(inputsDir, "owl.targets");
 
     using Stream embedded = typeof(MSBuildInputCapture).Assembly.GetManifestResourceStream("owl.targets")
-        ?? throw new InvalidOperationException("owl.targets is missing from this build of owl-gen.");
+        ?? throw new InvalidOperationException("owl.targets is missing from this build of owl.");
 
     using FileStream file = File.Create(path);
     embedded.CopyTo(file);

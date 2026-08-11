@@ -6,7 +6,8 @@ namespace Owl;
 /// <remarks>
 /// owl only declares the options it has to understand itself. Anything else on a <c>gen</c> command
 /// line is forwarded to owl-gen untouched, so <c>--tfm</c>, <c>--verify</c> and friends work without
-/// being declared in two places and drifting apart.
+/// being parsed in two places and drifting apart. owl's help lists them all the same, being the one
+/// place any of them is documented.
 /// </remarks>
 sealed class Command
 {
@@ -40,9 +41,6 @@ sealed class Command
 
   /// <summary>Site options, passed straight to owl-site.</summary>
   public List<string> SiteArgs { get; } = [];
-
-  /// <summary>Set when the arguments were a request for owl-gen's own help.</summary>
-  public bool ForwardsHelp { get; private set; }
 
   /// <summary>True when projects were given, so the model is written before serving or exporting.</summary>
   public bool Generates => Projects.Count > 0;
@@ -147,13 +145,6 @@ sealed class Command
       }
     }
 
-    // 'owl gen --help' asks about owl-gen's own options, so let it through to owl-gen unchanged.
-    if (command.GenArgs.Contains("-h") || command.GenArgs.Contains("--help"))
-    {
-      command.ForwardsHelp = true;
-      return command;
-    }
-
     if (command.Projects.Count == 0 && command.ModelDir is null)
     {
       throw new OwlError($"owl {name}: pass one or more .csproj paths, or --json <dir> to reuse an existing model.");
@@ -182,11 +173,6 @@ sealed class Command
   /// <summary>Runs the command and returns the exit code to hand back to the shell.</summary>
   public int Run()
   {
-    if (ForwardsHelp)
-    {
-      return Tools.Gen(GenArgs);
-    }
-
     // Before anything is generated or rendered, so a missing prerequisite is a sentence at the
     // start rather than a failure minutes into a build. What is needed depends on the command:
     // generating asks MSBuild what a project compiles, and only serve and build run the site.

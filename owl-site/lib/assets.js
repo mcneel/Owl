@@ -601,14 +601,14 @@ ${TEMML_CSS}
 .member-name a { color: var(--text); text-decoration: none; }
 .member-name a:hover { color: var(--flash); }
 /* The permalink, kept out of sight until the card is pointed at: a column of hashes down a list of
-   sixty members is noise, and the only one worth drawing is the one being read. Focus shows it too,
-   so it is reachable by keyboard rather than by cursor alone. */
-.member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; transition: opacity 0.12s; }
-/* focus-visible, not focus: clicking the mark focuses it, and on plain :focus it then stayed drawn
-   on a card the pointer had long since left - one # lit up somewhere down the page for no reason a
-   reader could see. Keyboard focus still shows it, which is the case the rule is here for: it is the
-   one way to reach a control that is otherwise invisible until hovered. */
-.member:hover .member-anchor, .member-anchor:focus-visible { opacity: 1; }
+   sixty members is noise, and the only one worth drawing is the one being read. */
+.member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; }
+/* Hover and nothing else. Focus was the other half of this rule and focus is what stuck: clicking
+   the mark leaves it focused, and a focused mark is drawn on a card the pointer left long ago -
+   one # lit up down the page for no reason a reader could see. :focus-visible narrows that to
+   keyboard focus in theory, but a click that follows any keyboard use still counts as one, so the
+   reveal is a pointer affordance now and the mark is out of the tab order to match. */
+.member:hover .member-anchor { opacity: 1; }
 .member-anchor:hover { color: var(--flash); }
 .member-fullname { font-size: 0.72rem; color: var(--fullname); font-family: monospace; margin-top: 0.4rem; margin-bottom: 0.45rem; word-break: break-all; }
 .summary { color: var(--text2); line-height: 1.6; font-size: 0.88rem; }

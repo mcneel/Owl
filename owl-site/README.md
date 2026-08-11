@@ -31,7 +31,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
 | `--quiet` | build | Only print the summary, not per-page progress. |
 | `--dist <dir>` | check | Check an already-exported directory instead of rendering. |
-| `-h`, `--help` | all | Show that script's usage. |
+| `-h`, `--help` | check | Show `check.js`'s usage. `serve.js` and `build.js` print none: `owl --help` is the one place every option is documented, so there is nothing here to drift from it. |
 
 `serve.js` also takes a bare port as a positional argument, so `node serve.js --json .owl/json 9000`
 and `--port 9000` are the same thing.

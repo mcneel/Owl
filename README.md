@@ -93,7 +93,8 @@ owl gen <project.csproj...>
   --tfm <tfm>           Target framework to document (default net8.0)
   -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
   --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
-  --examples <dir>      Root for <code source="..."/> paths (default: project dir, repo root)
+  --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
+                        directory and the repo root
   --skip-msbuild        Reuse previously captured project inputs
   --no-restore          Skip the restore pass before capturing inputs
   --verify              Report undocumented public API and unresolved crefs

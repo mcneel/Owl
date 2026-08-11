@@ -6,7 +6,9 @@ using Owl;
 // This is a front-end over two independent tools, both sitting next to this binary: owl-gen writes
 // the documentation model, and owl-site renders it. The model on disk is the only thing they share.
 
-if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+// Help anywhere on the line, so 'owl gen --help' is answered here too. owl documents every option
+// the tools behind it accept, and they print no usage of their own to drift from this one.
+if (args.Length == 0 || args[0] is "help" || args.Contains("-h") || args.Contains("--help"))
 {
   PrintUsage();
   return 0;
@@ -67,6 +69,22 @@ static void PrintUsage()
       --docs <dir>          Authored markdown pages (default docs/api, when it exists)
                             Without them the site is browsed by namespace alone
       --name <text>         Site name
+      -h, --help            Show this help
+      --version             Print owl's version
+
+    Model options, for what the documentation is generated from:
+      --tfm <tfm>           Target framework to document (default net8.0)
+      -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
+      --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
+      --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
+                            directory and the repo root
+      --skip-msbuild        Reuse previously captured project inputs
+      --no-restore          Skip the restore pass before capturing inputs
+      --verify              Report undocumented public API and unresolved crefs; non-zero exit
+                            on unresolved crefs or compilation errors
+      -v, --verbose         Full diagnostics
+
+    Site options, for serve and build:
       --port <n>            Port for serve (default 8080)
       --base <path>         Path prefix the site will be served under
       --site-url <url>      Origin for canonical urls and the sitemap
@@ -76,11 +94,8 @@ static void PrintUsage()
       --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
       --skip-undocumented   Leave anything with no <summary> out of the site
       --quiet               Only print the summary, not per-page progress (build)
-      -h, --help            Show this help
-      --version             Print owl's version
 
-    serve and build generate first, so they accept everything gen does, including --tfm,
-    --configuration, --examples, --verify and --verbose. Run 'owl gen --help' for the full list.
+    serve and build generate before they render, so both take the model options too.
 
     Requires a .NET SDK (8.0 or newer) to generate, and node (18 or newer) to serve or export.
     Diagrams additionally need the d2 binary; without it a diagram fence stays a code block.

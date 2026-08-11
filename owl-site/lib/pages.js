@@ -2246,7 +2246,10 @@ ${this.seeAlsoHtml(type.docs)}
       chips.map((c) => `<span class="chip chip-${attr(chipSlug(c))}">${escape(c)}</span>`).join('') +
       // Beside the name it links to, and before the Examples button, which the row's own margin
       // holds at the far end: the anchor belongs to the member, not to the action next to it.
-      `<a class="member-anchor" href="#${attr(member.anchor)}" ` +
+      // Out of the tab order, since only the pointer can bring it into view: tabbing onto a mark
+      // that stays invisible is worse than not reaching it, and the tree link beside it goes to the
+      // same member. A reader on the page still finds it, which is what the label is for.
+      `<a class="member-anchor" href="#${attr(member.anchor)}" tabindex="-1" ` +
       // Named as the heading beside it is, so the two do not read as different members.
       `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>` +
       exampleButton +

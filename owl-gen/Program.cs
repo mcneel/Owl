@@ -38,18 +38,15 @@ public static class OwlGen
     {
       options = CommandLineOptions.Parse(args);
 
-      if (options.ShowHelp)
-      {
-        CommandLineOptions.PrintUsage(Console.Out);
-        return 0;
-      }
-
       return Generate(options, Console.Out);
     }
     catch (Exception ex)
     {
       Console.Error.WriteLine();
-      Console.Error.WriteLine("owl-gen failed: " + ex.Message);
+
+      // Named for the front-end, not this library: owl is the only thing anyone
+      // runs, so a failure here is a failure of the command they typed.
+      Console.Error.WriteLine("owl: " + ex.Message);
 
       // Options are null when the command line itself was the problem, in which
       // case the message above is the whole story.
@@ -68,7 +65,7 @@ public static class OwlGen
 
     List<string> projects = options.Projects;
 
-    log.WriteLine($"owl-gen: {projects.Count} project(s), {options.TargetFramework}/{options.Configuration}");
+    log.WriteLine($"owl: {projects.Count} project(s), {options.TargetFramework}/{options.Configuration}");
     log.WriteLine();
 
     // Every assembly being documented, known up front so crefs can be marked internal or external
@@ -134,7 +131,7 @@ public static class OwlGen
 
     if (assemblies.Count == 0)
     {
-      Console.Error.WriteLine("owl-gen: nothing was documented");
+      Console.Error.WriteLine("owl: nothing was documented");
       return 1;
     }
 
@@ -238,8 +235,9 @@ sealed class CommandLineOptions
   public string RepoRoot { get; private set; } = "";
 
   /// <summary>
-  /// Where a &lt;code source="..."/&gt; path is rooted. Null leaves it to the
-  /// project directory and the repo root, which is right for most layouts.
+  /// An extra directory a &lt;code source="..."/&gt; path is tried against, ahead
+  /// of the project directory and the repo root. Null is right for most
+  /// layouts, which write those paths against one of the two.
   /// </summary>
   public string? ExamplesRoot { get; private set; }
 
@@ -269,9 +267,6 @@ sealed class CommandLineOptions
 
   /// <summary>Print full diagnostic lists rather than the first few.</summary>
   public bool Verbose { get; private set; }
-
-  /// <summary>Set when the arguments only asked for usage.</summary>
-  public bool ShowHelp { get; private set; }
 
   /// <summary>
   /// The captured MSBuild inputs, kept under the model directory.
@@ -303,11 +298,6 @@ sealed class CommandLineOptions
 
       switch (arg)
       {
-        case "-h":
-        case "--help":
-          options.ShowHelp = true;
-          break;
-
         case "-o":
         case "--out":
           options.OutputDirectory = Path.GetFullPath(Next(args, ref i, arg));
@@ -354,7 +344,7 @@ sealed class CommandLineOptions
         default:
           if (arg.StartsWith('-'))
           {
-            throw new ArgumentException($"Unknown argument '{arg}'. Try --help.");
+            throw new ArgumentException($"Unknown argument '{arg}'. Try 'owl --help'.");
           }
 
           options.Projects.Add(ResolveProject(arg));
@@ -362,14 +352,9 @@ sealed class CommandLineOptions
       }
     }
 
-    if (options.ShowHelp)
-    {
-      return options;
-    }
-
     if (options.Projects.Count == 0)
     {
-      throw new ArgumentException("No project given. Pass one or more .csproj paths. Try --help.");
+      throw new ArgumentException("No project given. Pass one or more .csproj paths. Try 'owl --help'.");
     }
 
     if (options.OutputDirectory.Length == 0)
@@ -429,36 +414,5 @@ sealed class CommandLineOptions
     }
 
     return null;
-  }
-
-  /// <summary>Writes the usage text.</summary>
-  public static void PrintUsage(TextWriter output)
-  {
-    output.WriteLine(
-      """
-      owl-gen - write the documentation model for one or more .NET projects
-
-      Usage:
-        owl-gen <project.csproj...> --out <dir> [options]
-
-      Options:
-        -o, --out <dir>       Where to write the model (required)
-        --name <text>         Site name, recorded in the model
-        --tfm <tfm>           Target framework to document (default: net8.0)
-        -c, --configuration   Build configuration (default: Debug)
-        --repo-root <dir>     Root that source paths are made relative to (default: git root)
-        --examples <dir>      Root for <code source="..."/> paths (default: project dir, repo root)
-        --skip-msbuild        Reuse previously captured project inputs
-        --no-restore          Skip the restore pass before capturing inputs
-        --verify              Report undocumented public API and unresolved crefs; non-zero exit
-                              on unresolved crefs or compilation errors
-        -v, --verbose         Full diagnostics and stack traces
-        -h, --help            Show this help
-
-      Examples:
-        owl-gen src/MyLib/MyLib.csproj --out .owl/json
-        owl-gen src/MyLib/MyLib.csproj --out .owl/json --name "MyLib API" --verify
-        owl-gen src/A/A.csproj src/B/B.csproj --out .owl/json
-      """);
   }
 }

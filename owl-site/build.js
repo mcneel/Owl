@@ -71,51 +71,18 @@ function parseArgs(argv) {
       case '--quiet':
         options.quiet = true;
         break;
-      case '-h':
-      case '--help':
-        options.help = true;
-        break;
       default:
-        throw new Error(`Unknown argument '${argv[i]}'. Try --help.`);
+        throw new Error(`Unknown argument '${argv[i]}'. Try 'owl --help'.`);
     }
   }
 
   return options;
 }
 
-function usage() {
-  console.log(`
-Export a generated API documentation model as a static site.
-
-Usage:
-  node build.js --json <dir> --out <dir> [--base /prefix] [--site-url https://host]
-
-Options:
-  --json <dir>      Location of the generated model (required)
-  --out <dir>       Output directory (required)
-  --docs <dir>      Authored markdown pages; without them the site is browsed by namespace
-  --name <text>     Site name, overriding the one recorded in the model
-  --logo <file>     Header icon, overriding <docs>/logo.svg
-  --logo-dark <file>  Header icon for the dark theme; optional, --logo covers both
-  --base <path>     Path prefix the site will be served under
-  --site-url <url>  Origin for canonical urls, Open Graph tags and the sitemap
-  --source-refs <path>  Root for "declared in" references; omitted, there are none
-  --d2 <path>       The d2 binary that draws diagram fences (default: d2 from PATH)
-  --skip-undocumented   Leave out anything with no <summary>
-  --quiet           Only print the summary
-  -h, --help        Show this help
-`);
-}
-
 const options = parseArgs(process.argv.slice(2));
 
-if (options.help) {
-  usage();
-  process.exit(0);
-}
-
 if (!options.out) {
-  console.error('build.js: --out is required. Try --help.');
+  console.error("build.js: --out is required. Try 'owl --help'.");
   process.exit(2);
 }
 

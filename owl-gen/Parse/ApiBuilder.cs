@@ -68,7 +68,8 @@ sealed class ApiBuilder
   /// </param>
   /// <param name="findings">Findings accumulate here across all projects.</param>
   /// <param name="examplesRoot">
-  /// Where &lt;code source="..."/&gt; paths are rooted, when one was given.
+  /// An extra root &lt;code source="..."/&gt; paths are tried against before the
+  /// project directory and the repo root, when one was given.
   /// </param>
   public ApiBuilder(
       CSharpCompilation cmpl,
@@ -83,11 +84,13 @@ sealed class ApiBuilder
     _repoRoot = root;
     _findings = findings;
 
-    // An explicit root answers on its own. Without one, the two directories such a path is
-    // usually written against are tried in the order that a narrower guess comes first.
+    // The two directories such a path is usually written against, in the order that a narrower
+    // guess comes first, with an explicit root ahead of both. Naming one adds a place to look
+    // rather than replacing these: a caller reaching for examples kept outside the tree should not
+    // thereby lose the ones already resolving beside the project.
     List<string> exampleRoots = examplesRoot is null
         ? [inputs.ProjectDir, root]
-        : [examplesRoot];
+        : [examplesRoot, inputs.ProjectDir, root];
 
     _docParser = new DocCommentParser(
         apis,
