@@ -272,7 +272,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-ns { border-bottom: 1px solid var(--border); }
 /* Sits above the groups rather than inside one, so it gets the group row's padding back. */
 .tree-overview .tree-type-label { padding: 0.5rem 0.75rem; }
-.tree-ns-label { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; user-select: none; background: none; border: none; width: 100%; text-align: left; font-family: inherit; }
+.tree-ns-label { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; user-select: none; background: var(--bg2); border: none; width: 100%; text-align: left; font-family: inherit; }
 .tree-ns-label:hover { background: var(--bg3); color: var(--text); }
 /* A namespace row, which is a step in the nesting rather than a heading over it: written like the
    type rows under it and marked with the namespace drawing, so the tree reads as one tree. The rule
@@ -286,7 +286,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-arrow.collapsed { transform: rotate(-90deg); }
 .tree-arrow-spacer { display: inline-block; width: 1rem; flex-shrink: 0; }
 .tree-ns-children.collapsed { display: none; }
-.tree-type-label { display: flex; align-items: center; padding: 0.28rem 0.75rem; cursor: default; user-select: none; }
+.tree-type-label { display: flex; align-items: center; padding: 0.28rem 0.75rem; cursor: default; user-select: none; background: var(--bg2); }
 .tree-type-label:hover { background: var(--bg3); }
 /* A namespace row is a type row with a namespace on it: the same box, the same drawing column, and
    the same split between an arrow that opens it and a name that goes to its page. */
@@ -316,7 +316,13 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    the kind badge beside it and never as a kind of its own. */
 .tree-badge-static { background: none; border: 1px solid var(--text4); color: var(--text3); }
 .tree-badge svg { display: block; width: 0.72rem; height: 0.72rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-.tree-type-children { padding-left: 0.25rem; }
+/* The member rows hang off the arrow that opened them, which is the one thing left on screen saying
+   where the list came from once its type has scrolled away. Drawn once from the container rather
+   than a segment per row: the rows are a single run and the line through them is a single line.
+   Placed on the arrow's centre - the row's 0.75rem edge plus half the 1rem arrow column - which is
+   0.75rem clear of where the names start. */
+.tree-type-children { position: relative; padding-left: 0.25rem; }
+.tree-type-children::before { content: ''; position: absolute; left: 1.25rem; top: 0; bottom: 0; border-left: 1px solid var(--border2); }
 .tree-type-children.collapsed { display: none; }
 /* The tree's own ink, the same one the type rows above them are written in: a member row is a row
    like any other, and dimming the whole list said 'less important' about every member there is.
@@ -343,6 +349,28 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-inherited-toggle { background: none; border: none; padding: 0 0.15rem; cursor: pointer; color: var(--text4); display: inline-flex; align-items: center; flex-shrink: 0; }
 .tree-inherited-toggle:hover { color: var(--text); }
 .tree-inherited-toggle[aria-pressed="true"] { color: var(--text2); }
+
+/* ---- Tree: a branch names itself while you are inside it ---- */
+/* A namespace of a few hundred types, or a type of a few hundred members, is taller than the column
+   it is read in, so the row naming it is off screen for most of the scrolling. Both rows hold their
+   place instead - the namespace or category at the top, the type on the line under it - and each
+   only for as long as its own contents are on screen, so passing out of a branch hands the two
+   slots to the next one.
+   Where the type row pins is where the group row ends, so the two are one number. The two group
+   shapes are not the same height - a category heading is text and an arrow at 0.5rem padding, a
+   namespace row is a kind drawing at 0.28rem - so the number is written per shape, and written onto
+   the row as a height as well, which is what keeps the offset and the height from drifting apart
+   into a gap or an overlap. */
+.sidebar { --tree-head: 2rem; }
+.tree-ns-plain { --tree-head: 1.66rem; }
+.tree-ns-label { min-height: var(--tree-head); }
+.tree-ns-plain > .tree-type-label { min-height: var(--tree-head); }
+/* Stacked, so the outer row covers the inner one and both cover the guide line running past them.
+   The Overview row is left out: it is a group of one row with nothing under it, so pinning it buys
+   no name and only puts it over the row below. */
+.tree-ns > .tree-ns-label,
+.tree-ns:not(.tree-overview) > .tree-type-label { position: sticky; top: 0; z-index: 2; }
+.tree-type > .tree-type-label { position: sticky; top: var(--tree-head); z-index: 1; }
 
 /* ---- Main content ---- */
 /* No padding at the top. It sits inside the scrollport, so a sticky child stops below it and
