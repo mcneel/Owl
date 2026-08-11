@@ -196,8 +196,14 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 
 /* ---- Header search results ----
    Hangs off the form, which is the positioned element, and takes the page's colours rather than
-   the header's: it is content the header happens to be pointing at, not part of the bar. */
-.nav-results { position: absolute; top: calc(100% + 0.35rem); left: 0; width: 30rem; max-width: 80vw; max-height: 70vh; overflow-y: auto; z-index: 40; background: var(--bg2); border: 1px solid var(--border2); border-radius: 5px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); padding: 0.25rem; }
+   the header's: it is content the header happens to be pointing at, not part of the bar.
+
+   Anchored to the field's right edge rather than its left. The panel is nearly twice the width of
+   the field it drops from, and the field sits at the right end of the header with the selectors and
+   the theme toggle after it - so hung off the left, the extra width ran off the right of the site
+   and a body that does not scroll sideways cut it off. Rightward there is nothing to grow into;
+   leftward there is the whole of the title's slack, which is where the width has to come from. */
+.nav-results { position: absolute; top: calc(100% + 0.35rem); right: 0; width: 30rem; max-width: 80vw; max-height: 70vh; overflow-y: auto; z-index: 40; background: var(--bg2); border: 1px solid var(--border2); border-radius: 5px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); padding: 0.25rem; }
 .nav-results[hidden] { display: none; }
 .nav-result { display: flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.82rem; color: var(--text); text-decoration: none; }
 .nav-result:hover, .nav-result.active { background: var(--bg3); }
@@ -273,7 +279,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    between groups goes with the heading look - forty of them under a list of rows is a grid, not a
    separation - which leaves category mode's headings as the two modes' visible difference. */
 .tree-ns-plain { border-bottom: none; }
-.tree-ns-plain > .tree-ns-label { gap: 0.35rem; padding: 0.28rem 0.75rem; font-size: 0.82rem; font-weight: 400; color: var(--text2); text-transform: none; letter-spacing: normal; }
 /* A square, so the rotation below turns about its centre and the arrow does not drift sideways. */
 .tree-arrow { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex-shrink: 0; transition: transform 0.15s; }
 .tree-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
@@ -283,9 +288,11 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-ns-children.collapsed { display: none; }
 .tree-type-label { display: flex; align-items: center; padding: 0.28rem 0.75rem; cursor: default; user-select: none; }
 .tree-type-label:hover { background: var(--bg3); }
-.tree-link { color: var(--text2); text-decoration: none; font-size: 0.82rem; display: flex; align-items: center; gap: 0.35rem; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tree-link:hover { color: var(--text); }
-.tree-link.active { color: var(--flash); font-weight: 600; }
+/* A namespace row is a type row with a namespace on it: the same box, the same drawing column, and
+   the same split between an arrow that opens it and a name that goes to its page. */
+.tree-link, .tree-ns-link { color: var(--text2); text-decoration: none; font-size: 0.82rem; display: flex; align-items: center; gap: 0.35rem; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tree-link:hover, .tree-ns-link:hover { color: var(--text); }
+.tree-link.active, .tree-ns-link.active { color: var(--flash); font-weight: 600; }
 /* The kind drawings, on the column the lettered squares used to hold: the same box, so the tree's
    left edge is one column whether a row wears a drawing, the Overview page's mark or neither.
    Painted here rather than by whatever draws one: every kind is one ink, so a colour written onto
@@ -322,7 +329,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 /* A shade back from the name, so an overload's parameters read as the tiebreaker they are, with
    a hair of space in front - the row's own 0.35rem gap was far too much. */
 .tree-child-link .tree-sig { color: var(--text4); margin-left: 0.12rem; }
-.tree-toggle { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: inline-flex; align-items: center; }
+.tree-toggle, .tree-ns-toggle { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: inline-flex; align-items: center; }
 /* Inherited rows sit in the list in their alphabetical place, drawn back to the shade the parameter
    types beside them use: there, and plainly not what this type declares. Not drawn at all until the
    arrow at the end of the type's row asks for them. */
@@ -427,7 +434,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .page-title .kind-icon { width: 1.75rem; height: 1.75rem; }
 .page-subtitle { font-family: monospace; font-size: 0.76rem; color: var(--fullname); margin-top: 0.3rem; word-break: break-all; }
 .page-intro { color: var(--text2); font-size: 0.93rem; line-height: 1.6; margin-top: 0.6rem; }
-.page-chips { margin-top: 0.7rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .page-head { margin-bottom: 1.6rem; }
 /* The type's identity stays on screen while its members scroll under it. Bled out to the gutters,
    because .main-content is padded and content would otherwise scroll past either side of it. */
@@ -585,7 +591,7 @@ ${TEMML_CSS}
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
    meant. */
-.badge, .explicit-badge, .tree-badge, .asm-badge, .chip { user-select: none; -webkit-user-select: none; }
+.badge, .explicit-badge, .tree-badge, .chip { user-select: none; -webkit-user-select: none; }
 /* The pill shape, worn by Readonly and SetOnly alone now that a kind is drawn rather than spelled:
    what is left of it says how a property may be used, which is not a kind and takes no part in the
    kind palette. Its ink is the darkest on the page under either theme, hence the white. */
@@ -593,7 +599,11 @@ ${TEMML_CSS}
 .badge-mod { background: var(--badge-mod); color: var(--oc-white); }
 /* The small pill, worn by Explicit alone. */
 .explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
-.asm-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; color: white; margin-left: auto; opacity: 0.85; white-space: nowrap; text-decoration: none; }
+/* Which assembly a card's type came from, pushed to the far end of its header. Grey and unadorned:
+   it is there to be looked up rather than looked at, and it shares the row with a name that is the
+   point of the card. It brightens on hover, since it does lead somewhere. */
+.asm-name { margin-left: auto; padding-left: 0.5rem; font-size: 0.7rem; color: var(--text4); white-space: nowrap; text-decoration: none; }
+.asm-name:hover { color: var(--text2); }
 .member-name { font-size: 0.97rem; font-weight: 600; color: var(--text); }
 /* The interface an explicit implementation came from is a link, but it is also part of a heading. */
 .member-name .see-ref { font-family: inherit; }
@@ -603,11 +613,13 @@ ${TEMML_CSS}
 /* The permalink, kept out of sight until the card is pointed at: a column of hashes down a list of
    sixty members is noise, and the only one worth drawing is the one being read. */
 .member-anchor { color: var(--text4); text-decoration: none; font-size: 0.8rem; opacity: 0; }
-/* Hover and nothing else. Focus was the other half of this rule and focus is what stuck: clicking
-   the mark leaves it focused, and a focused mark is drawn on a card the pointer left long ago -
-   one # lit up down the page for no reason a reader could see. :focus-visible narrows that to
-   keyboard focus in theory, but a click that follows any keyboard use still counts as one, so the
-   reveal is a pointer affordance now and the mark is out of the tab order to match. */
+/* Drawn outright rather than faded, and drawn by hover alone. Both are the same symptom: a # left
+   lit on a card the pointer had long since left, somewhere down the page, for no reason a reader
+   could see. The fade was what Safari kept - it went on painting a faded-in mark after the hover it
+   belonged to had gone, where a plain repaint goes when the hover does. Focus was the rest of it:
+   clicking the mark leaves it focused, and :focus-visible still counts a click that follows any
+   keyboard use, so the reveal is the pointer's alone and the mark is out of the tab order to match.
+   Anything put back here has to be checked in Safari, which is the one that let it show. */
 .member:hover .member-anchor { opacity: 1; }
 .member-anchor:hover { color: var(--flash); }
 .member-fullname { font-size: 0.72rem; color: var(--fullname); font-family: monospace; margin-top: 0.4rem; margin-bottom: 0.45rem; word-break: break-all; }
@@ -778,6 +790,10 @@ dd { margin-left: 1rem; color: var(--text3); }
 .search-results .r-sig { font-family: monospace; font-size: 0.78rem; color: var(--text2); margin: 0.5rem 0; word-break: break-word; }
 .search-results .r-summary { font-size: 0.84rem; color: var(--text3); margin-top: 0.25rem; }
 .search-results .r-ns { font-family: monospace; font-size: 0.74rem; color: var(--fullname); margin-top: 0.45rem; word-break: break-all; }
+/* The end of what is drawn. Not a result, so it carries neither a result's rule nor its padding. */
+.search-results li.search-more { padding: 1rem 0 0; border-bottom: none; text-align: center; }
+.search-more-btn { font: inherit; font-size: 0.84rem; color: var(--text2); background: var(--bg2); border: 1px solid var(--border2); border-radius: 6px; padding: 0.45rem 1rem; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+.search-more-btn:hover { color: var(--text); border-color: var(--flash); }
 /* Open Color yellow, on gray 9: yellow 4 under the dark theme, the lighter yellow 2 under light.
    Opaque, and it sets its own foreground rather than inheriting. A match inside a signature lands
    within a .tok-* span, so 'color: inherit' would leave a saturated token colour sitting on the
@@ -937,15 +953,57 @@ const JS = `
     });
   }
 
+  // ---- The url as view state ----
+  // What the reader has narrowed the page to belongs in the address bar: a filtered page survives a
+  // reload that way, and a link to one arrives filtered rather than whole. The kind tab writes k
+  // here; the search box writes q and a.
+  //
+  // Merged into whatever is already in the url rather than rebuilt from the writer's own fields,
+  // because two writers share it - a keystroke in the search box must not drop the tab's k, and a
+  // press on a tab must not drop the query.
+  //
+  // replaceState, not push: a filter is an adjustment to one view rather than a place of its own, and
+  // an entry per press would make Back walk the tabs one at a time instead of leaving the page. The
+  // hash is carried across, since on a type page it is the member being read.
+  function urlParams() {
+    return new URLSearchParams(location.search);
+  }
+
+  function writeParams(params) {
+    var query = params.toString();
+    history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+  }
+
+  function setParam(name, value) {
+    var params = urlParams();
+    if (value) {
+      params.set(name, value);
+    } else {
+      params.delete(name);
+    }
+    writeParams(params);
+  }
+
   // ---- Filter bar ----
   // Nothing here paints anything: the marker under a kind's tab is the stylesheet's business, drawn
   // from the same property as the marks that tab filters, so the two cannot end up disagreeing.
   var filterButtons = document.querySelectorAll('.filter-btn');
   var activeKind = 'all';
 
-  function matchesKind(el) {
-    return activeKind === 'all' || el.getAttribute('data-badge') === activeKind;
+  // Taken on the letter rather than the element, because the search page filters entries in its
+  // match list - rows that are not in the page yet, and may never be - by the same rule.
+  function matchesBadge(badge) {
+    return activeKind === 'all' || badge === activeKind;
   }
+
+  function matchesKind(el) {
+    return matchesBadge(el.getAttribute('data-badge'));
+  }
+
+  // How the search page narrows its results, set by the search section below once it has a match
+  // list to narrow - that list is what the page is a window onto. Null until then, and on every
+  // page with no results to narrow at all. See applyFilter.
+  var filterSearchResults = null;
 
   // Enum values and operators are listed as table rows rather than cards, so every shape is
   // filtered and counted together - counting only cards would empty those sections and hide the
@@ -971,10 +1029,18 @@ const JS = `
         el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
       });
 
-    // Search results are the same filter over a different shape.
-    document.querySelectorAll('.search-results li[data-badge]').forEach(function (el) {
-      el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
-    });
+    // Search results are the same filter over a different shape, but the rows in the page are only
+    // as far as the reader has read: narrowing them by hiding what is drawn would filter the first
+    // page of matches and present that as the whole answer. So the list is narrowed and redrawn
+    // instead. The pass over the page is for the rows a server-rendered ?q= put there, which is all
+    // there is until the index lands.
+    if (filterSearchResults) {
+      filterSearchResults();
+    } else {
+      document.querySelectorAll('.search-results li[data-badge]').forEach(function (el) {
+        el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
+      });
+    }
 
     document.querySelectorAll('.main-content .type-section').forEach(function (section) {
       section.classList.toggle('hidden', !anyVisible(section));
@@ -1001,14 +1067,45 @@ const JS = `
     });
   }
 
+  // The one way the active kind changes, so the buttons, the page and the url cannot end up
+  // disagreeing about which it is. All leaves no mark: a bare address is the unfiltered page.
+  function selectKind(kind) {
+    filterButtons.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-kind') === kind);
+    });
+    activeKind = kind;
+    setParam('k', kind === 'all' ? '' : kind);
+    applyFilter();
+  }
+
   filterButtons.forEach(function (button) {
     button.addEventListener('click', function () {
-      filterButtons.forEach(function (b) { b.classList.remove('active'); });
-      button.classList.add('active');
-      activeKind = button.getAttribute('data-kind');
-      applyFilter();
+      selectKind(button.getAttribute('data-kind'));
     });
   });
+
+  // The tab the url asks for, restored before anything else reads the page - revealTarget below
+  // decides what to do about a hidden anchor and needs the filter already settled to see one.
+  //
+  // A letter this page has no tab for is not worth showing an empty page over: a member kind on a
+  // list of types, or one a build has since stopped offering, falls back to All and the url is
+  // corrected to say so rather than left claiming a filter that is not on. Compared against the
+  // buttons rather than looked up as a selector, because this value comes out of a shared link.
+  if (filterButtons.length > 0) {
+    var askedKind = urlParams().get('k');
+    if (askedKind && askedKind !== 'all') {
+      var wanted = null;
+      filterButtons.forEach(function (b) {
+        if (b.getAttribute('data-kind') === askedKind) wanted = b;
+      });
+
+      if (wanted) {
+        selectKind(askedKind);
+      } else {
+        setParam('k', '');
+      }
+    }
+  }
 
   // Following a link to something the filter is hiding widens back to All.
   //
@@ -1051,6 +1148,10 @@ const JS = `
   var treeRoot = document.getElementById('sidebar');
   var treeKey = treeRoot ? 'docs-tree:' + (treeRoot.getAttribute('data-tree') || '') : '';
 
+  // What opens and closes a group. A group that names no page of its own is one button - the whole
+  // row - and one that does is an arrow beside a link, since the row cannot both open and navigate.
+  var GROUP_CONTROLS = 'button.tree-ns-label, .tree-ns-toggle';
+
   function saveTreeState() {
     if (!treeKey) return;
 
@@ -1090,13 +1191,17 @@ const JS = `
     var open = {};
     state.open.forEach(function (id) { open[id] = true; });
 
-    document.querySelectorAll('.tree-ns-label').forEach(function (label) {
+    document.querySelectorAll(GROUP_CONTROLS).forEach(function (label) {
       var children = document.getElementById(label.getAttribute('data-target'));
       if (!children) return;
 
       // The group holding the current page opens regardless: landing on a type inside a collapsed
-      // group would hide the very thing being read.
-      var holdsActive = children.querySelector('.tree-link.active, .tree-child-link.active');
+      // group would hide the very thing being read. A namespace page is its group's own page, so
+      // the same goes for arriving at one - the tree answers it with the list it holds.
+      var group = label.closest('.tree-ns');
+      var holdsActive =
+        children.querySelector('.tree-link.active, .tree-child-link.active') ||
+        (group && group.querySelector('.tree-ns-link.active'));
       var expanded = Boolean(holdsActive) || open[children.id] === true;
 
       children.classList.toggle('collapsed', !expanded);
@@ -1109,7 +1214,7 @@ const JS = `
   restoreTreeState();
 
   // ---- Tree: collapse, expand, search ----
-  document.querySelectorAll('.tree-ns-label').forEach(function (label) {
+  document.querySelectorAll(GROUP_CONTROLS).forEach(function (label) {
     label.addEventListener('click', function () {
       var id = label.getAttribute('data-target');
       var children = document.getElementById(id);
@@ -1158,11 +1263,10 @@ const JS = `
       var anyOpen = groups.some(function (g) { return !g.classList.contains('collapsed'); });
 
       groups.forEach(function (g) { g.classList.toggle('collapsed', anyOpen); });
-      document.querySelectorAll('.tree-ns-label .tree-arrow').forEach(function (el) {
-        el.classList.toggle('collapsed', anyOpen);
-      });
-      document.querySelectorAll('.tree-ns-label').forEach(function (el) {
+      document.querySelectorAll(GROUP_CONTROLS).forEach(function (el) {
         el.setAttribute('aria-expanded', String(!anyOpen));
+        var arrow = el.querySelector('.tree-arrow');
+        if (arrow) arrow.classList.toggle('collapsed', anyOpen);
       });
 
       treeToggleAll.setAttribute('aria-expanded', String(!anyOpen));
@@ -1204,7 +1308,9 @@ const JS = `
     // A group whose own name matches keeps everything it holds rather than emptying out: in
     // namespace mode that name is a namespace, and typing one is a way of asking for its types.
     document.querySelectorAll('.tree-ns:not(.tree-overview)').forEach(function (ns) {
-      var label = ns.querySelector('.tree-ns-label');
+      // Whichever of the two carries the name: the whole row where the group has no page, the link
+      // beside the arrow where it has one.
+      var label = ns.querySelector('.tree-ns-label, .tree-ns-link');
       var named = Boolean(q) && Boolean(label) && label.textContent.toLowerCase().indexOf(q) >= 0;
 
       if (named) {
@@ -1244,7 +1350,9 @@ const JS = `
       // worse than none: the tree cannot show you what you are looking at, and looks empty for no
       // reason you can see. Following anything the filter does not match - a link in the page, a
       // breadcrumb, a search result - drops it rather than leaving that.
-      var here = document.querySelector('.tree-link.active');
+      var here =
+        document.querySelector('.tree-link.active') ||
+        document.querySelector('.tree-ns-link.active');
       if (here && here.closest('.hidden')) {
         treeSearch.value = '';
         applyTreeFilter();
@@ -1470,7 +1578,8 @@ const JS = `
   // long member list, which is the case the highlight exists for.
   var active =
     document.querySelector('.tree-child-link.active') ||
-    document.querySelector('.tree-link.active');
+    document.querySelector('.tree-link.active') ||
+    document.querySelector('.tree-ns-link.active');
 
   if (treeRoot) {
     var remembered = readTreeState();
@@ -1722,10 +1831,116 @@ const JS = `
     navResults.hidden = false;
   }
 
+  // ---- The results page ----
+  // Every match is in the answer, a page of them at a time in the document. A bare query against a
+  // large assembly matches thousands of rows, and building all of them at once is a freeze the
+  // reader watches; a page is more than fills a window, so the next one is asked for well before
+  // this one is read to the end.
+  var PAGE_SIZE = 100;
+
+  // What the query found, what the kind filter lets through, and how much of that is drawn. Held
+  // rather than found again: filtering and reaching the end of the page both work from this, and
+  // neither is a reason to search the index a second time.
+  var matched = [];
+  var listed = [];
+  var listedQuery = '';
+  var drawn = 0;
+  var more = null;
+  var watcher = null;
+
+  // One result. Same shape the server builds in Renderer.searchResultHtml.
+  // [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static]
+  function resultRow(m, q) {
+    var e = m[2];
+    var ns = (index.namespaces || [])[e[6]] || '';
+    return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
+      '<div class="r-head">' +
+      kindIcon(e) +
+      '<a class="r-name" href="' + escapeHtml(rowUrl(e[1])) + '">' + markMatch(e[0], q) + '</a>' +
+      '</div>' +
+      // Already highlighted markup, built by the same highlighter the server uses, which
+      // escaped the code on the way in. Escaping it again would print the spans.
+      (e[5] ? '<div class="r-sig">' + markMarkup(e[5], escapeHtml(q).toLowerCase()) + '</div>' : '') +
+      (e[3] ? '<div class="r-summary">' + markMatch(e[3], q) + '</div>' : '') +
+      '<div class="r-ns">' + escapeHtml(ns) + '</div>' +
+      '</li>';
+  }
+
+  // Draws the next page, keeping the row that asks for the one after it at the end of the list for
+  // as long as there is one to ask for.
+  function drawPage() {
+    var next = listed.slice(drawn, drawn + PAGE_SIZE);
+    if (next.length === 0) return;
+
+    var html = '';
+    for (var i = 0; i < next.length; i++) html += resultRow(next[i], listedQuery);
+    drawn += next.length;
+
+    // Before the asking row rather than at the end of the list, so it stays the last thing in it
+    // and the observer watching it does not have to be rebound to a new one every page.
+    if (more) {
+      more.insertAdjacentHTML('beforebegin', html);
+    } else {
+      results.insertAdjacentHTML('beforeend', html);
+    }
+
+    if (drawn >= listed.length) {
+      // Nothing left to ask for, so nothing should be offering.
+      if (watcher) watcher.disconnect();
+      if (more) results.removeChild(more);
+      more = null;
+      return;
+    }
+
+    if (!more) {
+      results.insertAdjacentHTML(
+        'beforeend',
+        '<li class="search-more"><button type="button" class="search-more-btn">Show more results</button></li>'
+      );
+      more = results.lastElementChild;
+      more.querySelector('.search-more-btn').addEventListener('click', drawPage);
+      if (watcher) watcher.observe(more);
+    }
+  }
+
+  // Narrows the matches to the kind the filter bar is set to and draws the first page of them. This
+  // is what the bar calls, so a kind selects over every match rather than over the drawn ones.
+  function showResults() {
+    listed = matched.filter(function (m) { return matchesBadge(m[2][4] || '?'); });
+
+    if (watcher) watcher.disconnect();
+    more = null;
+    drawn = 0;
+    results.innerHTML = '';
+
+    drawPage();
+  }
+
+  // Reaching the end of the drawn rows asks for the next page, so a long list fills itself in as it
+  // is read. The margin asks while the end is still below the fold, and .main-content is the element
+  // that scrolls here rather than the document. The button on the row is what answers where there is
+  // no observer to notice the end arriving.
+  if (onSearchPage && window.IntersectionObserver) {
+    watcher = new window.IntersectionObserver(
+      function (entries) {
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].isIntersecting) {
+            drawPage();
+            return;
+          }
+        }
+      },
+      { root: document.querySelector('.main-content'), rootMargin: '600px' }
+    );
+  }
+
   function run(query) {
     var q = query.trim().toLowerCase();
     if (!q) {
-      if (results) results.innerHTML = '';
+      if (results) {
+        matched = [];
+        showResults();
+      }
       if (status) status.textContent = '';
       hideNav();
       return;
@@ -1739,29 +1954,18 @@ const JS = `
         return;
       }
 
-      // Same shape the server builds in Renderer.searchResultHtml.
-      // [name, url, haystack, summary, filterLetter, signature, nsIndex, asmIndex, icon, static]
-      var shown = matches.slice(0, 200);
-      results.innerHTML = shown.map(function (m) {
-        var e = m[2];
-        var ns = (index.namespaces || [])[e[6]] || '';
-        return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
-          '<div class="r-head">' +
-          kindIcon(e) +
-          '<a class="r-name" href="' + escapeHtml(rowUrl(e[1])) + '">' + markMatch(e[0], q) + '</a>' +
-          '</div>' +
-          // Already highlighted markup, built by the same highlighter the server uses, which
-          // escaped the code on the way in. Escaping it again would print the spans.
-          (e[5] ? '<div class="r-sig">' + markMarkup(e[5], escapeHtml(q).toLowerCase()) + '</div>' : '') +
-          (e[3] ? '<div class="r-summary">' + markMatch(e[3], q) + '</div>' : '') +
-          '<div class="r-ns">' + escapeHtml(ns) + '</div>' +
-          '</li>';
-      }).join('');
+      // The kind buttons keep whatever they were set to across a re-render, which showResults
+      // applies on the way to drawing - there is no separate pass over the rows to hide any.
+      matched = matches;
+      listedQuery = q;
+      showResults();
 
-      // The kind buttons keep whatever they were set to across a re-render.
-      applyFilter();
+      // Only now, with a list to narrow. Handing the filter bar this any earlier would have it
+      // clear a server-rendered ?q= and draw an empty match list over it.
+      filterSearchResults = showResults;
 
-      // Only the empty result says anything; a hit count is noise above the hits themselves.
+      // Only the empty result says anything; a hit count is noise above the hits themselves, and
+      // the list is no longer clipped for a count to be the only warning of.
       if (status) {
         var where = searchScope() ? ' in ' + searchScope() : '';
         status.textContent = matches.length === 0 ? 'No matches for "' + query + '"' + where + '.' : '';
@@ -1781,10 +1985,12 @@ const JS = `
       if (!onSearchPage) return;
 
       // The scope rides along, so reloading or sharing the url keeps searching the same assembly.
-      var params = [];
-      if (value) params.push('q=' + encodeURIComponent(value));
-      if (searchScope()) params.push('a=' + encodeURIComponent(searchScope()));
-      history.replaceState(null, '', params.length ? '?' + params.join('&') : location.pathname);
+      // Set on what is already there rather than built from these two alone, which would drop the
+      // kind tab's k on every keystroke - see writeParams.
+      var params = urlParams();
+      if (value) { params.set('q', value); } else { params.delete('q'); }
+      if (searchScope()) { params.set('a', searchScope()); } else { params.delete('a'); }
+      writeParams(params);
     }, 130);
   });
 

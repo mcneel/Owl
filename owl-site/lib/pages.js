@@ -369,6 +369,16 @@ const MEMBER_ORDER = [
 const INHERITED_KINDS = new Set(['field', 'property', 'indexer', 'event', 'method']);
 
 /**
+ * How many results a server-rendered ?q= paints.
+ *
+ * Not a limit on the answer: the browser replaces these rows as soon as the index lands and pages
+ * the rest of the matches in as they are read - see the search section of app.js. This is the first
+ * page of that same list, so hydrating does not change how long the list looks. A static build
+ * renders none of it at all, passing serverSide false.
+ */
+const FIRST_PAINT_RESULTS = 100;
+
+/**
  * What makes two members the same member, for deciding whether a base's version of one is already
  * answered for further down.
  *
@@ -438,7 +448,6 @@ class Renderer {
 
     this.assemblyNames = names;
     this.multipleAssemblies = names.length > 1;
-    this.palette = theme.assemblyPalette(names);
   }
 
   // ------------------------------------------------------------------
@@ -489,6 +498,11 @@ class Renderer {
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),
       ...options,
+      // No selector while browsing by namespace. A namespace belongs to no one assembly, so the
+      // tree beside it is every namespace on the site whatever the header says, and a control that
+      // narrows nothing it sits above is one that reads as broken. Which assembly a type ships in
+      // is written on its card instead, and that name is the way to the assembly's own page.
+      assemblies: this.browsingNamespaces ? [] : options.assemblies,
     });
   }
 
@@ -599,12 +613,19 @@ class Renderer {
     );
   }
 
-  assemblyBadgeHtml(assemblyName) {
+  /**
+   * The assembly a card's type came out of, at the far end of its header.
+   *
+   * Written rather than badged: a coloured pill is a thing to look at, and this is a thing to look
+   * up - the answer to 'where is this one from', asked of one card in a list, not read down the
+   * column. So it is the name in the quiet grey the tree's second lines use, and a link, which on a
+   * site browsed by namespace is the only way to an assembly's own page.
+   */
+  assemblyNameHtml(assemblyName) {
     if (!this.multipleAssemblies || !assemblyName) return '';
-    const colour = theme.assemblyColor(this.palette, assemblyName);
     return (
-      `<a class="asm-badge" style="background:${colour}" ` +
-      `href="${attr(this.routes.assembly(assemblyName))}">${escape(assemblyName)}</a>`
+      `<a class="asm-name" href="${attr(this.routes.assembly(assemblyName))}">` +
+      `${escape(assemblyName)}</a>`
     );
   }
 
@@ -885,7 +906,7 @@ class Renderer {
   }
 
   /**
-   * A type rendered as a card: kind badge, name, assembly badge, monospace full name, summary.
+   * A type rendered as a card: kind badge, name, assembly, monospace full name, summary.
    */
   typeCardHtml(type, assemblyName, { linked = true, headingLevel = null, showAssembly = true } = {}) {
     const summary = this.summaryHtml(type.docs);
@@ -910,7 +931,7 @@ class Renderer {
       (type.accessibility && type.accessibility !== 'public'
         ? `<span class="chip">${escape(type.accessibility)}</span>`
         : '') +
-      (showAssembly ? this.assemblyBadgeHtml(assemblyName) : '') +
+      (showAssembly ? this.assemblyNameHtml(assemblyName) : '') +
       '</div>' +
       `<div class="member-fullname">${escape(type.fullName)}</div>` +
       (summary ? `<div class="summary">${summary}</div>` : '') +
@@ -1171,23 +1192,17 @@ ${this.namespaceListHtml(namespaces.map((ns) => ns.name))}
 <div class="page-head">
   <h1 class="page-title">${escape(label)}<span class="page-kind">namespace</span></h1>
   ${docs && docs.summary ? `<div class="page-intro">${docnodes.render(docs.summary, this.docContext)}</div>` : ''}
-  <div class="page-chips">
-    ${assemblies
-      .map(
-        (a) =>
-          `<a class="chip" href="${attr(this.routes.assembly(a))}">` +
-          `<span class="legend-dot" style="background:${theme.assemblyColor(this.palette, a)}"></span>` +
-          `${escape(a)}</a>`
-      )
-      .join('')}
-  </div>
 </div>
 
 ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Remarks</h2><div class="remarks">${docnodes.render(docs.remarks, this.docContext)}</div></section>` : ''}
 
 <section class="ns-section">
   <h2 class="ns-heading">Types</h2>
-  ${this.typeSectionsHtml(bucket.types, { headingLevel: 3 })}
+  ${
+    // With the assembly named on each card: a namespace is not one assembly's, and with no selector
+    // in the header this is what says which one a type came out of.
+    this.typeSectionsHtml(bucket.types, { headingLevel: 3 })
+  }
 </section>
 `;
 
@@ -2352,18 +2367,48 @@ ${this.seeAlsoHtml(type.docs)}
    * type is written, because in namespace mode the tree is one nesting: namespaces hold types and
    * types hold members, and a heading in the middle of that would read as a break in it.
    *
+   * A group that names a page of its own splits the row in two, the way the type rows under it are
+   * split: the arrow opens the group and the name goes to the page. One row cannot do both, and of
+   * the two the arrow is the one a reader can find no other way.
+   *
    * @param {object} options  collapsed: start closed
    *                          icon: kind mark to draw before the label, which also plains the row
+   *                          href: the group's own page, which makes the label a link
+   *                          active: the reader is on that page
    */
-  treeGroup(id, label, inner, { collapsed = false, icon = '' } = {}) {
+  treeGroup(id, label, inner, { collapsed = false, icon = '', href = '', active = false } = {}) {
+    const children =
+      `<div class="tree-ns-children${collapsed ? ' collapsed' : ''}" ` +
+      `id="ns_${attr(id)}">${inner}</div>`;
+
+    const mark = icon ? icons.iconHtml(icon) : '';
+
+    if (href) {
+      return (
+        `<div class="tree-ns${icon ? ' tree-ns-plain' : ''}">` +
+        '<div class="tree-type-label">' +
+        `<button class="tree-ns-toggle" type="button" data-target="ns_${attr(id)}" ` +
+        `aria-expanded="${collapsed ? 'false' : 'true'}" ` +
+        `aria-label="Toggle ${attr(label)}">` +
+        this.treeArrowHtml(collapsed) +
+        '</button>' +
+        `<a class="tree-ns-link${active ? ' active' : ''}" href="${attr(href)}">` +
+        mark +
+        `<span>${escape(label)}</span></a>` +
+        '</div>' +
+        children +
+        '</div>'
+      );
+    }
+
     return (
       `<div class="tree-ns${icon ? ' tree-ns-plain' : ''}">` +
       `<button class="tree-ns-label" type="button" data-target="ns_${attr(id)}" ` +
       `aria-expanded="${collapsed ? 'false' : 'true'}">` +
       this.treeArrowHtml(collapsed) +
-      (icon ? icons.iconHtml(icon) : '') +
+      mark +
       `<span>${escape(label)}</span></button>` +
-      `<div class="tree-ns-children${collapsed ? ' collapsed' : ''}" id="ns_${attr(id)}">${inner}</div>` +
+      children +
       '</div>'
     );
   }
@@ -2555,9 +2600,9 @@ ${this.seeAlsoHtml(type.docs)}
    * Only the namespace being read is expanded. A dump has a few dozen of them against a few
    * thousand types, so opening them all would bury the list that makes the column navigable.
    *
-   * Types and nothing else under a namespace: no Overview row leading to the namespace's own page,
-   * because namespace mode is an API dump and a row that leads to prose is not part of one. That
-   * page is still written, and a type's breadcrumbs still name it.
+   * The namespace's own page is the row itself rather than an Overview row under it, since the row
+   * is already the name of that page: it opens on the arrow and goes there on the name, which is
+   * how every type row below it behaves.
    *
    * @param {string|null} activeNamespace  the namespace being read, expanded
    * @param {object} options   activeType: the type whose page this is, expanded to show members
@@ -2587,6 +2632,10 @@ ${this.seeAlsoHtml(type.docs)}
       out += this.treeGroup(slugify(bucket.name) || 'global', bucket.name || '(global)', rows, {
         collapsed: !open,
         icon: 'namespace',
+        href: this.routes.namespace(bucket.name),
+        // Marked only where the namespace itself is what is being read: on a type's page the
+        // highlight belongs to the type, and two of them would leave neither meaning anything.
+        active: open && activeType === null,
       });
     }
 
@@ -2620,7 +2669,7 @@ ${this.seeAlsoHtml(type.docs)}
     }
 
     if (serverSide && trimmed) {
-      const matches = this.searchIndexEntries(trimmed, 200, scope);
+      const matches = this.searchIndexEntries(trimmed, FIRST_PAINT_RESULTS, scope);
       // Only the empty result says anything; a hit count is noise above the hits themselves.
       statusText =
         matches.total === 0

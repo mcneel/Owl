@@ -72,8 +72,9 @@ const CHIP_PAINTS = {
  * it where the two answers differ.
  */
 const KIND_MAP = {
-  // Types group under T, except an interface and a struct: a contract and a value type each read
-  // differently enough from a class to carry their own tab and colour.
+  // Types group under T, except an interface: a contract reads differently enough from the rest to
+  // carry its own tab. A struct keeps a badge and a colour of its own, being a value type, but
+  // filters in with the rest of the types - see FILTER_LETTERS.
   class: ['T', 'Class'],
   interface: ['I', 'Interface'],
   struct: ['S', 'Struct'],
@@ -91,8 +92,9 @@ const KIND_MAP = {
   property: ['P', 'Property'],
   indexer: ['P', 'Indexer'],
   field: ['F', 'Field'],
-  // V rather than the F it was: an enum value is not a field to anyone reading one, and a Values tab
-  // is what someone looking at an enum wants of the bar.
+  // V rather than the F it was: an enum value is not a field to anyone reading one, whatever the two
+  // have in common underneath. The badge is the whole of what V is for now - the tab it used to have
+  // is gone, and an enum value filters with the enum it belongs to. See FILTER_LETTERS.
   enumvalue: ['V', 'Enum value'],
   event: ['E', 'Event'],
 };
@@ -133,44 +135,40 @@ const KIND_ICONS = {
 /**
  * Kinds filtered under a letter other than the one on their badge.
  *
- * E is worn by an enum and by an event, which are not one kind and must not be one tab: a search
- * lists both, so the letter alone cannot say which tab a row belongs under. The badge answers what
- * the reader is looking at and this answers which button shows it - an enum filters as the type it
- * is, under Types, where it has always been found.
+ * Two things put a kind here. E is worn by an enum and by an event, which are not one kind and must
+ * not be one tab: a search lists both, so the letter alone cannot say which tab a row belongs under.
+ * The rest are here because their badge is worth keeping and their tab was not - T has become the
+ * tab for what a reader does not go looking for by kind. A struct is a type like any other in a list
+ * of them, an enum value is read with the enum that declares it, and a constructor or a finalizer is
+ * not something anyone scans a type for the way they scan it for a method or a property: it is how
+ * the type itself begins and ends.
+ *
+ * The badge answers what the reader is looking at; this answers which button shows it.
  */
 const FILTER_LETTERS = {
   enum: 'T',
+  struct: 'T',
+  enumvalue: 'T',
+  constructor: 'T',
+  destructor: 'T',
 };
 
 /**
- * The filter buttons, in the order they appear in the bar. One per badge letter, so no kind is
+ * The filter buttons, in the order they appear in the bar. One per filter letter rather than per
+ * badge letter - FILTER_LETTERS folds some kinds in with others - so nothing a row can carry is
  * left unreachable; a page renders only the ones its own contents use.
+ *
+ * Interfaces leads Types because it is the narrower of the two: Types is what is left once the
+ * contracts are taken out, so it reads as the wider bucket sitting after the one it excludes.
  */
 const FILTER_KINDS = [
   { key: 'all', label: 'All' },
-  { key: 'T', label: 'Types' },
   { key: 'I', label: 'Interfaces' },
-  { key: 'S', label: 'Structs' },
-  { key: 'C', label: 'Constructors' },
+  { key: 'T', label: 'Types' },
   { key: 'M', label: 'Methods' },
   { key: 'P', label: 'Properties' },
   { key: 'F', label: 'Fields' },
-  { key: 'V', label: 'Values' },
   { key: 'E', label: 'Events' },
-];
-
-/** Cycled to give each assembly a stable colour, dark enough to carry white text. */
-const ASSEMBLY_PALETTE = [
-  '#7c3aed',
-  '#0369a1',
-  '#065f46',
-  '#92400e',
-  '#9d174d',
-  '#1e3a8a',
-  '#166534',
-  '#713f12',
-  '#4c1d95',
-  '#0c4a6e',
 ];
 
 function kindLetter(kind) {
@@ -191,7 +189,8 @@ function kindIcon(kind) {
  * The letter this kind is filtered under, which is its badge's unless FILTER_LETTERS says otherwise.
  *
  * Everything that carries a data-badge for the kind tabs to match on asks this; everything that
- * draws a badge asks kindLetter. The two are the same answer for every kind but the enum.
+ * draws a badge asks kindLetter. The two are the same answer for every kind but the ones
+ * FILTER_LETTERS names.
  */
 function filterLetter(kind) {
   return Object.prototype.hasOwnProperty.call(FILTER_LETTERS, kind)
@@ -216,18 +215,6 @@ function kindPlural(kind) {
   return label + 's';
 }
 
-/** Assigns each assembly a colour by position, so it stays the same across pages. */
-function assemblyPalette(assemblyNames) {
-  const map = new Map();
-  assemblyNames.forEach((name, i) => map.set(name, ASSEMBLY_PALETTE[i % ASSEMBLY_PALETTE.length]));
-  return map;
-}
-
-function assemblyColor(palette, assemblyName) {
-  if (!palette || !assemblyName) return '#475569';
-  return palette.get(assemblyName) || '#475569';
-}
-
 module.exports = {
   BADGE_PAINTS,
   CHIP_PAINTS,
@@ -235,12 +222,9 @@ module.exports = {
   KIND_ICONS,
   FILTER_LETTERS,
   FILTER_KINDS,
-  ASSEMBLY_PALETTE,
   kindLetter,
   kindIcon,
   filterLetter,
   kindLabel,
   kindPlural,
-  assemblyPalette,
-  assemblyColor,
 };
