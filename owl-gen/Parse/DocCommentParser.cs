@@ -262,6 +262,7 @@ sealed class DocCommentParser
           DocId = reference.DocId,
           Label = string.IsNullOrWhiteSpace(inner) ? reference.Label : inner,
           External = reference.External,
+          Assembly = reference.Assembly,
         });
         return;
       }
@@ -430,6 +431,7 @@ sealed class DocCommentParser
       DocId = docId,
       Label = CSharpDisplay.Of(symbol, s_crefLabelFormat),
       External = external ? true : null,
+      Assembly = external ? symbol.ContainingAssembly?.Name : null,
     };
   }
 
@@ -563,7 +565,10 @@ sealed class DocCommentParser
             Kind = "cref",
             DocId = cref,
             Label = Collapse(el.Value) is { Length: > 0 } inner ? inner : (cref is null ? "" : ShortLabel(cref)),
-            // Everything on this path is by definition outside the documented set.
+            // Everything on this path is by definition outside the documented set. Which assembly
+            // it came from is not knowable here: this is a doc id read out of another assembly's
+            // xml, with no symbol behind it to ask, so these crefs reach only what a doc id alone
+            // can - the documented set, or Microsoft Learn.
             External = true,
           });
           break;

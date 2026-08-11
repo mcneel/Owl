@@ -27,6 +27,8 @@ function parseArgs(argv) {
     base: '',
     siteUrl: '',
     sourceRefs: '',
+    // Repeatable, since a set can reference more than one documented elsewhere.
+    links: [],
     logo: '',
     logoDark: '',
     d2: '',
@@ -48,6 +50,9 @@ function parseArgs(argv) {
         break;
       case '--source-refs':
         options.sourceRefs = argv[++i];
+        break;
+      case '--link':
+        options.links.push(argv[++i]);
         break;
       case '--json':
         options.jsonDir = path.resolve(argv[++i]);

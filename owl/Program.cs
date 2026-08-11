@@ -94,6 +94,8 @@ static void PrintUsage()
       --logo <file>         Header icon, overriding <docs>/logo.svg
       --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
       --source-refs <path>  Root for "declared in" references; without it there are none
+      --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
+                            sitting there as text. Repeatable; <asm> may end in '*'
       --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
       --skip-undocumented   Leave anything with no <summary> out of the site
       --sandcastle          Also answer the Sandcastle urls this set was published at

@@ -167,7 +167,13 @@ function renderCref(node, context) {
   return `<a class="${cls}" href="${attr(url)}"${rel}>${escape(label)}</a>`;
 }
 
-/** Resolves a cref to a url: internal pages first, Microsoft Learn as a fallback. */
+/**
+ * Resolves a cref to a url: internal pages first, then a sibling site, then Microsoft Learn.
+ *
+ * The sibling comes before Learn because the two never both apply - one answers for the assemblies
+ * --link named and the other for the framework - and after the documented set because a set
+ * documents its own types better than it knows anyone else's.
+ */
 function crefUrl(node, context) {
   if (!node.id) return null;
 
@@ -180,6 +186,14 @@ function crefUrl(node, context) {
   if (typeId) {
     const typeEntry = context.model.entry(typeId);
     if (typeEntry) return context.routes.forEntry(typeEntry);
+  }
+
+  // A member on another site resolves to its type's page: see Links.typeUrl for why it stops
+  // there rather than carrying an anchor.
+  const links = context.links;
+  if (links && !links.empty && node.asm) {
+    const url = links.typeUrl(node.id.startsWith('T:') ? node.id : typeId, node.asm);
+    if (url) return url;
   }
 
   return learnUrl(node.id);

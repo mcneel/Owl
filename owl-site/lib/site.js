@@ -7,6 +7,7 @@ const { Routes, slugify } = require('./routes');
 const { Renderer } = require('./pages');
 const { Diagrams, probe } = require('./diagrams');
 const { Sandcastle, stub } = require('./sandcastle');
+const { Links } = require('./links');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
 
@@ -24,6 +25,8 @@ const { inlineSvg } = require('./html');
  *   base      path prefix the site is served under
  *   siteUrl   absolute origin for canonical urls and the sitemap
  *   sourceRefs  root the "declared in" references hang from; without it there are none
+ *   links     '<assembly>=<url>' entries naming the sites that document the assemblies this one
+ *             only references; without them those types stay text. See lib/links.js
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
  *   skipUndocumented  leave out anything with no <summary>
@@ -46,6 +49,10 @@ class Site {
     this.base = options.base || '';
     this.siteUrl = options.siteUrl || '';
     this.sourceRefs = options.sourceRefs || '';
+
+    // Parsed once here rather than per reload: a bad --link is a mistake in the command line, and
+    // the run should stop on it at the start rather than on the first page that needed it.
+    this.links = new Links(options.links || []);
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
@@ -104,6 +111,7 @@ class Site {
       siteName: this.siteName,
       siteUrl: this.siteUrl,
       sourceRefs: this.sourceRefs,
+      links: this.links,
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
       diagrams,

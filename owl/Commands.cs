@@ -103,11 +103,14 @@ sealed class Command
           break;
 
         // Affect how the model is rendered, not what is in it, so the site alone needs them.
+        // --link is repeatable, which needs nothing extra: each pair is appended in the order it
+        // was given, and the site parses them all.
         case "--base":
         case "--site-url":
         case "--logo":
         case "--logo-dark":
         case "--source-refs":
+        case "--link":
         case "--d2":
           command.SiteArgs.Add(arg);
           command.SiteArgs.Add(Next(args, ref i, arg));

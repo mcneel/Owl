@@ -347,6 +347,16 @@ sealed class TypeRef
 
   /// <summary>True when the type lives outside the documented set.</summary>
   public bool External { get; set; }
+
+  /// <summary>
+  /// Assembly the type is declared in, recorded only when it is external.
+  /// </summary>
+  /// <remarks>
+  /// It is what decides whether another documentation site has a page for the
+  /// type. The doc id cannot answer that: one namespace is routinely spread
+  /// across several assemblies, and only some of them are documented anywhere.
+  /// </remarks>
+  [JsonPropertyName("asm")] public string? Assembly { get; set; }
 }
 
 /// <summary>Accessor visibility for a property or indexer.</summary>

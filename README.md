@@ -143,6 +143,8 @@ owl serve and owl build, both
   --base <path>         Path prefix the site will be served under
   --site-url <url>      Origin for canonical urls and the sitemap
   --source-refs <path>  Root for "declared in" references; without it there are none
+  --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
+                        sitting there as text. Repeatable; <asm> may end in '*'
   --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
   --skip-undocumented   Leave anything with no <summary> out of the site
   --sandcastle          Also answer the Sandcastle urls this set was published at
@@ -153,6 +155,19 @@ instead of projects to reuse a model.
 
 `--name` is recorded in the model, so you set it once at generation time rather than repeating it
 every time you serve or export. Passing it to `serve` or `build` overrides it for that run.
+
+A set documents the assemblies it was generated from, so every type it merely *references* — the
+library it is built on — is a name with nowhere to go. `--link` says where those live:
+
+```bash
+owl build Grasshopper.vbproj GH_IO.csproj --base /api/gh1 \
+  --link RhinoCommon=/api/rhinocommon --link "Rhino.Runtime.Code*=/api/rhinocode"
+```
+
+Parameters, return types, base classes and `<see cref>`s into a named assembly then link into that
+site. It is keyed by assembly rather than by namespace because a namespace is not owned by one, and
+the url is computed from owl's own slug rule, so the other site does not have to be at hand — or
+even built yet — for this one to link into it. Framework types keep going to Microsoft Learn.
 
 Every member's source file and line is recorded too, but nothing is shown until `--source-refs`
 gives a root to hang those paths from — on its own the recorded path is relative to the tree the

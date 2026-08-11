@@ -788,18 +788,24 @@ sealed class ApiBuilder
 
   TypeRef BuildTypeRef(ITypeSymbol type)
   {
-    // OfType unwraps arrays and pointers, and resolves to the original definition, so a
-    // constructed generic links to the open type where the documentation actually lives.
-    string? docId = DocIds.OfType(type);
+    // Unwrapped first, and everything below asked of that: an array has neither a doc id nor an
+    // assembly of its own, so Brep[] answered no to both and was filed as external. Of resolves to
+    // the original definition, so a constructed generic links to the open type where the
+    // documentation actually lives.
+    ITypeSymbol? target = DocIds.Unwrap(type);
+    string? docId = DocIds.Of(target);
 
-    bool external = type.ContainingAssembly is null
-        || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly);
+    bool external = target?.ContainingAssembly is null
+        || !SymbolEqualityComparer.Default.Equals(target.ContainingAssembly, _compilation.Assembly);
 
     return new TypeRef
     {
       DocId = docId,
       Display = CSharpDisplay.Of(type, DisplayFormats.TypeReference),
       External = external,
+      // Only for the ones from elsewhere: a type of ours is found by doc id, and naming the
+      // assembly on all thirty-six thousand references would be most of them saying so.
+      Assembly = external ? target?.ContainingAssembly?.Name : null,
     };
   }
 

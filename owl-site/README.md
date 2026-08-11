@@ -27,6 +27,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--base <path>` | serve, build | Path prefix the site is served under. |
 | `--site-url <url>` | serve, build | Origin for canonical urls, Open Graph tags and the sitemap. |
 | `--source-refs <path>` | serve, build | Root the "declared in" references hang from. Without it, none are shown. |
+| `--link <asm>=<url>` | serve, build, check | Site documenting a referenced assembly. Repeatable; `<asm>` may end in `*` to cover a family. `check` takes it so those links are counted as leaving rather than as broken. |
 | `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
 | `--quiet` | build | Only print the summary, not per-page progress. |
@@ -55,6 +56,19 @@ A type stays even if its own summary is missing, as long as one of its members h
 has nowhere else to be read. Enum values go the other way and stay with an enum that survived on its
 own merits, since an enum without its values is not worth a page. References to something that was
 left out render as plain text rather than as a link to a page that is not there.
+
+A type from outside the set resolves in three steps: the documented set, then whichever site
+`--link` names for the assembly it was declared in, then Microsoft Learn for the framework. Both
+places a reference can appear go through the same resolution — `crefUrl` in `lib/docnodes.js` for
+everything structured, since parameters, interfaces and base types are all rendered as crefs, and
+`externalTypeUrl` in `lib/pages.js` for the names in a highlighted signature, which are text and
+have to be matched back to a doc id first.
+
+Cross-site urls are computed rather than looked up, from the doc id and owl's slug rule, so nothing
+has to be fetched and the other site does not have to exist yet. An external *member* stops at its
+declaring type's page: owl appends a counter to disambiguate two members whose anchors normalize
+alike, and that counter cannot be derived, so an anchor computed from here would occasionally be
+wrong. C# keywords are left to Learn — `string` is `System.String` wherever it is written.
 
 The model records the file and line every member was declared at, but nothing is shown unless
 `--source-refs` gives a root to hang those paths from — the recorded path is relative to the tree

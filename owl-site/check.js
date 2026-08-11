@@ -24,24 +24,28 @@ let distDir = null;
 let jsonDir = '';
 let apiDir = '';
 let skipUndocumented = false;
+const links = [];
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--dist') distDir = path.resolve(args[++i]);
   else if (args[i] === '--json') jsonDir = path.resolve(args[++i]);
   else if (args[i] === '--docs') apiDir = path.resolve(args[++i]);
+  else if (args[i] === '--link') links.push(args[++i]);
   else if (args[i] === '--skip-undocumented') skipUndocumented = true;
   else if (args[i] === '-h' || args[i] === '--help') {
     console.log(`
 Check a documentation site for dead links, missing metadata and offline-ness.
 
 Usage:
-  node check.js --json <dir> [--docs <dir>] [--skip-undocumented]
-  node check.js --dist <dir>
+  node check.js --json <dir> [--docs <dir>] [--skip-undocumented] [--link <asm>=<url>]
+  node check.js --dist <dir> [--link <asm>=<url>]
 
 Options:
   --json <dir>          Location of the generated model; renders every page in memory
   --docs <dir>          Authored markdown pages; without them the site is browsed by namespace
   --skip-undocumented   Leave out anything with no <summary>, as serve and build would
+  --link <asm>=<url>    As build's, so links into another site are checked as leaving rather than
+                        as broken. Pass what the site was built with
   --dist <dir>          Check an already-exported directory instead of rendering one
   -h, --help            Show this help
 `);
@@ -103,7 +107,7 @@ function collectPages() {
     return pages;
   }
 
-  const site = new Site({ jsonDir, apiDir, skipUndocumented });
+  const site = new Site({ jsonDir, apiDir, skipUndocumented, links });
 
   for (const key of site.renderer.treeAssetNames()) {
     const url = site.routes.asset(`tree-${key}.json`);
@@ -193,11 +197,22 @@ for (const [url, html] of pages) {
   anchorsByPage.set(url, new Set((html.match(/\sid="([^"]+)"/g) || []).map((m) => m.slice(5, -1))));
 }
 
+// Where the --link map sends references this set does not document. Root-relative and therefore
+// indistinguishable from one of this site's own urls, so they are named here rather than counted
+// as pages that went missing; whether the other site has them is that site's check to run.
+const linkedSites = links.map((entry) => entry.slice(entry.indexOf('=') + 1).replace(/\/$/, ''));
+let outboundLinks = 0;
+
 // Second pass so fragment targets can be validated against the collected anchor sets.
 for (const [url, html] of pages) {
   for (const match of html.matchAll(/href="([^"]+)"/g)) {
     const href = match[1];
     if (/^(https?:|mailto:|#)/.test(href)) continue;
+
+    if (linkedSites.some((site) => site && href.startsWith(site + '/'))) {
+      outboundLinks++;
+      continue;
+    }
 
     hrefCount++;
 
@@ -304,6 +319,7 @@ for (const [title, urls] of duplicateTitles.slice(0, 10)) {
 
 console.log(`pages checked        ${pages.size}`);
 console.log(`internal links       ${hrefCount}`);
+if (linkedSites.length > 0) console.log(`links to other sites ${outboundLinks}`);
 console.log(`lazy tree groups     ${lazyGroups}`);
 console.log(`distinct titles      ${titles.size}`);
 console.log(`distinct descriptions ${descriptions.size}`);

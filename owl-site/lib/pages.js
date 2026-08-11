@@ -6,6 +6,7 @@ const { highlight } = require('./highlight');
 const { page, filterBar, memberFilterBar, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
 const icons = require('./icons');
+const { Links } = require('./links');
 const markdown = require('./markdown');
 const theme = require('./theme');
 
@@ -465,7 +466,20 @@ class Renderer {
     // through to wherever a fenced block can appear: authored markdown, and doc comments alike.
     this.diagrams = options.diagrams || null;
     this.warn = typeof options.warn === 'function' ? options.warn : () => {};
-    this.docContext = { model, routes, inline: false, diagrams: this.diagrams, warn: this.warn };
+
+    // The sibling sites, for the references this set does not document itself. Empty unless --link
+    // named one, which leaves every external name resolving exactly as it did: the documented set,
+    // then Microsoft Learn, then nothing.
+    this.links = options.links || new Links();
+
+    this.docContext = {
+      model,
+      routes,
+      inline: false,
+      diagrams: this.diagrams,
+      warn: this.warn,
+      links: this.links,
+    };
     this.markdownContext = { diagrams: this.diagrams, warn: this.warn };
 
     // An assembly with nothing in it is not somewhere to send a reader, and --skip-undocumented can
@@ -739,6 +753,10 @@ class Renderer {
    * A name two different external types answer to is filed as ambiguous and linked nowhere, since
    * the wrong page is worse than none. Keyed by arity the way typesByName is, so IEnumerable and
    * IEnumerable&lt;T&gt; are not each other.
+   *
+   * The assembly is kept beside the doc id, because which site documents a type is a fact about
+   * the assembly it was declared in and the signature has even less to say about that than it does
+   * about the name. See lib/links.js.
    */
   externalTypesByName() {
     if (this._externalTypesByName) return this._externalTypesByName;
@@ -759,8 +777,8 @@ class Renderer {
 
       for (const key of keys) {
         const seen = index.get(key);
-        if (seen === undefined) index.set(key, ref.id);
-        else if (seen !== ref.id) index.set(key, '');
+        if (seen === undefined) index.set(key, { id: ref.id, asm: ref.asm || '' });
+        else if (seen && seen.id !== ref.id) index.set(key, null);
       }
     };
 
@@ -780,15 +798,18 @@ class Renderer {
   }
 
   /**
-   * Where a name no documented type answers to points: Microsoft Learn, when it is a BCL type.
+   * Where a name no documented type answers to points: a sibling site --link named, or Microsoft
+   * Learn when it is a BCL type.
    *
-   * Anything else outside the set - a type from a third party package - has no page this knows of,
-   * and stays text.
+   * Anything else outside the set - a type from a third party package nobody documents - has no
+   * page this knows of, and stays text.
    */
   externalTypeUrl(name, arity = 0) {
     const index = this.externalTypesByName();
-    const docId = index.get(`${name}\`${arity}`) || index.get(name);
-    return (docId && docnodes.learnUrl(docId)) || '';
+    const ref = index.get(`${name}\`${arity}`) || index.get(name);
+    if (!ref) return '';
+
+    return this.links.typeUrl(ref.id, ref.asm) || docnodes.learnUrl(ref.id) || '';
   }
 
   /**
@@ -827,7 +848,9 @@ class Renderer {
 
     return html.replace(/<span class="tok-(type|keyword)">([^<]*)<\/span>/g, (whole, kind, name, offset) => {
       // Most keywords are not types at all, and the ones that are cannot be anything else: 'string'
-      // is System.String wherever it is written, so it skips the lookups entirely.
+      // is System.String wherever it is written, so it skips the lookups entirely - including the
+      // --link map, which no keyword belongs in. An alias for a framework type is a framework type,
+      // and the table below is a table of doc ids with no assembly to match a link entry against.
       if (kind === 'keyword') {
         const url = docnodes.learnUrl(KEYWORD_TYPES[name]);
         return url ? this.linkedToken(kind, name, url) : whole;
@@ -905,7 +928,7 @@ class Renderer {
     const iface = member.explicitInterface;
 
     return (
-      this.typeRefHtml({ id: iface.id, display: iface.display, external: iface.external }) +
+      this.typeRefHtml({ id: iface.id, display: iface.display, external: iface.external, asm: iface.asm }) +
       '.' +
       escape(lastSegment(member.name) + genericSuffix(member))
     );
@@ -914,7 +937,7 @@ class Renderer {
   typeRefHtml(ref) {
     if (!ref) return '';
     return docnodes.render(
-      [{ t: 'cref', id: ref.id, label: ref.display, external: ref.external }],
+      [{ t: 'cref', id: ref.id, label: ref.display, external: ref.external, asm: ref.asm }],
       this.docContext
     );
   }
@@ -1880,7 +1903,7 @@ ${this.seeAlsoHtml(type.docs)}
         if (ref.href) {
           return `<a class="see-ref" href="${attr(ref.href)}" rel="noopener">${escape(ref.label || ref.href)}</a>`;
         }
-        return this.typeRefHtml({ id: ref.id, display: ref.label, external: ref.external });
+        return this.typeRefHtml({ id: ref.id, display: ref.label, external: ref.external, asm: ref.asm });
       })
       .join(' ');
 

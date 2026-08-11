@@ -142,6 +142,30 @@ rests on. It is not quite total: a VB `Declare Function` is a `MethodKind` C# ha
 no name for, and the C# renderer throws rather than guess, so that one is spelled
 out from its parts.
 
+## Linking to the set next door
+
+A documentation set covers the assemblies it was generated from, and every type it merely
+references belongs to somebody else. On its own that is most of a signature: Grasshopper's
+parameters are RhinoCommon's geometry, and all of it rendered as dead text beside links to
+everything the set did document.
+
+`--link` maps an assembly to the site that documents it, and it is an assembly rather than a
+namespace on purpose. A namespace is not owned by one assembly — `Rhino.UI` types are documented in
+the RhinoCommon set, and Rhino.UI.dll declares more of its own that are documented nowhere — so a
+namespace map would send both to the same page and be wrong about half of them. That is why the
+model now records the assembly on every external reference, which cost 1% of its size.
+
+The url is computed from the doc id rather than looked up in the other set's model. Both sites are
+written by owl, whose type slug is `Slug.Normalize` of the name with `T:` taken off, so the page is
+derivable — which means a set can link into one that has not been built yet, and the two builds
+need no ordering between them. The cost is that nothing verifies the target exists: an assembly
+mapped to a site that does not document a particular type links to a 404. Feeding the other model
+in would fix that, at the price of making the sets build in sequence.
+
+External *members* stop at their declaring type's page. Their anchors are derivable too, but only
+almost: owl appends a counter where two members normalize alike — six of RhinoCommon's 19,147 — and
+a computed anchor would land those on the right page beside the wrong card.
+
 ## The tree is sent once, not with every page
 
 The sidebar tree is the same list of types on every page that carries it — what

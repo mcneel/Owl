@@ -39,6 +39,12 @@ sealed class DocNode
   [JsonPropertyName("external")] public bool? External { get; set; }
 
   /// <summary>
+  /// Assembly an external cref's target is declared in. See
+  /// <see cref="TypeRef.Assembly"/>.
+  /// </summary>
+  [JsonPropertyName("asm")] public string? Assembly { get; set; }
+
+  /// <summary>
   /// Parameter or type-parameter name for paramref / typeparamref nodes.
   /// </summary>
   [JsonPropertyName("name")] public string? Name { get; set; }
@@ -104,6 +110,12 @@ sealed class DocRef
 
   /// <summary>True when the target lives outside the documented set.</summary>
   [JsonPropertyName("external")] public bool? External { get; set; }
+
+  /// <summary>
+  /// Assembly an external target is declared in. See
+  /// <see cref="TypeRef.Assembly"/>.
+  /// </summary>
+  [JsonPropertyName("asm")] public string? Assembly { get; set; }
 }
 
 /// <summary>One &lt;exception&gt; tag: what is thrown, and when.</summary>

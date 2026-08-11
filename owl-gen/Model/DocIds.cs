@@ -55,14 +55,25 @@ static class DocIds
   /// Doc id for a type reference, unwrapping arrays and pointers so
   /// <c>Brep[]</c> still links to <c>Brep</c>.
   /// </summary>
-  public static string? OfType(ITypeSymbol? type)
+  public static string? OfType(ITypeSymbol? type) => Of(Unwrap(type));
+
+  /// <summary>
+  /// What an array or a pointer is ultimately of, and any other type
+  /// unchanged.
+  /// </summary>
+  /// <remarks>
+  /// Everything a reference records is a fact about this symbol rather than
+  /// about the array around it: neither an array nor a pointer has a
+  /// documentation id or a containing assembly of its own, so asking one for
+  /// either answers nothing, which is how <c>Brep[]</c> came to be filed as
+  /// living outside the documented set.
+  /// </remarks>
+  public static ITypeSymbol? Unwrap(ITypeSymbol? type)
   {
     while (true)
     {
       switch (type)
       {
-        case null:
-          return null;
         case IArrayTypeSymbol array:
           type = array.ElementType;
           continue;
@@ -70,7 +81,7 @@ static class DocIds
           type = pointer.PointedAtType;
           continue;
         default:
-          return Of(type);
+          return type;
       }
     }
   }
