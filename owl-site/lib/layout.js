@@ -36,6 +36,8 @@ const VERSIONS = ['9'];
  *   sidebar      optional sidebar HTML (renders the tree column)
  *   treeKey      identifies the tree, so its expanded groups are remembered per shape rather
  *                than smeared across every assembly's
+ *   treeSrc      where the rows this page left out of its tree are fetched from, or '' for a
+ *                tree that is written out whole
  *   filterBar    optional filter bar HTML
  *   routes       Routes instance
  *   homeUrl      where the site name and the home crumb point; the root, unless it only redirects
@@ -57,6 +59,7 @@ function page(options) {
     body,
     sidebar = null,
     treeKey = '',
+    treeSrc = '',
     filterBar = null,
     routes,
     homeUrl = null,
@@ -175,7 +178,9 @@ ${icons.spriteHtml()}
 <div class="layout">
 ${
   sidebar
-    ? `  <aside class="sidebar" id="sidebar" aria-label="Navigation" data-tree="${attr(treeKey)}">
+    ? `  <aside class="sidebar" id="sidebar" aria-label="Navigation" data-tree="${attr(treeKey)}"${
+        treeSrc ? ` data-tree-src="${attr(treeSrc)}"` : ''
+      }>
 ${sidebar}
   </aside>
   <div class="resize-handle" id="resize-handle" role="separator" aria-orientation="vertical"></div>`

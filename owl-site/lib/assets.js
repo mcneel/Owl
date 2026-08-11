@@ -294,6 +294,8 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .tree-arrow.collapsed { transform: rotate(-90deg); }
 .tree-arrow-spacer { display: inline-block; width: 1rem; flex-shrink: 0; }
 .tree-ns-children.collapsed { display: none; }
+/* Where a group's rows should be, when the fetch that carries them did not arrive. */
+.tree-empty { padding: 0.28rem 0.75rem 0.28rem 1.75rem; font-size: 0.78rem; color: var(--text2); }
 .tree-type-label { display: flex; align-items: center; padding: 0.28rem 0.75rem; cursor: default; user-select: none; background: var(--bg2); }
 .tree-type-label:hover { background: var(--bg3); }
 /* A namespace row is a type row with a namespace on it: the same box, the same drawing column, and
@@ -1288,6 +1290,75 @@ const JS = `
 
   restoreTreeState();
 
+  // ---- Tree: the rows the page left out ----
+  // A tree is the same list of types on every page that carries it - what changes is which group
+  // is open and which row is marked - so the page is written with only the group being read in it,
+  // and the rest arrive once from an asset the browser then has cached for the whole read. See
+  // treeGroup and treeAsset in lib/pages.js, which decide what is left out and write what fills it.
+  var lazyGroups = [].slice.call(document.querySelectorAll('.tree-ns-children[data-lazy]'));
+  var treeSrc = treeRoot ? treeRoot.getAttribute('data-tree-src') : '';
+
+  // Where the column was left by the last thing that placed it, so that the rows arriving under a
+  // reader who has scrolled in the meantime do not pull the tree out from under them.
+  var placedScroll = 0;
+
+  // Mirrors treeTypeRow in lib/pages.js, for the rows that have no members listed under them,
+  // which is every row but the one being read. The mark references the sprite already on the page.
+  function treeRowHtml(row, prefix) {
+    var since = row.length > 3 && row[3] ? ' data-since="' + escapeHtml(row[3]) + '"' : '';
+
+    return (
+      '<div class="tree-type"' + since + '><div class="tree-type-label">' +
+      '<span class="tree-arrow-spacer"></span>' +
+      '<a class="tree-link" href="' + escapeHtml(prefix + row[1] + '/') + '">' +
+      '<svg class="kind-icon" aria-hidden="true" focusable="false"><use href="#${ICON_PREFIX}' +
+      escapeHtml(row[2] || 'class') + '"/></svg>' +
+      escapeHtml(row[0]) +
+      '</a></div></div>'
+    );
+  }
+
+  function fillTree(asset) {
+    var prefix = (asset && asset.prefix) || '';
+    var groups = (asset && asset.groups) || {};
+
+    lazyGroups.forEach(function (container) {
+      var rows = groups[container.getAttribute('data-lazy')];
+      if (!rows) return;
+
+      var html = '';
+      for (var i = 0; i < rows.length; i++) html += treeRowHtml(rows[i], prefix);
+
+      // Appended rather than written over: a category group already holds its Overview row, which
+      // is in the page so that it is there with the script off as well.
+      container.insertAdjacentHTML('beforeend', html);
+      container.removeAttribute('data-lazy');
+    });
+  }
+
+  if (treeSrc && lazyGroups.length > 0) {
+    fetch(treeSrc)
+      .then(function (response) { return response.json(); })
+      .then(function (asset) {
+        fillTree(asset);
+        // Over the whole tree this time: what was remembered may name a group that was empty until
+        // now, and the filter has rows to hide that were not there when it last ran.
+        restoreTreeState();
+        applyTreeFilter();
+        if (!treeRoot || treeRoot.scrollTop === placedScroll) placeTree();
+      })
+      .catch(function () {
+        // Said rather than left blank. A group that opens onto nothing reads as a group with
+        // nothing in it, and there is no way for the reader to tell that from a fetch that failed.
+        lazyGroups.forEach(function (container) {
+          container.insertAdjacentHTML(
+            'beforeend',
+            '<div class="tree-empty">Could not load the rest of the tree.</div>'
+          );
+        });
+      });
+  }
+
   // ---- Tree: collapse, expand, search ----
   document.querySelectorAll(GROUP_CONTROLS).forEach(function (label) {
     label.addEventListener('click', function () {
@@ -1651,27 +1722,37 @@ const JS = `
   //
   // A member wins over its type: centring on the type would leave the highlight off-screen in a
   // long member list, which is the case the highlight exists for.
-  var active =
-    document.querySelector('.tree-child-link.active') ||
-    document.querySelector('.tree-link.active') ||
-    document.querySelector('.tree-ns-link.active');
+  //
+  // Run again once the groups the page left out have been filled in: rows landing above the one
+  // being read move it down the column, so a position measured against the skeleton is no longer
+  // where the reader was. Where they have scrolled since, it is left alone - see placedScroll.
+  function placeTree() {
+    var active =
+      document.querySelector('.tree-child-link.active') ||
+      document.querySelector('.tree-link.active') ||
+      document.querySelector('.tree-ns-link.active');
 
-  if (treeRoot) {
-    var remembered = readTreeState();
-    if (remembered && remembered.scroll) treeRoot.scrollTop = remembered.scroll;
-  }
-
-  if (active && active.scrollIntoView) {
-    var onScreen = false;
-
-    if (treeRoot && active.getBoundingClientRect) {
-      var entry = active.getBoundingClientRect();
-      var pane = treeRoot.getBoundingClientRect();
-      onScreen = entry.top >= pane.top && entry.bottom <= pane.bottom;
+    if (treeRoot) {
+      var remembered = readTreeState();
+      if (remembered && remembered.scroll) treeRoot.scrollTop = remembered.scroll;
     }
 
-    if (!onScreen) active.scrollIntoView({ block: 'center' });
+    if (active && active.scrollIntoView) {
+      var onScreen = false;
+
+      if (treeRoot && active.getBoundingClientRect) {
+        var entry = active.getBoundingClientRect();
+        var pane = treeRoot.getBoundingClientRect();
+        onScreen = entry.top >= pane.top && entry.bottom <= pane.bottom;
+      }
+
+      if (!onScreen) active.scrollIntoView({ block: 'center' });
+    }
+
+    placedScroll = treeRoot ? treeRoot.scrollTop : 0;
   }
+
+  placeTree();
 
   // Scrolling is part of where you were, and cheap enough to record on a timer rather than a
   // listener that fires on every wheel tick.

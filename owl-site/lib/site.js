@@ -254,8 +254,22 @@ class Site {
           type: 'application/json; charset=utf-8',
           body: JSON.stringify(this.renderer.searchAsset()),
         };
-      default:
+      default: {
+        // The rows the trees leave out, one asset per tree shape. Answered from the renderer the
+        // pages were written by, so a key it has no tree for is a 404 rather than an empty tree.
+        const tree = /^tree-(.+)\.json$/.exec(name);
+        const rows = tree ? this.renderer.treeAsset(tree[1]) : null;
+
+        if (rows) {
+          return {
+            status: 200,
+            type: 'application/json; charset=utf-8',
+            body: JSON.stringify(rows),
+          };
+        }
+
         return { status: 404, type: 'text/plain; charset=utf-8', body: 'Not found' };
+      }
     }
   }
 

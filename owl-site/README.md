@@ -179,6 +179,12 @@ the theme toggle, the kind filter, the collapsible tree, the resizable sidebar, 
 selector and client-side search. Syntax highlighting, diagrams and math all happen at render time
 and nothing loads from a CDN, so an exported site works with no network at all.
 
+A page is written with only the tree group it is standing in; the rest arrive from
+`/assets/tree-<tree>.json`, once per read rather than once per page. Without JavaScript the reader
+keeps that group, every group's heading and every category's Overview link — which is what the
+groups were worth with the script off anyway, since only the script can open a collapsed one.
+On RhinoCommon this is the difference between a 944 MB export and a 226 MB one.
+
 ## Layout
 
 ```

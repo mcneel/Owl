@@ -112,6 +112,14 @@ class Routes {
     return `${this.base}${this.modeInsert}/type/${typeSlug}/`;
   }
 
+  /**
+   * What every type url under these routes begins with, for the tree asset: a slug and a slash
+   * make the rest. One prefix rather than a url per row, since a tree holds thousands of them.
+   */
+  typePrefix() {
+    return `${this.base}${this.modeInsert}/type/`;
+  }
+
   /** Url for a member, which lives as a fragment on its type's page. */
   member(typeSlug, anchor) {
     return anchor ? `${this.type(typeSlug)}#${anchor}` : this.type(typeSlug);

@@ -60,8 +60,21 @@ if (!distDir && !jsonDir) {
 const failures = [];
 const notes = [];
 
+// url -> the parsed tree asset served there, for the check that every group a page leaves empty
+// has rows waiting for it. Filled by collectPages, from whichever of the two sources it read.
+const treeAssets = new Map();
+
 function fail(message) {
   failures.push(message);
+}
+
+/** Records one tree asset, so the groups the pages left empty can be matched against its rows. */
+function readTreeAsset(url, body) {
+  try {
+    treeAssets.set(url, JSON.parse(body));
+  } catch (err) {
+    fail(`${url}: not valid JSON (${err.message})`);
+  }
 }
 
 /** Collects { url -> html } either by rendering or by reading an exported tree. */
@@ -77,13 +90,27 @@ function collectPages() {
           const rel = path.relative(distDir, path.dirname(full)).split(path.sep).filter(Boolean);
           pages.set('/' + (rel.length ? rel.join('/') + '/' : ''), fs.readFileSync(full, 'utf8'));
         }
+        // Keyed by the url it was written at rather than by its name, so an export made with
+        // --base is matched against the urls its pages actually name.
+        else if (/^tree-.+\.json$/.test(entry.name)) {
+          const rel = path.relative(distDir, full).split(path.sep).join('/');
+          readTreeAsset('/' + rel, fs.readFileSync(full, 'utf8'));
+        }
       }
     };
     walk(distDir);
+
     return pages;
   }
 
   const site = new Site({ jsonDir, apiDir, skipUndocumented });
+
+  for (const key of site.renderer.treeAssetNames()) {
+    const url = site.routes.asset(`tree-${key}.json`);
+    const result = site.asset(`tree-${key}.json`);
+    if (result.status !== 200) fail(`${url} returned ${result.status}`);
+    else readTreeAsset(url, result.body);
+  }
 
   // The namespace-mode copies too: the namespace pages link at them, so leaving them out would
   // report every one of those links as broken.
@@ -122,6 +149,8 @@ const knownUrls = new Set(pages.keys());
 for (const extra of ['/assets/app.css', '/assets/app.js', '/assets/search.json', '/sitemap.xml', '/robots.txt']) {
   knownUrls.add(extra);
 }
+
+for (const url of treeAssets.keys()) knownUrls.add(url);
 
 let hrefCount = 0;
 const brokenLinks = new Map();
@@ -192,6 +221,48 @@ for (const [target, count] of [...brokenLinks].slice(0, 20)) {
 }
 
 /**
+ * A group left empty for the browser to fill has rows waiting for it, under the same name.
+ *
+ * Worth a check of its own because getting it wrong is invisible in the exported files: the page
+ * renders, the tree draws, and the only symptom is a group that opens onto nothing in a browser.
+ */
+let lazyGroups = 0;
+
+for (const [url, html] of pages) {
+  const source = (html.match(/data-tree-src="([^"]+)"/) || [])[1] || '';
+  const groups = [...html.matchAll(/data-lazy="([^"]*)"/g)].map((m) => unescapeAttr(m[1]));
+  if (groups.length === 0) continue;
+
+  lazyGroups += groups.length;
+
+  // By name where the url does not match, which is what --dist on a site exported with --base
+  // gives: the files are written without the prefix their pages name them by.
+  const asset =
+    treeAssets.get(source) ||
+    treeAssets.get([...treeAssets.keys()].find((u) => u.endsWith(source.slice(source.lastIndexOf('/')))));
+
+  if (!asset) {
+    fail(`${url}: leaves ${groups.length} tree group(s) empty but names no readable tree asset`);
+    continue;
+  }
+
+  for (const group of groups) {
+    if (!asset.groups || !asset.groups[group]) {
+      fail(`${url}: tree group '${group}' has no rows in ${source}`);
+    }
+  }
+}
+
+function unescapeAttr(value) {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/**
  * The stylesheet is a hand-written string, and CSS fails silently: a comment left open, or a close
  * marker sitting outside one, makes the parser swallow the rules that follow rather than report
  * anything. It shows up as a styling bug in the browser and nowhere else, so it is worth checking.
@@ -233,6 +304,7 @@ for (const [title, urls] of duplicateTitles.slice(0, 10)) {
 
 console.log(`pages checked        ${pages.size}`);
 console.log(`internal links       ${hrefCount}`);
+console.log(`lazy tree groups     ${lazyGroups}`);
 console.log(`distinct titles      ${titles.size}`);
 console.log(`distinct descriptions ${descriptions.size}`);
 

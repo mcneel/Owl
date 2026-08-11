@@ -184,6 +184,10 @@ JSON-LD, and every link is a real `href`. The site works with JavaScript disable
 the theme toggle, the kind filter, the collapsible navigation tree, the resizable sidebar, the
 assembly selector and client-side search.
 
+The tree is sent once rather than with every page: a page carries the group it is standing in, and
+the rest arrive from an asset the browser then has cached for the read. See
+[NOTES](NOTES.md#the-tree-is-sent-once-not-with-every-page).
+
 Syntax highlighting, diagrams and math all happen when the site is generated and nothing is loaded
 from a CDN, so an exported site works with no network at all. Static output is written as
 `<path>/index.html`, which serves from any plain file host with no rewrite rules, alongside

@@ -530,6 +530,12 @@ class Renderer {
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),
       ...options,
+      // Where the rows this page left out of its tree are to be fetched from. Named by the same
+      // key the tree's remembered state is kept under, and left off the trees that have no asset -
+      // the assemblies tree lists categories rather than types, and is small enough to write out.
+      treeSrc: this.treeAssetNames().includes(options.treeKey)
+        ? this.routes.asset(`tree-${options.treeKey}.json`)
+        : '',
       // No selector while browsing by namespace. A namespace belongs to no one assembly, so the
       // tree beside it is every namespace on the site whatever the header says, and a control that
       // narrows nothing it sits above is one that reads as broken. Which assembly a type ships in
@@ -2405,15 +2411,28 @@ ${this.seeAlsoHtml(type.docs)}
    * split: the arrow opens the group and the name goes to the page. One row cannot do both, and of
    * the two the arrow is the one a reader can find no other way.
    *
+   * A group the page is not standing in is written without the rows it holds, and marked with the
+   * name the browser puts them back under. Nothing is lost by leaving them out: the group is
+   * collapsed, so they are not drawn, and the only thing that opens it is the script that fills it.
+   * The rows are the whole weight of a tree - every page carried every type in the set, which on a
+   * few thousand types is most of what the page weighs - and they are the same rows on every page.
+   * See treeAsset.
+   *
    * @param {object} options  collapsed: start closed
    *                          icon: kind mark to draw before the label, which also plains the row
    *                          href: the group's own page, which makes the label a link
    *                          active: the reader is on that page
+   *                          lazy: the browser fills this one, from the tree asset
    */
-  treeGroup(id, label, inner, { collapsed = false, icon = '', href = '', active = false } = {}) {
+  treeGroup(
+    id,
+    label,
+    inner,
+    { collapsed = false, icon = '', href = '', active = false, lazy = false } = {}
+  ) {
     const children =
       `<div class="tree-ns-children${collapsed ? ' collapsed' : ''}" ` +
-      `id="ns_${attr(id)}">${inner}</div>`;
+      `id="ns_${attr(id)}"${lazy ? ` data-lazy="${attr(id)}"` : ''}>${inner}</div>`;
 
     const mark = icon ? icons.iconHtml(icon) : '';
 
@@ -2537,22 +2556,25 @@ ${this.seeAlsoHtml(type.docs)}
     for (const group of groups) {
       const isActiveGroup = group.category === activeCategory || containsActiveType(group);
 
-      const rows = group.types
-        .map(({ type }) => {
-          const active = activeType !== null && type.docId === activeType.docId;
+      // Only the group being read is written out; the browser fills the rest from the tree asset.
+      const rows = !isActiveGroup
+        ? ''
+        : group.types
+            .map(({ type }) => {
+              const active = activeType !== null && type.docId === activeType.docId;
 
-          // Only the current type lists its members, so a large category stays readable.
-          const inherited = active ? this.inheritedMembers(type) : [];
-          const children = active ? this.treeMemberLinksHtml(type, inherited) : '';
+              // Only the current type lists its members, so a large category stays readable.
+              const inherited = active ? this.inheritedMembers(type) : [];
+              const children = active ? this.treeMemberLinksHtml(type, inherited) : '';
 
-          return this.treeTypeRow(type, {
-            active,
-            children,
-            childrenId: `tc_${type.slug}`,
-            inherited: inherited.length > 0,
-          });
-        })
-        .join('');
+              return this.treeTypeRow(type, {
+                active,
+                children,
+                childrenId: `tc_${type.slug}`,
+                inherited: inherited.length > 0,
+              });
+            })
+            .join('');
 
       // The overview link only exists for real categories, not the synthetic uncategorized group.
       const overview =
@@ -2574,8 +2596,11 @@ ${this.seeAlsoHtml(type.docs)}
               '</div></div>'
             : '';
 
+      // The Overview row is written whether or not the group is filled in, so a category's own
+      // page is one click away with the script off as well as on.
       out += this.treeGroup(`cat_${group.category}`, group.category, overview + rows, {
         collapsed: !isActiveGroup,
+        lazy: !isActiveGroup,
       });
     }
 
@@ -2648,23 +2673,27 @@ ${this.seeAlsoHtml(type.docs)}
       const open = bucket.name === activeNamespace;
 
       // Members are listed under the type being read and nowhere else, so a namespace the size of
-      // Rhino.Geometry stays a list of types.
-      const rows = bucket.types
-        .map(({ type }) => {
-          const active = activeType !== null && type.docId === activeType.docId;
-          const inherited = active ? this.inheritedMembers(type) : [];
+      // Rhino.Geometry stays a list of types. The namespaces that are not open are not written at
+      // all - the browser puts their rows back from the tree asset.
+      const rows = !open
+        ? ''
+        : bucket.types
+            .map(({ type }) => {
+              const active = activeType !== null && type.docId === activeType.docId;
+              const inherited = active ? this.inheritedMembers(type) : [];
 
-          return this.treeTypeRow(type, {
-            active,
-            children: active ? this.treeMemberLinksHtml(type, inherited) : '',
-            childrenId: `tc_${type.slug}`,
-            inherited: inherited.length > 0,
-          });
-        })
-        .join('');
+              return this.treeTypeRow(type, {
+                active,
+                children: active ? this.treeMemberLinksHtml(type, inherited) : '',
+                childrenId: `tc_${type.slug}`,
+                inherited: inherited.length > 0,
+              });
+            })
+            .join('');
 
       out += this.treeGroup(slugify(bucket.name) || 'global', bucket.name || '(global)', rows, {
         collapsed: !open,
+        lazy: !open,
         icon: 'namespace',
         href: this.routes.namespace(bucket.name),
         // Marked only where the namespace itself is what is being read: on a type's page the
@@ -2674,6 +2703,68 @@ ${this.seeAlsoHtml(type.docs)}
     }
 
     return out;
+  }
+
+  /**
+   * The rows the trees leave out, as one asset per tree shape.
+   *
+   * A tree is the same list on every page that carries it - what changes is which group is open
+   * and which row is marked - so writing it into all of them wrote the whole API into each. This
+   * is that list, sent once and kept by the browser's cache for the rest of the read: on
+   * RhinoCommon it is a tenth of what one page used to carry, against nineteen hundred pages that
+   * each carried it. See treeGroup and the tree section of assets.js.
+   *
+   * Rows are positional, as the search index's are: a name, a slug and the mark to draw, with the
+   * version a type arrived in only where it has one. Urls are a prefix and the slug rather than a
+   * url each, since every type page under one tree sits under the same path.
+   *
+   * @param {string} key  'namespaces', or an assembly's slug for one of the category trees
+   * @returns {object|null} null when the key names no tree this site has
+   */
+  treeAsset(key) {
+    const groups = {};
+
+    if (key === 'namespaces') {
+      // Namespace mode's urls carry its segment, and this tree is only ever rendered under it. A
+      // site with no authored pages has the one shape and no segment to insert.
+      const routes = this.baseRoutes.withMode(this.namespaceMode ? '' : NAMESPACE_MODE);
+
+      for (const bucket of this.model.sortedNamespaces()) {
+        groups[slugify(bucket.name) || 'global'] = bucket.types.map((entry) =>
+          this.treeAssetRow(entry.type)
+        );
+      }
+
+      return { schema: 1, prefix: routes.typePrefix(), groups };
+    }
+
+    const assemblyName = this.assemblyNames.find((name) => slugify(name) === key);
+    if (!assemblyName) return null;
+
+    for (const group of this.model.categoryTreeOfAssembly(assemblyName)) {
+      groups[`cat_${group.category}`] = group.types.map(({ type }) => this.treeAssetRow(type));
+    }
+
+    return { schema: 1, prefix: this.baseRoutes.typePrefix(), groups };
+  }
+
+  /** One type as the tree asset carries it. Mirrors treeTypeRow, which draws the same row here. */
+  treeAssetRow(type) {
+    const row = [type.name, type.slug, theme.kindIcon(type.kind)];
+    if (type.docs && type.docs.since) row.push(type.docs.since);
+    return row;
+  }
+
+  /**
+   * The trees this site has an asset for, which is what build.js writes and check.js asks for.
+   *
+   * The namespace tree always, since every site can be browsed that way; a category tree per
+   * assembly where there are authored pages to organise, and none where there are not.
+   */
+  treeAssetNames() {
+    const names = ['namespaces'];
+    if (!this.namespaceMode) for (const name of this.assemblyNames) names.push(slugify(name));
+    return names;
   }
 
   // ------------------------------------------------------------------

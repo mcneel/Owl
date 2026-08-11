@@ -200,7 +200,9 @@ if (site.sandcastle) {
   pages += redirects;
 }
 
-for (const asset of ['app.css', 'app.js', 'search.json']) {
+const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
+
+for (const asset of ['app.css', 'app.js', 'search.json', ...trees]) {
   const result = site.asset(asset);
   write(site.routes.asset(asset), result.body);
   bytes += Buffer.byteLength(result.body, 'utf8');

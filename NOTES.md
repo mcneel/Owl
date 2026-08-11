@@ -142,6 +142,37 @@ rests on. It is not quite total: a VB `Declare Function` is a `MethodKind` C# ha
 no name for, and the C# renderer throws rather than guess, so that one is spelled
 out from its parts.
 
+## The tree is sent once, not with every page
+
+The sidebar tree is the same list of types on every page that carries it — what
+changes is which group is open and which row is marked — so writing it into each
+page wrote the whole API into each page. On RhinoCommon that was 1491 types
+serialized 1881 times: 900 MB of a 944 MB export, 480 KB of a 582 KB type page
+whose actual content was 86 KB. Heroku refused the push, which is how it was
+found; the reader was paying for it on every navigation long before that.
+
+So a page is written with the group it is standing in and no other. The rest are
+empty containers naming what belongs in them, and `assets/tree-<tree>.json`
+holds those rows once — a name, a slug, the mark to draw, and the version the
+type arrived in where it has one. The browser fills them on load and the tree is
+then exactly the tree that used to be written out, byte for byte, which is what
+lets everything downstream of it — the filter, collapse-all, the remembered
+expansion — stay as it was. 944 MB becomes 226 MB, and the asset is 107 KB
+against the 480 KB each page used to carry.
+
+The rows left out are the ones a reader without JavaScript could never see: a
+collapsed group has no way to open without the script that toggles it. What they
+keep is the group they are in, every group's heading — a namespace heading is a
+link to the namespace's own page — and every category's Overview row, which is
+written into the skeleton for exactly that reason. A failed fetch says so in the
+tree rather than leaving the groups looking empty.
+
+One asset per tree shape, not one per site: an assembly's categories are a
+different list from every namespace, and namespace mode's urls carry its segment
+while category mode's do not, so the rows differ by more than what they hold. The
+assemblies tree is written out whole — it lists categories rather than types, and
+is a few dozen rows.
+
 ## Shipping
 
 owl ships as a .NET tool and nothing else. `.github/workflows/build.yml` packs
