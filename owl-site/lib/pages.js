@@ -3,7 +3,7 @@
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
 const { slugify, NAMESPACE_MODE } = require('./routes');
 const { highlight } = require('./highlight');
-const { page, filterBar, DEFAULT_SITE_NAME } = require('./layout');
+const { page, filterBar, memberFilterBar, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
 const icons = require('./icons');
 const markdown = require('./markdown');
@@ -920,7 +920,7 @@ class Renderer {
       : `<span class="member-name">${nameHtml}</span>`;
 
     return (
-      `<div class="member" data-badge="${attr(theme.filterLetter(type.kind))}" ` +
+      `<div class="member" data-filter="${attr(theme.filterLetter(type.kind))}" ` +
       `data-kind="${attr(type.kind)}"${this.sinceAttr(type.docs)}>` +
       '<div class="member-header">' +
       this.kindIconHtml(type.kind) +
@@ -981,7 +981,7 @@ class Renderer {
   }
 
   /**
-   * The letters a list of types or members filters under, for a filter bar offering only those.
+   * The letters a list of types filters under, for a filter bar offering only those.
    *
    * Filter letters rather than badge letters, so a page of enums offers the tab that actually shows
    * them rather than the Events tab their badge would ask for.
@@ -1456,10 +1456,12 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     //
     // Inherited members count towards the tabs, since they are listed under the declared ones: a
     // type that declares no events but inherits three still has events to filter to.
-    const kindTabs = filterBar({
-      kinds: this.filterLettersOf(
-        members.concat(inherited.map((entry) => entry.member)),
-        (m) => m.kind
+    //
+    // Its own vocabulary, not the one a list of types filters by: the reader here has already
+    // chosen the type and is choosing among its members. See MEMBER_FILTERS.
+    const kindTabs = memberFilterBar({
+      kinds: new Set(
+        members.concat(inherited.map((entry) => entry.member)).map((member) => member.kind)
       ),
     });
 
@@ -2028,8 +2030,8 @@ ${this.seeAlsoHtml(type.docs)}
    * The signature is highlighted but not cross-linked, since a link inside a link is neither: the
    * row leads to the member, which is the one place every type in its signature is linked anyway.
    *
-   * It carries the same data-badge the cards do, so the kind tabs act on it without knowing it is
-   * a different shape. No id: the anchor belongs to the member's own page, and a second element
+   * It carries the same data-filter the cards do, so the member tabs act on it without knowing it
+   * is a different shape. No id: the anchor belongs to the member's own page, and a second element
    * answering to it here would take the link away from the card that documents it.
    */
   inheritedRowHtml({ member, from }) {
@@ -2037,7 +2039,7 @@ ${this.seeAlsoHtml(type.docs)}
 
     return (
       `<a class="member inherited" href="${attr(url)}" ` +
-      `data-badge="${attr(theme.filterLetter(member.kind))}" ` +
+      `data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
       `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
       this.kindIconHtml(member.kind) +
       `<code class="inherited-sig">${highlight(member.signature || member.name, 'csharp')}</code>` +
@@ -2059,7 +2061,7 @@ ${this.seeAlsoHtml(type.docs)}
     const rows = members
       .map((member) => {
         return (
-          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.filterLetter(member.kind))}" ` +
+          `<tr id="${attr(member.anchor)}" data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           this.operationCells(member) +
           `<td class="op-types">${this.typeRefHtml(member.returnType)}</td>` +
@@ -2119,7 +2121,7 @@ ${this.seeAlsoHtml(type.docs)}
     const rows = members
       .map(
         (member) =>
-          `<tr id="${attr(member.anchor)}" data-badge="${attr(theme.filterLetter(member.kind))}" ` +
+          `<tr id="${attr(member.anchor)}" data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
           `<td class="enum-name">${escape(member.name)}` +
           (member.obsolete ? ' <span class="chip chip-obsolete">Obsolete</span>' : '') +
@@ -2141,7 +2143,7 @@ ${this.seeAlsoHtml(type.docs)}
 
   memberCardHtml(member, assemblyName, selfSlug) {
     const explicit = Boolean(member.explicitInterface);
-    const filterLetter = theme.filterLetter(member.kind);
+    const filterKey = theme.memberFilterKey(member.kind);
 
     const chips = [];
     if (member.isStatic) chips.push('static');
@@ -2248,7 +2250,7 @@ ${this.seeAlsoHtml(type.docs)}
 
     return (
       `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
-      `data-badge="${attr(filterLetter)}" data-kind="${attr(member.kind)}"` +
+      `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
       `${this.sinceAttr(member.docs)}>` +
       '<div class="member-header">' +
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
@@ -2741,8 +2743,8 @@ ${this.seeAlsoHtml(type.docs)}
    */
   searchResultHtml(row, query) {
     return (
-      // data-badge is what the kind filter above the results matches on.
-      `<li data-badge="${attr(theme.filterLetter(row.kind))}">` +
+      // data-filter is what the kind filter above the results matches on.
+      `<li data-filter="${attr(theme.filterLetter(row.kind))}">` +
       '<div class="r-head">' +
       this.kindIconHtml(row.kind) +
       `<a class="r-name" href="${attr(row.url)}">${markMatch(row.name, query)}</a>` +

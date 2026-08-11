@@ -1018,14 +1018,19 @@ const JS = `
   var filterButtons = document.querySelectorAll('.filter-btn');
   var activeKind = 'all';
 
-  // Taken on the letter rather than the element, because the search page filters entries in its
-  // match list - rows that are not in the page yet, and may never be - by the same rule.
-  function matchesBadge(badge) {
-    return activeKind === 'all' || badge === activeKind;
+  // The key is whatever the page that drew the row filters by - a kind letter over a list of types,
+  // a member tab on a type page - and this never needs to know which: the buttons and the rows on
+  // any one page are written from the same vocabulary, and a url asking for a key this page has no
+  // button for is dropped below rather than matched.
+  //
+  // Taken on the key rather than the element, because the search page filters entries in its match
+  // list - rows that are not in the page yet, and may never be - by the same rule.
+  function matchesFilter(key) {
+    return activeKind === 'all' || key === activeKind;
   }
 
   function matchesKind(el) {
-    return matchesBadge(el.getAttribute('data-badge'));
+    return matchesFilter(el.getAttribute('data-filter'));
   }
 
   // How the search page narrows its results, set by the search section below once it has a match
@@ -1065,7 +1070,7 @@ const JS = `
     if (filterSearchResults) {
       filterSearchResults();
     } else {
-      document.querySelectorAll('.search-results li[data-badge]').forEach(function (el) {
+      document.querySelectorAll('.search-results li[data-filter]').forEach(function (el) {
         el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
       });
     }
@@ -1660,6 +1665,37 @@ const JS = `
   // of whatever the reader was doing and swallow their next keystroke.
   if (onSearchPage) input.focus();
 
+  // ...but Ctrl/Cmd+K asks for it from anywhere, which is the one shortcut a reader arriving from
+  // any other docs site already has in their hands. Both modifiers rather than the platform's own,
+  // since either is what somebody's fingers expect and neither means anything else here.
+  //
+  // Shift and Alt are let through untouched: Cmd+Shift+K and friends belong to the browser's own
+  // tools, and a docs page taking them would be taking something it cannot give back. The default
+  // is stopped only for the bare chord, where the browser would otherwise open its address bar.
+  //
+  // select() rather than a bare focus, so the chord pressed over a query already in the box starts
+  // the next search instead of appending to the last one.
+  var shortcutHint = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '')
+    ? '⌘K'
+    : 'Ctrl K';
+
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.shiftKey || !(e.metaKey || e.ctrlKey)) return;
+    if ((e.key || '').toLowerCase() !== 'k') return;
+
+    e.preventDefault();
+    input.focus();
+    input.select();
+  });
+
+  // Said in the box itself, because a shortcut nobody is told about is a shortcut nobody presses.
+  // In the placeholder rather than as a mark of its own: it is worth a glance on an empty box and
+  // nothing at all once there is a query to read, which is exactly when a placeholder leaves.
+  //
+  // Written here rather than into the HTML because it names a key that depends on the machine, and
+  // the page it is written into is built once for every reader.
+  if (!input.value) input.placeholder = input.placeholder + '  ' + shortcutHint;
+
   // Namespace mode is a url shape, and the index is built once in the plain one. A result opened
   // from a namespace-mode page therefore has the segment put back, so following it keeps the mode
   // the way every other link on the page does. Empty everywhere else, where plain is the shape.
@@ -1881,7 +1917,7 @@ const JS = `
   function resultRow(m, q) {
     var e = m[2];
     var ns = (index.namespaces || [])[e[6]] || '';
-    return '<li data-badge="' + escapeHtml(e[4] || '?') + '">' +
+    return '<li data-filter="' + escapeHtml(e[4] || '?') + '">' +
       '<div class="r-head">' +
       kindIcon(e) +
       '<a class="r-name" href="' + escapeHtml(rowUrl(e[1])) + '">' + markMatch(e[0], q) + '</a>' +
@@ -1934,7 +1970,7 @@ const JS = `
   // Narrows the matches to the kind the filter bar is set to and draws the first page of them. This
   // is what the bar calls, so a kind selects over every match rather than over the drawn ones.
   function showResults() {
-    listed = matched.filter(function (m) { return matchesBadge(m[2][4] || '?'); });
+    listed = matched.filter(function (m) { return matchesFilter(m[2][4] || '?'); });
 
     if (watcher) watcher.disconnect();
     more = null;

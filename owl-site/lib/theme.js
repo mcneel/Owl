@@ -140,10 +140,13 @@ const KIND_ICONS = {
  * The rest are here because their badge is worth keeping and their tab was not - T has become the
  * tab for what a reader does not go looking for by kind. A struct is a type like any other in a list
  * of them, an enum value is read with the enum that declares it, and a constructor or a finalizer is
- * not something anyone scans a type for the way they scan it for a method or a property: it is how
- * the type itself begins and ends.
+ * not something anyone scans a list of types for the way they scan it for a class.
  *
  * The badge answers what the reader is looking at; this answers which button shows it.
+ *
+ * Members are only ever incidental here - a search lists them, a list of types does not. Where the
+ * page is one type and its members are the whole of what is listed, MEMBER_FILTERS is the rule
+ * instead.
  */
 const FILTER_LETTERS = {
   enum: 'T',
@@ -154,12 +157,16 @@ const FILTER_LETTERS = {
 };
 
 /**
- * The filter buttons, in the order they appear in the bar. One per filter letter rather than per
- * badge letter - FILTER_LETTERS folds some kinds in with others - so nothing a row can carry is
- * left unreachable; a page renders only the ones its own contents use.
+ * The filter buttons over a list of types - a namespace, an assembly, a page of search results - in
+ * the order they appear in the bar. One per filter letter rather than per badge letter -
+ * FILTER_LETTERS folds some kinds in with others - so nothing a row can carry is left unreachable;
+ * a page renders only the ones its own contents use.
  *
  * Interfaces leads Types because it is the narrower of the two: Types is what is left once the
  * contracts are taken out, so it reads as the wider bucket sitting after the one it excludes.
+ *
+ * A search's results are a list of types with members mixed in, which is why the member letters are
+ * here too. A type page's bar is MEMBER_FILTER_KINDS and shares none of this.
  */
 const FILTER_KINDS = [
   { key: 'all', label: 'All' },
@@ -169,6 +176,58 @@ const FILTER_KINDS = [
   { key: 'P', label: 'Properties' },
   { key: 'F', label: 'Fields' },
   { key: 'E', label: 'Events' },
+];
+
+/**
+ * Which tab a kind filters under on a type page, where what is listed is one type's members.
+ *
+ * A vocabulary of its own rather than a second reading of the letters above, because the two bars
+ * are asked different questions. A list of types is sorted by what each thing is, and a constructor
+ * appearing in one is a stray detail of some type - which is what lands it in T with the rest of
+ * what nobody browses by kind. A type page is already about one type, so the only question left is
+ * which of its members you came for, and the tabs answer it in the words the sections below use.
+ *
+ * Operators and conversions are methods and an indexer is a property, as they are in the sections.
+ * A finalizer files with the constructors, which is why that tab names both: a type declares at
+ * most one, and a tab that narrows a list to a single row is a tab nobody needs - the two together
+ * are the one thing they state, which is how the type begins and ends. An enum value is the field
+ * it is underneath: an enum page lists nothing else, so a Values tab would be a button that never
+ * narrows anything.
+ *
+ * Type kinds are not here because no type page lists one: a nested type is a type in its own right
+ * in this model, with its own page, reached from the tree and from the namespace it lives in.
+ */
+const MEMBER_FILTERS = {
+  constructor: 'constructor',
+  destructor: 'constructor',
+  method: 'method',
+  operator: 'method',
+  conversion: 'method',
+  property: 'property',
+  indexer: 'property',
+  field: 'field',
+  enumvalue: 'field',
+  event: 'event',
+};
+
+/**
+ * The type page's tabs, in the order they appear in the bar.
+ *
+ * Members in the order the page lists them would open on the enum values and fields, which is where
+ * a type's members are least often looked up. These read the other way about: how the type is made,
+ * then what it does, then the data behind it - so the tabs a reader reaches for are the ones nearest
+ * the left edge they start from.
+ *
+ * A page renders only the ones its own members use, inherited members included, and memberFilterTabs
+ * is what settles both that and the wording of the first tab.
+ */
+const MEMBER_FILTER_KINDS = [
+  { key: 'all', label: 'All' },
+  { key: 'constructor', label: 'Constructors' },
+  { key: 'method', label: 'Methods' },
+  { key: 'property', label: 'Properties' },
+  { key: 'field', label: 'Fields' },
+  { key: 'event', label: 'Events' },
 ];
 
 function kindLetter(kind) {
@@ -188,14 +247,48 @@ function kindIcon(kind) {
 /**
  * The letter this kind is filtered under, which is its badge's unless FILTER_LETTERS says otherwise.
  *
- * Everything that carries a data-badge for the kind tabs to match on asks this; everything that
- * draws a badge asks kindLetter. The two are the same answer for every kind but the ones
- * FILTER_LETTERS names.
+ * A row in a list of types carries the answer as its data-filter, for the kind tabs to match on;
+ * everything that draws a badge asks kindLetter instead. The two are the same answer for every kind
+ * but the ones FILTER_LETTERS names. A type page's members answer to memberFilterKey.
  */
 function filterLetter(kind) {
   return Object.prototype.hasOwnProperty.call(FILTER_LETTERS, kind)
     ? FILTER_LETTERS[kind]
     : kindLetter(kind);
+}
+
+/**
+ * The tab this kind filters under on a type page.
+ *
+ * Anything unrecognised falls in with the methods, the way an unrecognised kind falls in with the
+ * classes when a drawing is asked for: whatever the model grows, a thing listed under a type is
+ * likelier to be called than not - and a key no tab offers is a member only All can reach.
+ */
+function memberFilterKey(kind) {
+  return Object.prototype.hasOwnProperty.call(MEMBER_FILTERS, kind) ? MEMBER_FILTERS[kind] : 'method';
+}
+
+/**
+ * The tabs a type page offers, given the kinds of member it lists - declared and inherited both.
+ *
+ * Only the tabs its own members answer to, so no button on the row does nothing when pressed. The
+ * first is worded from what the page holds rather than from what the tab could hold: a type with no
+ * finalizer says Constructors, and one that declares a finalizer and no constructor worth listing
+ * says Finalizer. Naming both on every page would have most of them promising a member that is not
+ * there - and the pages that do declare one are exactly where the word earns its space.
+ *
+ * @param {Set<string>} kinds  member kinds, not filter keys: which tab the finalizer is named in
+ *   cannot be read back out of the key it shares with the constructors.
+ */
+function memberFilterTabs(kinds) {
+  const keys = new Set([...kinds].map(memberFilterKey));
+
+  return MEMBER_FILTER_KINDS.filter((tab) => tab.key === 'all' || keys.has(tab.key)).map((tab) => {
+    if (tab.key !== 'constructor') return tab;
+
+    const named = [kinds.has('constructor') ? 'Constructors' : '', kinds.has('destructor') ? 'Finalizer' : ''];
+    return { key: tab.key, label: named.filter(Boolean).join(' & ') };
+  });
 }
 
 function kindLabel(kind) {
@@ -207,8 +300,13 @@ function kindLabel(kind) {
  * The label a group of this kind is headed with. Spelled out rather than label + 's', because
  * 'Property' pluralises to 'Properties' and the section headings are uppercased, which turns a
  * wrong plural into a shout.
+ *
+ * A finalizer is the one kind headed in the singular: a type declares at most one, so a heading
+ * promising several stands over a section that can never hold them.
  */
 function kindPlural(kind) {
+  if (kind === 'destructor') return kindLabel(kind);
+
   const label = kindLabel(kind);
   if (/[^aeiou]y$/.test(label)) return label.slice(0, -1) + 'ies';
   if (/(s|x|z|ch|sh)$/i.test(label)) return label + 'es';
@@ -222,9 +320,13 @@ module.exports = {
   KIND_ICONS,
   FILTER_LETTERS,
   FILTER_KINDS,
+  MEMBER_FILTERS,
+  MEMBER_FILTER_KINDS,
   kindLetter,
   kindIcon,
   filterLetter,
+  memberFilterKey,
+  memberFilterTabs,
   kindLabel,
   kindPlural,
 };

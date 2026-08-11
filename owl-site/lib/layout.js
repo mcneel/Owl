@@ -3,7 +3,7 @@
 const { escape, attr, json } = require('./html');
 const icons = require('./icons');
 const { slugify } = require('./routes');
-const { FILTER_KINDS } = require('./theme');
+const { FILTER_KINDS, memberFilterTabs } = require('./theme');
 
 /**
  * The page shell: a fixed header, the kind filter bar, a resizable tree sidebar and an
@@ -228,26 +228,42 @@ function siteLogo(logo, logoDark) {
 }
 
 /**
- * Tabs that filter the cards on the page by badge letter.
+ * Tabs that filter a list of types - a namespace, an assembly, a page of search results - by the
+ * letter each row filters under.
  *
  * It renders inside the content column rather than in the chrome above it, because it acts on this
  * page and nothing else: the state resets on navigation, and the script it drives only ever looks
- * inside .main-content. A type page takes it further and puts the row in its own head, where it
- * ends up sitting on the line the member list starts under.
- *
- * A type's tabs cover what it inherits as well as what it declares, since both are listed under it.
+ * inside .main-content.
  */
 function filterBar({ kinds = null, extra = '' } = {}) {
-  // Only the letters this page actually renders. A namespace holds no methods and a type holds no
-  // interfaces, so offering every button everywhere means most of them do nothing when pressed.
+  // Only the letters this page actually renders. A namespace holds no methods, so offering every
+  // button everywhere means most of them do nothing when pressed.
   const available = FILTER_KINDS.filter((kind) => kind.key === 'all' || !kinds || kinds.has(kind.key));
+  return tabsHtml(available, extra);
+}
 
+/**
+ * The type page's tabs, which narrow one type's members rather than a list of types.
+ *
+ * The same row in the same script's hands, filtering on the same attribute; what differs is the
+ * vocabulary, which is theme's MEMBER_FILTERS rather than its letters. A type page puts the row in
+ * its own head, where it ends up sitting on the line the member list starts under.
+ *
+ * Member kinds go in, not filter keys: which tabs a page offers and how the first of them is worded
+ * are both read off what the type actually lists - what it inherits as well as what it declares,
+ * since both are listed under it. See memberFilterTabs.
+ */
+function memberFilterBar({ kinds = new Set(), extra = '' } = {}) {
+  return tabsHtml(memberFilterTabs(kinds), extra);
+}
+
+function tabsHtml(tabs, extra) {
   // 'All' plus one kind is not a choice, so there is nothing to put a bar around.
-  if (available.length < 3) return '';
+  if (tabs.length < 3) return '';
 
   // Nothing is painted here: 'All' opens active, and the stylesheet knows what that looks like.
   // The kinds are coloured by the script, from the same palette their badges are drawn from.
-  const buttons = available.map((kind) => {
+  const buttons = tabs.map((kind) => {
     const active = kind.key === 'all';
     return (
       `<button type="button" class="filter-btn${active ? ' active' : ''}" ` +
@@ -334,4 +350,4 @@ function renderBreadcrumbs(breadcrumbs) {
   return `<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${items}</ol></nav>`;
 }
 
-module.exports = { page, filterBar, assemblySelector, DEFAULT_SITE_NAME };
+module.exports = { page, filterBar, memberFilterBar, assemblySelector, DEFAULT_SITE_NAME };
