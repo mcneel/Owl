@@ -85,6 +85,12 @@ const CSS = `
      reason - see --kind-ink. */
   --kind:        var(--oc-gray-4);
   --kind-ink:    var(--oc-gray-9);
+  /* The Readonly pill, which is the far end of the page's range: near-white here, where the light
+     theme has it near-black, so that under either one it is the strongest filled mark in the row of
+     chips and reads as inverted against them. Brighter than --kind, so it is not read as one of the
+     drawings beside it. */
+  --badge-mod:     var(--oc-gray-2);
+  --badge-mod-ink: var(--oc-gray-9);
   --flash:       #2196f3;
   --scrollbar:   #404040;
   --tok-keyword: #c4a7fd;
@@ -120,6 +126,8 @@ const CSS = `
   --fullname:    #a3a3a3;
   --kind:        var(--oc-gray-7);
   --kind-ink:    var(--oc-white);
+  --badge-mod:     var(--oc-gray-9);
+  --badge-mod-ink: var(--oc-white);
   --flash:       #0ea5e9;
   --scrollbar:   #d4d4d4;
   --tok-keyword: #7c3aed;
@@ -139,8 +147,9 @@ const CSS = `
 /* ---- Badge colours ----
    Written from lib/theme.js, so the palette is stated once and every badge, filter pill and search
    row reads it from here rather than carrying a colour of its own. Outside the two theme blocks
-   because a badge means the same thing under either one; the kind ink is the one that needed saying
-   twice, and it is up there with --flash. */
+   because a colour means the same thing under either one. The two that did need saying twice are
+   the ones that are not colours but ends of a range - the kind ink and the Readonly pill - and they
+   are up there with --flash, where a theme states what its ends are. */
 :root {
 ${paintCss('badge', BADGE_PAINTS)}
 ${paintCss('chip', CHIP_PAINTS)}
@@ -634,9 +643,10 @@ ${TEMML_CSS}
 .badge, .explicit-badge, .tree-badge, .chip { user-select: none; -webkit-user-select: none; }
 /* The pill shape, worn by Readonly and SetOnly alone now that a kind is drawn rather than spelled:
    what is left of it says how a property may be used, which is not a kind and takes no part in the
-   kind palette. Its ink is the darkest on the page under either theme, hence the white. */
+   kind palette. Ground and ink swap ends with the theme - dark on light, light on dark - so that it
+   stays the most contrasted mark in the row either way. See --badge-mod. */
 .badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em; }
-.badge-mod { background: var(--badge-mod); color: var(--oc-white); }
+.badge-mod { background: var(--badge-mod); color: var(--badge-mod-ink); }
 /* The small pill, worn by Explicit alone. */
 .explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
 /* Which assembly a card's type came from, pushed to the far end of its header. Grey and unadorned:
@@ -787,6 +797,11 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
 /* In the body font, like every other member name on the page: the monospace it wore said 'code' a
    second time, when the row it heads is already a value and a number. */
 .enum-table .enum-name { font-weight: 600; color: var(--text); white-space: nowrap; }
+/* Name and mark on one line, hung from the top of the cell so they sit with the first line of the
+   description beside them rather than in the middle of it. The drawing is a shade under the one the
+   member cards wear, which keeps a row the height of its text. */
+.enum-table .enum-name-row { display: inline-flex; align-items: center; gap: 0.4rem; vertical-align: top; }
+.enum-table .enum-name-row .kind-icon { width: 0.95rem; height: 0.95rem; }
 /* The expression is the row's identity, so it carries the weight. It is split across three cells
    and closed in on the symbol from both sides, which is what puts every symbol in the table on one
    vertical line; the padding is tightened so the three still read as one expression. */
@@ -1386,17 +1401,32 @@ const JS = `
   // ---- Tree: inherited members ----
   // The rows are already in the tree, in their alphabetical place and drawn back. This only says
   // whether they are drawn, and only for the one type whose members are listed.
+
+  // The rows and the control that speaks for them, set together. Two things ask for this - the
+  // button, and the filter when a query matched a row that is drawn back - so it is written once.
+  function setInherited(row, shown) {
+    var children = row.querySelector('.tree-type-children');
+    if (children) children.classList.toggle('show-inherited', shown);
+
+    var button = row.querySelector('.tree-inherited-toggle');
+    if (!button) return;
+
+    button.setAttribute('aria-pressed', String(shown));
+
+    var arrow = button.querySelector('.tree-arrow');
+    if (arrow) arrow.classList.toggle('collapsed', !shown);
+  }
+
   document.querySelectorAll('.tree-inherited-toggle').forEach(function (button) {
     button.addEventListener('click', function (event) {
       event.preventDefault();
-      var children = document.getElementById(button.getAttribute('data-target'));
+      var row = button.closest('.tree-type');
+      var children = row && row.querySelector('.tree-type-children');
       if (!children) return;
 
-      var shown = children.classList.toggle('show-inherited');
-      button.setAttribute('aria-pressed', String(shown));
-
-      var arrow = button.querySelector('.tree-arrow');
-      if (arrow) arrow.classList.toggle('collapsed', !shown);
+      // Whatever the reader does here is theirs, not the filter's, so the mark comes off.
+      children.classList.remove('filter-inherited');
+      setInherited(row, !children.classList.contains('show-inherited'));
     });
   });
 
@@ -1427,22 +1457,52 @@ const JS = `
     var q = treeSearch ? treeSearch.value.toLowerCase().trim() : '';
 
     document.querySelectorAll('.tree-type').forEach(function (el) {
-      var typeText = (el.querySelector('.tree-link') || {}).textContent || '';
-      var childTexts = [].slice.call(el.querySelectorAll('.tree-child-link')).map(function (a) {
-        return a.textContent.toLowerCase();
+      var typeText = ((el.querySelector('.tree-link') || {}).textContent || '').toLowerCase();
+
+      // A type whose own name matches keeps every member listed under it, the way a namespace whose
+      // name matches keeps every type: what was asked for is the whole of it, not the part of it
+      // that says the query over again.
+      var named = Boolean(q) && typeText.indexOf(q) >= 0;
+
+      var kept = 0;
+      var inherited = 0;
+
+      el.querySelectorAll('.tree-child-link').forEach(function (row) {
+        var show =
+          withinVersion(row) && (!q || named || row.textContent.toLowerCase().indexOf(q) >= 0);
+        row.classList.toggle('hidden', !show);
+        if (!show) return;
+
+        kept += 1;
+        if (row.classList.contains('tree-child-inherited')) inherited += 1;
       });
-      var match = !q || typeText.toLowerCase().indexOf(q) >= 0 || childTexts.some(function (t) {
-        return t.indexOf(q) >= 0;
-      });
+
+      // The type stays while a row under it is left, so a half-remembered name finds the type that
+      // declares it. Rows outside the chosen version are gone by then and do not hold it open.
+      var match = !q || named || kept > 0;
       el.classList.toggle('hidden', !match || !withinVersion(el));
+
+      // A row the query matched has to be a row the reader can see, and the inherited ones are
+      // drawn back until the arrow asks for them - a query that names one is that asking, and
+      // without this the branch answers with nothing in it. Marked as the filter's doing, so
+      // clearing the field puts them away again while a reader who opened them keeps them.
+      var children = el.querySelector('.tree-type-children');
+      if (children) {
+        var reveal = Boolean(q) && !named && inherited > 0;
+
+        if (reveal && !children.classList.contains('show-inherited')) {
+          children.classList.add('filter-inherited');
+          setInherited(el, true);
+        } else if (!reveal && children.classList.contains('filter-inherited')) {
+          children.classList.remove('filter-inherited');
+          setInherited(el, false);
+        }
+      }
+
       if (q && match) {
         var parent = el.closest('.tree-ns-children');
         if (parent) parent.classList.remove('collapsed');
       }
-    });
-
-    document.querySelectorAll('.tree-child-link').forEach(function (el) {
-      el.classList.toggle('hidden', !withinVersion(el));
     });
 
     // The Overview row holds no types, so it is matched on its own text rather than emptied out.
@@ -1462,6 +1522,12 @@ const JS = `
       if (named) {
         ns.querySelectorAll('.tree-type').forEach(function (el) {
           el.classList.toggle('hidden', !withinVersion(el));
+        });
+
+        // The members under them too, or a group that kept all its types would still be showing a
+        // part of the one type that lists any.
+        ns.querySelectorAll('.tree-child-link').forEach(function (row) {
+          row.classList.toggle('hidden', !withinVersion(row));
         });
 
         var children = ns.querySelector('.tree-ns-children');

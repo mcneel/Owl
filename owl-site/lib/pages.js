@@ -2161,9 +2161,14 @@ ${this.seeAlsoHtml(type.docs)}
         (member) =>
           `<tr id="${attr(member.anchor)}" data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
           `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
-          `<td class="enum-name">${escape(member.name)}` +
-          (member.obsolete ? ' <span class="chip chip-obsolete">Obsolete</span>' : '') +
-          '</td>' +
+          // The mark before the name, as every other member list on the site writes one: the tree
+          // no longer carries these rows, so the table is where a reader meets them and it should
+          // read like the lists they came from.
+          '<td class="enum-name"><span class="enum-name-row">' +
+          this.kindIconHtml(member.kind) +
+          escape(member.name) +
+          (member.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
+          '</span></td>' +
           `<td class="enum-value">${escape(member.constantValue || '')}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
           '</tr>'
@@ -2323,6 +2328,17 @@ ${this.seeAlsoHtml(type.docs)}
   // ------------------------------------------------------------------
   // Sidebar trees
   // ------------------------------------------------------------------
+
+  /**
+   * Whether a type's members belong under it in the tree.
+   *
+   * An enum's page is one table of its values, read top to bottom, and nothing on it is far enough
+   * down to need jumping to - so a row per value only lengthens the tree between the types a reader
+   * is moving among.
+   */
+  treeListsMembers(type) {
+    return type.kind !== 'enum';
+  }
 
   /**
    * A type's members under it in the tree, with its operators behind a single row.
@@ -2564,8 +2580,9 @@ ${this.seeAlsoHtml(type.docs)}
               const active = activeType !== null && type.docId === activeType.docId;
 
               // Only the current type lists its members, so a large category stays readable.
-              const inherited = active ? this.inheritedMembers(type) : [];
-              const children = active ? this.treeMemberLinksHtml(type, inherited) : '';
+              const lists = active && this.treeListsMembers(type);
+              const inherited = lists ? this.inheritedMembers(type) : [];
+              const children = lists ? this.treeMemberLinksHtml(type, inherited) : '';
 
               return this.treeTypeRow(type, {
                 active,
@@ -2680,11 +2697,12 @@ ${this.seeAlsoHtml(type.docs)}
         : bucket.types
             .map(({ type }) => {
               const active = activeType !== null && type.docId === activeType.docId;
-              const inherited = active ? this.inheritedMembers(type) : [];
+              const lists = active && this.treeListsMembers(type);
+              const inherited = lists ? this.inheritedMembers(type) : [];
 
               return this.treeTypeRow(type, {
                 active,
-                children: active ? this.treeMemberLinksHtml(type, inherited) : '',
+                children: lists ? this.treeMemberLinksHtml(type, inherited) : '',
                 childrenId: `tc_${type.slug}`,
                 inherited: inherited.length > 0,
               });

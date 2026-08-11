@@ -27,16 +27,15 @@
 /**
  * Badge colours that say something other than what kind a member is.
  *
- * Readonly and SetOnly share `mod`: they are one fact about a property told from either end, only
- * ever one of them is on a member, and neither is a kind, so they read as one marker. It is the
- * darkest ink on the page, which is what makes it the one pill that reads as inverted against the
- * kind marks around it whichever theme is on.
- *
  * `explicit` paints the badge and the card's border together, since the border is there to make the
- * badge's point at a glance.
+ * badge's point at a glance. One colour under either theme, which is why it is stated here.
+ *
+ * Readonly and SetOnly are not here, though they share a badge of their own: what that pill is is
+ * the far end of the page's own range - the darkest ground under a light theme and the lightest
+ * under a dark one - and a range is what a theme decides. It is written with --kind in lib/assets.js
+ * for the same reason, as a ground and an ink that swap places between the two.
  */
 const BADGE_PAINTS = {
-  mod: 'var(--oc-gray-9)',
   explicit: 'var(--oc-blue-4)',
 };
 
