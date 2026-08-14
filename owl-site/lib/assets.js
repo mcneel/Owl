@@ -275,14 +275,12 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    than it tells you. The three properties cover Firefox, old Edge and the WebKit/Blink family. */
 .sidebar { width: 280px; min-width: 150px; max-width: 600px; background: var(--bg2); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 0; }
 .sidebar::-webkit-scrollbar { display: none; }
-/* Pinned, like the rows under it: it filters the whole tree, so it is no use only while the top of
+/* Pinned, like the rows under it: it acts on the whole tree, so it is no use only while the top of
    the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
    written on rather than left to the contents, because those rows pin against it - see --tree-bar.
    Anything added here that makes the bar taller - a second row of controls, a taller field - is a
    change to --tree-bar and nothing else: the rows read their offsets from it. */
 .sidebar-toolbar { position: sticky; top: 0; z-index: 3; height: var(--tree-bar); background: var(--bg2); padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; align-items: center; }
-#tree-search { flex: 1; min-width: 0; padding: 0.35rem 0.6rem; border-radius: 5px; border: 1px solid var(--border2); background: var(--bg); color: var(--text); font-size: 0.8rem; outline: none; }
-#tree-search::placeholder { color: var(--text4); }
 #collapse-all-btn { flex-shrink: 0; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); width: 1.8rem; height: 1.8rem; padding: 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 #collapse-all-btn:hover { background: var(--bg4); }
 #collapse-all-btn svg { display: block; width: 0.9rem; height: 0.9rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
@@ -383,9 +381,9 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    shapes are not the same height - a category heading is text and an arrow at 0.5rem padding, a
    namespace row is a kind drawing at 0.28rem - so the number is written per shape, and written onto
    the row as a height as well, which is what keeps the offset and the height from drifting apart
-   into a gap or an overlap. The filter bar is the first of the pinned slots and stacks the same way,
+   into a gap or an overlap. The toolbar is the first of the pinned slots and stacks the same way,
    so both offsets are measured from the bottom of it. --tree-bar carries a little slack over what
-   the field and the button need, since a clipped control costs more than a hair of extra bar. */
+   the button needs, since a clipped control costs more than a hair of extra bar. */
 .sidebar { --tree-bar: 2.9rem; --tree-head: 2rem; }
 .tree-ns-plain { --tree-head: 1.66rem; }
 .tree-ns-label { min-height: var(--tree-head); }
@@ -895,7 +893,7 @@ const JS = `
 /*
  * Progressive enhancement only. Every link is a real href and every page renders without
  * JavaScript; this restores the interactive behaviour the Python server had - theme toggle, the
- * kind filter bar, collapsible tree, tree search, resizable sidebar - plus client-side search.
+ * kind filter bar, collapsible tree, resizable sidebar - plus client-side search.
  */
 
 (function () {
@@ -1289,9 +1287,6 @@ const JS = `
         JSON.stringify({
           open: open,
           scroll: treeRoot ? treeRoot.scrollTop : 0,
-          // What the tree was filtered to is as much a part of where you left it as which groups
-          // were open: filtering for something and clicking it should not hand back the whole tree.
-          q: treeSearch ? treeSearch.value : '',
         })
       );
     } catch (e) {}
@@ -1388,9 +1383,9 @@ const JS = `
       .then(function (asset) {
         fillTree(asset);
         // Over the whole tree this time: what was remembered may name a group that was empty until
-        // now, and the filter has rows to hide that were not there when it last ran.
+        // now, and the version menu has rows to hide that were not there when it last ran.
         restoreTreeState();
-        applyTreeFilter();
+        applyTreeVersion();
         if (!treeRoot || treeRoot.scrollTop === placedScroll) placeTree();
       })
       .catch(function () {
@@ -1405,7 +1400,7 @@ const JS = `
       });
   }
 
-  // ---- Tree: collapse, expand, search ----
+  // ---- Tree: collapse and expand ----
   document.querySelectorAll(GROUP_CONTROLS).forEach(function (label) {
     label.addEventListener('click', function () {
       var id = label.getAttribute('data-target');
@@ -1432,22 +1427,6 @@ const JS = `
   // ---- Tree: inherited members ----
   // The rows are already in the tree, in their alphabetical place and drawn back. This only says
   // whether they are drawn, and only for the one type whose members are listed.
-
-  // The rows and the control that speaks for them, set together. Two things ask for this - the
-  // button, and the filter when a query matched a row that is drawn back - so it is written once.
-  function setInherited(row, shown) {
-    var children = row.querySelector('.tree-type-children');
-    if (children) children.classList.toggle('show-inherited', shown);
-
-    var button = row.querySelector('.tree-inherited-toggle');
-    if (!button) return;
-
-    button.setAttribute('aria-pressed', String(shown));
-
-    var arrow = button.querySelector('.tree-arrow');
-    if (arrow) arrow.classList.toggle('collapsed', !shown);
-  }
-
   document.querySelectorAll('.tree-inherited-toggle').forEach(function (button) {
     button.addEventListener('click', function (event) {
       event.preventDefault();
@@ -1455,13 +1434,16 @@ const JS = `
       var children = row && row.querySelector('.tree-type-children');
       if (!children) return;
 
-      // Whatever the reader does here is theirs, not the filter's, so the mark comes off.
-      children.classList.remove('filter-inherited');
-      setInherited(row, !children.classList.contains('show-inherited'));
+      var shown = !children.classList.contains('show-inherited');
+      children.classList.toggle('show-inherited', shown);
+      button.setAttribute('aria-pressed', String(shown));
+
+      var arrow = button.querySelector('.tree-arrow');
+      if (arrow) arrow.classList.toggle('collapsed', !shown);
     });
   });
 
-  // The burger beside the filter field toggles the whole tree: collapse everything if anything
+  // The burger in the sidebar toolbar toggles the whole tree: collapse everything if anything
   // is open, otherwise expand everything.
   var treeToggleAll = document.getElementById('collapse-all-btn');
   if (treeToggleAll) {
@@ -1482,126 +1464,23 @@ const JS = `
     });
   }
 
-  var treeSearch = document.getElementById('tree-search');
-
-  function applyTreeFilter() {
-    var q = treeSearch ? treeSearch.value.toLowerCase().trim() : '';
-
+  // The tree's side of the version menu: rows for API that arrived after the chosen version are
+  // hidden, and a group left holding nothing visible goes with them rather than opening onto an
+  // empty list.
+  function applyTreeVersion() {
     document.querySelectorAll('.tree-type').forEach(function (el) {
-      var typeText = ((el.querySelector('.tree-link') || {}).textContent || '').toLowerCase();
-
-      // A type whose own name matches keeps every member listed under it, the way a namespace whose
-      // name matches keeps every type: what was asked for is the whole of it, not the part of it
-      // that says the query over again.
-      var named = Boolean(q) && typeText.indexOf(q) >= 0;
-
-      var kept = 0;
-      var inherited = 0;
-
       el.querySelectorAll('.tree-child-link').forEach(function (row) {
-        var show =
-          withinVersion(row) && (!q || named || row.textContent.toLowerCase().indexOf(q) >= 0);
-        row.classList.toggle('hidden', !show);
-        if (!show) return;
-
-        kept += 1;
-        if (row.classList.contains('tree-child-inherited')) inherited += 1;
+        row.classList.toggle('hidden', !withinVersion(row));
       });
-
-      // The type stays while a row under it is left, so a half-remembered name finds the type that
-      // declares it. Rows outside the chosen version are gone by then and do not hold it open.
-      var match = !q || named || kept > 0;
-      el.classList.toggle('hidden', !match || !withinVersion(el));
-
-      // A row the query matched has to be a row the reader can see, and the inherited ones are
-      // drawn back until the arrow asks for them - a query that names one is that asking, and
-      // without this the branch answers with nothing in it. Marked as the filter's doing, so
-      // clearing the field puts them away again while a reader who opened them keeps them.
-      var children = el.querySelector('.tree-type-children');
-      if (children) {
-        var reveal = Boolean(q) && !named && inherited > 0;
-
-        if (reveal && !children.classList.contains('show-inherited')) {
-          children.classList.add('filter-inherited');
-          setInherited(el, true);
-        } else if (!reveal && children.classList.contains('filter-inherited')) {
-          children.classList.remove('filter-inherited');
-          setInherited(el, false);
-        }
-      }
-
-      if (q && match) {
-        var parent = el.closest('.tree-ns-children');
-        if (parent) parent.classList.remove('collapsed');
-      }
+      el.classList.toggle('hidden', !withinVersion(el));
     });
 
-    // The Overview row holds no types, so it is matched on its own text rather than emptied out.
-    document.querySelectorAll('.tree-overview').forEach(function (row) {
-      var text = (row.textContent || '').toLowerCase();
-      row.classList.toggle('hidden', Boolean(q) && text.indexOf(q) < 0);
-    });
-
-    // A group whose own name matches keeps everything it holds rather than emptying out: in
-    // namespace mode that name is a namespace, and typing one is a way of asking for its types.
     document.querySelectorAll('.tree-ns:not(.tree-overview)').forEach(function (ns) {
-      // Whichever of the two carries the name: the whole row where the group has no page, the link
-      // beside the arrow where it has one.
-      var label = ns.querySelector('.tree-ns-label, .tree-ns-link');
-      var named = Boolean(q) && Boolean(label) && label.textContent.toLowerCase().indexOf(q) >= 0;
-
-      if (named) {
-        ns.querySelectorAll('.tree-type').forEach(function (el) {
-          el.classList.toggle('hidden', !withinVersion(el));
-        });
-
-        // The members under them too, or a group that kept all its types would still be showing a
-        // part of the one type that lists any.
-        ns.querySelectorAll('.tree-child-link').forEach(function (row) {
-          row.classList.toggle('hidden', !withinVersion(row));
-        });
-
-        var children = ns.querySelector('.tree-ns-children');
-        if (children) children.classList.remove('collapsed');
-      }
-
       var any = [].slice.call(ns.querySelectorAll('.tree-type')).some(function (t) {
         return !t.classList.contains('hidden');
       });
       ns.classList.toggle('hidden', !any);
     });
-  }
-
-  if (treeSearch) {
-    var treeSearchTimer = null;
-    treeSearch.addEventListener('input', function () {
-      applyTreeFilter();
-      // Debounced: typing fires this on every keystroke, and only the last one matters.
-      if (treeSearchTimer) clearTimeout(treeSearchTimer);
-      treeSearchTimer = setTimeout(saveTreeState, 200);
-    });
-
-    // Put the filter back before anything measures the tree, so the open groups, the scroll
-    // position and the check for whether the active entry is on screen all see the filtered shape
-    // rather than the full one.
-    var filtered = readTreeState();
-    if (filtered && filtered.q) {
-      treeSearch.value = filtered.q;
-      applyTreeFilter();
-
-      // Unless it hides where you just arrived. A filter that excludes the page being read is
-      // worse than none: the tree cannot show you what you are looking at, and looks empty for no
-      // reason you can see. Following anything the filter does not match - a link in the page, a
-      // breadcrumb, a search result - drops it rather than leaving that.
-      var here =
-        document.querySelector('.tree-link.active') ||
-        document.querySelector('.tree-ns-link.active');
-      if (here && here.closest('.hidden')) {
-        treeSearch.value = '';
-        applyTreeFilter();
-        saveTreeState();
-      }
-    }
   }
 
   if (versionSelect) {
@@ -1618,16 +1497,16 @@ const JS = `
       activeVersion = versionSelect.value;
       try { localStorage.setItem(VERSION_KEY, activeVersion); } catch (e) {}
       applyFilter();
-      applyTreeFilter();
+      applyTreeVersion();
     });
 
     applyFilter();
-    applyTreeFilter();
+    applyTreeVersion();
   } else if (activeVersion) {
     // The one-version label: nothing to remember and nothing to listen to, but what came after that
     // version is hidden here exactly as the menu would hide it.
     applyFilter();
-    applyTreeFilter();
+    applyTreeVersion();
   }
 
   // ---- Draggable columns ----

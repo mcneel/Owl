@@ -2568,8 +2568,6 @@ ${this.seeAlsoHtml(type.docs)}
   sidebarToolbar() {
     return (
       '<div class="sidebar-toolbar">' +
-      '<label class="skip-link" for="tree-search">Filter the tree</label>' +
-      '<input type="search" id="tree-search" placeholder="Filter" autocomplete="off">' +
       // Drawn rather than typed: a glyph sits on a baseline and lands low in a square button,
       // while a viewBox centres on the geometry.
       '<button id="collapse-all-btn" type="button" title="Collapse all" aria-label="Collapse all">' +
