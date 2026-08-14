@@ -46,8 +46,119 @@ function learnUrl(docId) {
 }
 
 /**
+ * How many type arguments a written name has after it, or 0 for none.
+ *
+ * Commas at the top level are what count: the two in 'Dictionary&lt;string, List&lt;int, int&gt;&gt;' do
+ * not both belong to Dictionary.
+ */
+function writtenArity(text) {
+  if (text[0] !== '<') return 0;
+
+  let depth = 0;
+  let count = 1;
+
+  for (const c of text) {
+    if (c === '<') depth++;
+    else if (c === '>') {
+      depth--;
+      if (depth === 0) return count;
+    } else if (c === ',' && depth === 1) count++;
+  }
+
+  // Never closed, so it was not an argument list; say nothing rather than guess a count.
+  return 0;
+}
+
+/**
+ * A display name split into the generic name and the argument list written after it:
+ * 'IEquatable&lt;Point3d&gt;' comes back as head 'IEquatable' and rest '&lt;Point3d&gt;'.
+ *
+ * Null for anything that is not exactly one constructed type name - no arguments at all, or a
+ * member label such as 'ListAspect&lt;3&gt;.Equals' that only opens with one - so a caller can leave
+ * what it does not fully understand as it was.
+ */
+function splitConstructedName(display) {
+  const head = /^([A-Za-z_][\w.]*)</.exec(display || '');
+  if (!head) return null;
+
+  let depth = 0;
+  let end = -1;
+
+  for (let at = head[1].length; at < display.length; at++) {
+    const c = display[at];
+    if (c === '<') depth++;
+    else if (c === '>' && --depth === 0) {
+      end = at + 1;
+      break;
+    }
+  }
+
+  // Only array and nullable marks may follow the list; anything else says this was not a type.
+  if (end < 0 || !/^(\[,*\]|\?)*$/.test(display.slice(end))) return null;
+
+  return { head: head[1], rest: display.slice(head[1].length) };
+}
+
+/**
+ * The one way a type reference is written: a link when there is somewhere to go, marked as
+ * leaving when that somewhere is another site, and marked dead when there is nowhere.
+ *
+ * A reference that leaves the site is marked by colour rather than by an arrow: these are dense -
+ * every 'string' and 'int' in a parameter table is one - and at that size the arrow read as
+ * noise. Muted, because a framework type is rarely what the reader came for. The arrow stays on
+ * prose links, which are rare and where it earns its place.
+ *
+ * The dead mark could not stay a bare span: it kept the link colour, which promised a page to
+ * anyone reading an Implements row.
+ *
+ * @param {string} html  the label, already escaped or marked up
+ */
+function refHtml(url, html, title) {
+  const titled = title ? ` title="${attr(title)}"` : '';
+
+  if (!url) {
+    return `<span class="see-ref see-ref-none"${titled}>${html}</span>`;
+  }
+
+  const external = /^https?:/i.test(url);
+  return (
+    `<a class="see-ref${external ? ' see-ref-out' : ''}" href="${attr(url)}"` +
+    (external ? ' rel="noopener"' : '') +
+    `${titled}>${html}</a>`
+  );
+}
+
+/**
+ * A written type - a generic argument list, a constraint - with each name that resolves made a
+ * link.
+ *
+ * Resolved by name through context.typeUrl, because a written type is text: 'IEnumerable&lt;Point3d&gt;'
+ * carries IEnumerable's doc id and no other, and a constraint never carried one at all. A name
+ * that resolves nowhere stays text rather than wearing the dead mark - most such names are type
+ * parameters, which are not broken links.
+ */
+function writtenTypeHtml(text, context) {
+  if (!context.typeUrl) return escape(text);
+
+  let out = '';
+  let last = 0;
+
+  for (const match of text.matchAll(/[A-Za-z_]\w*/g)) {
+    out += escape(text.slice(last, match.index));
+    last = match.index + match[0].length;
+
+    const url = context.typeUrl(match[0], writtenArity(text.slice(last)));
+    out += url ? refHtml(url, escape(match[0])) : escape(match[0]);
+  }
+
+  return out + escape(text.slice(last));
+}
+
+/**
  * @param {object[]|null|undefined} nodes
- * @param {object} context  { model, routes, inline } - inline suppresses block-level markup
+ * @param {object} context  { model, routes, inline, typeUrl } - inline suppresses block-level
+ *   markup; typeUrl resolves a written type name and arity to a url, for the names a reference's
+ *   doc id does not cover
  */
 function render(nodes, context) {
   if (!nodes || nodes.length === 0) return '';
@@ -149,22 +260,16 @@ function renderCref(node, context) {
     label = shortMemberLabel(label);
   }
 
-  // Nothing to point at - not documented here, and not a framework type Learn would have a page for
-  // - so it is marked as the dead name it is. A span alone was not enough: it kept the link colour,
-  // which promised a page to anyone reading an Implements row.
-  if (!url) {
-    return `<span class="see-ref see-ref-none">${escape(label)}</span>`;
+  // A constructed generic is one reference to the definition - 'IEquatable<Point3d>' is
+  // T:System.IEquatable`1 and nothing else - so rendered whole it linked the arguments to the
+  // definition's page along with the name. The name keeps the reference's link; the arguments
+  // are written names of their own, and resolve as written names do.
+  const split = context.typeUrl ? splitConstructedName(label) : null;
+  if (split) {
+    return refHtml(url, escape(split.head)) + writtenTypeHtml(split.rest, context);
   }
 
-  // A reference that leaves for Microsoft Learn is marked by colour rather than by an arrow: these
-  // are dense - every 'string' and 'int' in a parameter table is one - and at that size the arrow
-  // read as noise. Muted, because a framework type is rarely what the reader came for. The arrow
-  // stays on prose links, which are rare and where it earns its place.
-  const external = /^https?:/i.test(url);
-  const rel = external ? ' rel="noopener"' : '';
-  const cls = external ? 'see-ref see-ref-out' : 'see-ref';
-
-  return `<a class="${cls}" href="${attr(url)}"${rel}>${escape(label)}</a>`;
+  return refHtml(url, escape(label));
 }
 
 /**
@@ -293,4 +398,14 @@ function renderList(node, context) {
   return out + `</${tag}>`;
 }
 
-module.exports = { render, toText, learnUrl, containingTypeDocId, codeLanguage };
+module.exports = {
+  render,
+  toText,
+  learnUrl,
+  crefUrl,
+  refHtml,
+  writtenTypeHtml,
+  writtenArity,
+  containingTypeDocId,
+  codeLanguage,
+};

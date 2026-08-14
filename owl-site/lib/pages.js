@@ -184,34 +184,17 @@ function declaredArity(docId) {
 }
 
 /**
- * How many type arguments a highlighted signature writes after a name, or 0 for none.
- *
- * The highlighter has already cut the argument list into tokens, and a run of punctuation can end
- * up sharing one of them, so this reads the text with the tags taken back out rather than trying to
- * walk the markup. Commas at the top level are what count: the two in
- * 'Dictionary&lt;string, List&lt;int, int&gt;&gt;' do not both belong to Dictionary.
+ * docnodes.writtenArity over a highlighted signature. The highlighter has already cut the
+ * argument list into tokens, and a run of punctuation can end up sharing one of them, so the text
+ * is read with the tags taken back out rather than trying to walk the markup.
  */
 function typeArgumentCount(html) {
-  const text = html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-
-  if (text[0] !== '<') return 0;
-
-  let depth = 0;
-  let count = 1;
-
-  for (const c of text) {
-    if (c === '<') depth++;
-    else if (c === '>') {
-      depth--;
-      if (depth === 0) return count;
-    } else if (c === ',' && depth === 1) count++;
-  }
-
-  // Never closed, so it was not an argument list; say nothing rather than guess a count.
-  return 0;
+  return docnodes.writtenArity(
+    html
+      .replace(/<[^>]*>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+  );
 }
 
 /** Kinds that take a parameter list, and so can be overloaded on it. */
@@ -483,6 +466,9 @@ class Renderer {
       diagrams: this.diagrams,
       warn: this.warn,
       links: this.links,
+      // Resolution for the names that arrive as text rather than as references - generic
+      // arguments, constraints - so a written name leads to the same page wherever it is read.
+      typeUrl: (name, arity) => this.spelledTypeUrl(name, arity),
     };
     this.markdownContext = { diagrams: this.diagrams, warn: this.warn };
 
@@ -831,6 +817,24 @@ class Renderer {
   }
 
   /**
+   * Where a type name written as text points, or '' for nowhere: the C# keywords first, since
+   * 'string' is System.String wherever it is written, then the documented set, then what the
+   * framework and the sibling sites declare.
+   *
+   * The one resolution every written name goes through - a signature's tokens, a generic argument
+   * list, a constraint - so 'Point3d' leads to the same page whichever row it is read in. The
+   * assembly being read breaks a tie between documented types sharing a name.
+   */
+  spelledTypeUrl(name, arity = 0, assemblyName = this.docContext.selfAssembly) {
+    return (
+      docnodes.learnUrl(KEYWORD_TYPES[name]) ||
+      this.typeUrlByName(name, assemblyName, arity) ||
+      this.externalTypeUrl(name, arity) ||
+      ''
+    );
+  }
+
+  /**
    * Makes the type tokens in an already-highlighted signature clickable.
    *
    * The highlighter has already picked them out, so this only resolves names. A dotted name arrives
@@ -848,7 +852,7 @@ class Renderer {
    *   MeshingParameters' ends up linked twice to the same page. A method's name escapes this by
    *   being followed by '(', which makes it a call rather than a type to the highlighter.
    */
-  linkTypesIn(html, assemblyName, selfUrl, ownName) {
+  linkTypesIn(html, assemblyName, ownName) {
     // The last token bearing that name, not every one: in 'Foo Foo' the first is the type being
     // returned and only the second is the thing being declared.
     let declaredAt = -1;
@@ -877,9 +881,8 @@ class Renderer {
       if (offset === declaredAt) return whole;
 
       const arity = typeArgumentCount(html.slice(offset + whole.length));
-      const url = this.typeUrlByName(name, assemblyName, arity) || this.externalTypeUrl(name, arity);
-      // A type names itself in its own declaration; linking that goes nowhere.
-      if (!url || url === selfUrl) return whole;
+      const url = this.spelledTypeUrl(name, arity, assemblyName);
+      if (!url) return whole;
 
       return this.linkedToken(kind, name, url);
     });
@@ -896,13 +899,8 @@ class Renderer {
   }
 
   /** A highlighted, cross-linked signature: the one call every place that shows one makes. */
-  signatureHtml(code, assemblyName, selfSlug, ownName) {
-    return this.linkTypesIn(
-      highlight(code, 'csharp'),
-      assemblyName,
-      selfSlug ? this.routes.type(selfSlug) : '',
-      ownName
-    );
+  signatureHtml(code, assemblyName, ownName) {
+    return this.linkTypesIn(highlight(code, 'csharp'), assemblyName, ownName);
   }
 
   /**
@@ -952,6 +950,11 @@ class Renderer {
     );
   }
 
+  /**
+   * One resolved type reference as a link: the call every row that lists a type makes, so the
+   * Implements row, a parameter table and a cref in prose all write a reference the same way -
+   * including the generic arguments, which docnodes resolves as written names.
+   */
   typeRefHtml(ref) {
     if (!ref) return '';
     return docnodes.render(
@@ -1511,10 +1514,14 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // places that render doc nodes, since a page is rendered start to finish before the next one
     // begins. The finally is what keeps a thrown render from leaking it into the page after.
     this.docContext.selfType = type.docId;
+    // The assembly being read rides along for the names a type argument list resolves by: two
+    // types can answer to one bare name, and the assembly is what breaks the tie.
+    this.docContext.selfAssembly = assembly;
     try {
       return this.inMode(mode, () => this.typeBody(type, assembly));
     } finally {
       this.docContext.selfType = null;
+      this.docContext.selfAssembly = null;
     }
   }
 
@@ -1551,7 +1558,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     const context = [
       this.obsoleteHtml(type.obsolete),
       this.relationsHtml(type),
-      this.typeParamsHtml(type, assembly),
+      this.typeParamsHtml(type),
       this.delegateHtml(type, assembly),
       type.docs && type.docs.example
         ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(type.docs.example, this.docContext)}</div>`
@@ -1583,7 +1590,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <div class="page-head sticky-head">
   <div class="page-head-brief">
     <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
-    <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly, type.slug)}</div>
+    <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly)}</div>
     ${
       summaryHtml
         ? '<div class="page-head-intro">' +
@@ -1812,15 +1819,10 @@ ${this.seeAlsoHtml(type.docs)}
         const arity = declaredArity(ref.id);
         const label = arity > 0 ? genericBrackets(`${bare}\`${arity}`) : bare;
 
-        const entry = this.model.entry(ref.id);
-        const url = entry ? this.routes.forEntry(entry) : docnodes.learnUrl(ref.id);
-
         // Only worth a tooltip when it says something the label does not.
-        const title = label === ref.display ? '' : ` title="${attr(ref.display)}"`;
+        const title = label === ref.display ? '' : ref.display;
 
-        return url
-          ? `<a class="see-ref" href="${attr(url)}"${title}>${escape(label)}</a>`
-          : `<span class="see-ref"${title}>${escape(label)}</span>`;
+        return docnodes.refHtml(docnodes.crefUrl(ref, this.docContext), escape(label), title);
       })
       .join(separator);
 
@@ -1852,8 +1854,7 @@ ${this.seeAlsoHtml(type.docs)}
       const links = type.derivedTypes
         .map((docId) => {
           const entry = this.model.entry(docId);
-          if (!entry) return null;
-          return `<a class="see-ref" href="${attr(this.routes.type(entry.slug))}">${escape(entry.name)}</a>`;
+          return entry ? this.typeRefHtml({ id: docId, display: entry.name }) : null;
         })
         .filter(Boolean);
 
@@ -1871,19 +1872,16 @@ ${this.seeAlsoHtml(type.docs)}
     return rows.join('');
   }
 
-  typeParamsHtml(type, assemblyName) {
+  typeParamsHtml(type) {
     if (!type.typeParameters || type.typeParameters.length === 0) return '';
 
     const rows = type.typeParameters
       .map((tp) => {
         const variance = tp.variance ? `${escape(tp.variance)} ` : '';
-        // Constraints are bare names in the model, so they resolve the way a signature's do.
+        // Constraints are written names in the model, so they resolve the way a signature's do.
         const constraints = tp.constraints
           ? `<span class="param-type">where ${tp.constraints
-              .map((name) => {
-                const url = this.typeUrlByName(name, assemblyName);
-                return url ? `<a href="${attr(url)}">${escape(name)}</a>` : escape(name);
-              })
+              .map((name) => docnodes.writtenTypeHtml(name, this.docContext))
               .join(', ')}</span>`
           : '';
         return (
@@ -1907,7 +1905,7 @@ ${this.seeAlsoHtml(type.docs)}
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
       '<div class="section"><span class="section-label">Signature:</span>' +
-      `<div class="declaration">${this.signatureHtml(type.signature, assemblyName, type.slug)}</div>` +
+      `<div class="declaration">${this.signatureHtml(type.signature, assemblyName)}</div>` +
       this.parametersHtml(type.parameters) +
       '</div>'
     );
@@ -2289,8 +2287,7 @@ ${this.seeAlsoHtml(type.docs)}
       const links = member.implements
         .map((docId) => {
           const entry = this.model.entry(docId);
-          if (!entry) return null;
-          return `<a class="see-ref" href="${attr(this.routes.forEntry(entry))}">${escape(entry.name)}</a>`;
+          return entry ? this.typeRefHtml({ id: docId, display: entry.name }) : null;
         })
         .filter(Boolean);
       if (links.length > 0) {
@@ -2354,7 +2351,7 @@ ${this.seeAlsoHtml(type.docs)}
       // The accessors ride on the declaration rather than sitting beside it as chips: 'get; set;'
       // is how the property is written, and a reader looking for whether one can be assigned to
       // looks where the assignment would be declared.
-      `<div class="declaration">${this.signatureHtml(member.signature + this.accessorList(member), assemblyName, selfSlug, lastSegment(member.name))}</div>` +
+      `<div class="declaration">${this.signatureHtml(member.signature + this.accessorList(member), assemblyName, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '') +
       (rest ? `<div class="member-detail">${rest}</div>` : '') +
@@ -2972,7 +2969,7 @@ ${this.seeAlsoHtml(type.docs)}
    */
   searchResultHtml(row, query) {
     const declaration = row.signature
-      ? this.signatureHtml(row.signature, row.assembly, '', lastSegment(row.name))
+      ? this.signatureHtml(row.signature, row.assembly, lastSegment(row.name))
       : '';
 
     const needle = (query || '').toLowerCase();
@@ -3171,7 +3168,7 @@ ${this.seeAlsoHtml(type.docs)}
           r.haystack,
           r.summary,
           theme.filterLetter(r.kind),
-          this.signatureHtml(r.signature, r.assembly, '', lastSegment(r.name)),
+          this.signatureHtml(r.signature, r.assembly, lastSegment(r.name)),
           seen.get(r.namespace),
           assemblyIndex.get(r.assembly),
           theme.kindIcon(r.kind),
