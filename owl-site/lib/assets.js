@@ -209,7 +209,8 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 #search:focus { background: var(--nav-focus); }
 /* type=search draws a platform clear button; the magnifier already occupies that corner. */
 #search::-webkit-search-cancel-button, #search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
-.nav-search-icon { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); width: 0.95rem; height: 0.95rem; pointer-events: none; fill: none; stroke: var(--nav-dim); stroke-width: 2; stroke-linecap: round; }
+/* A filled mark like the sidebar toggle's: the path carries its own weight. */
+.nav-search-icon { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); width: 1.05rem; height: 1.05rem; pointer-events: none; fill: var(--nav-dim); }
 
 /* ---- Header search results ----
    Hangs off the form, which is the positioned element, and takes the page's colours rather than
@@ -2321,6 +2322,16 @@ const JS = `
         location.href = rows[at].getAttribute('href');
       }
     });
+  }
+
+  // A static export serves the same prebuilt page for every ?q=, so the query lives only in
+  // the url; the dev server renders it into the box, so an already-filled value wins.
+  if (onSearchPage && !input.value) {
+    var boot = urlParams();
+    input.value = boot.get('q') || '';
+    if (status && !status.getAttribute('data-scope') && boot.get('a')) {
+      status.setAttribute('data-scope', boot.get('a'));
+    }
   }
 
   if (input.value && onSearchPage) run(input.value);
