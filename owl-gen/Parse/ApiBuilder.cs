@@ -217,6 +217,30 @@ sealed class ApiBuilder
         or Accessibility.ProtectedOrInternal;
   }
 
+  /// <summary>
+  /// Whether a reference may name a type: anything from another assembly, or a
+  /// type of this one that gets a page. An internal type of the documented
+  /// assembly fails both, and naming it would put a dead, unlinkable entry on
+  /// every list the reference reaches.
+  /// </summary>
+  bool IsPresentableReference(INamedTypeSymbol type)
+  {
+    return !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly)
+        || IsDocumentableType(type);
+  }
+
+  /// <summary>
+  /// The interface members a member explicitly implements, empty for everything
+  /// else. C# reports such a member as private; VB gives it any accessibility.
+  /// </summary>
+  static ImmutableArray<ISymbol> ExplicitImplementations(ISymbol member) => member switch
+  {
+    IMethodSymbol m => ImmutableArray<ISymbol>.CastUp(m.ExplicitInterfaceImplementations),
+    IPropertySymbol p => ImmutableArray<ISymbol>.CastUp(p.ExplicitInterfaceImplementations),
+    IEventSymbol e => ImmutableArray<ISymbol>.CastUp(e.ExplicitInterfaceImplementations),
+    _ => [],
+  };
+
   bool IsDocumentableType(INamedTypeSymbol type)
   {
     if (!IsVisibleAccessibility(type.DeclaredAccessibility))
@@ -282,7 +306,7 @@ sealed class ApiBuilder
         .Any(e => SymbolEqualityComparer.Default.Equals(e.Type.OriginalDefinition, type.OriginalDefinition));
   }
 
-  static IEnumerable<ISymbol> DocumentableMembers(INamedTypeSymbol type)
+  IEnumerable<ISymbol> DocumentableMembers(INamedTypeSymbol type)
   {
     foreach (ISymbol member in type.GetMembers())
     {
@@ -300,18 +324,12 @@ sealed class ApiBuilder
     }
   }
 
-  static bool IsDocumentableMember(ISymbol member, INamedTypeSymbol containingType)
+  bool IsDocumentableMember(ISymbol member, INamedTypeSymbol containingType)
   {
-    // Explicit interface implementations report as private but are part of the contract.
-    bool isExplicitImpl = member switch
-    {
-      IMethodSymbol m => m.ExplicitInterfaceImplementations.Length > 0,
-      IPropertySymbol p => p.ExplicitInterfaceImplementations.Length > 0,
-      IEventSymbol e => e.ExplicitInterfaceImplementations.Length > 0,
-      _ => false,
-    };
-
-    if (!isExplicitImpl && !IsVisibleAccessibility(member.DeclaredAccessibility))
+    // Explicit interface implementations report as private but are part of the contract -
+    // unless every contract they satisfy is internal, which makes the member internal too.
+    if (!IsVisibleAccessibility(member.DeclaredAccessibility)
+        && !ExplicitImplementations(member).Any(impl => IsPresentableReference(impl.ContainingType)))
     {
       return false;
     }
@@ -412,23 +430,26 @@ sealed class ApiBuilder
     }
     else
     {
-      apiType.BaseType = type.BaseType is null || type.BaseType.SpecialType == SpecialType.System_Object
-          ? null
-          : BuildTypeRef(type.BaseType);
+      // An internal base has no page and never will, so the nearest presentable ancestor
+      // stands in for it wherever the model names a base.
+      INamedTypeSymbol? baseType = NearestPresentableBase(type);
+      apiType.BaseType = baseType is null ? null : BuildTypeRef(baseType);
 
       apiType.InheritanceChain = BuildInheritanceChain(type);
-      apiType.Interfaces = type.Interfaces.Length == 0
-          ? null
-          : type.Interfaces.Select(BuildTypeRef).ToList();
 
-      apiType.AllInterfaces = type.AllInterfaces.Length == 0
+      List<INamedTypeSymbol> interfaces = PresentableInterfaces(type.Interfaces);
+      apiType.Interfaces = interfaces.Count == 0
           ? null
-          : type.AllInterfaces
-              .Select(DocIds.Of)
-              .Where(id => id is not null)
-              .Select(id => id!)
-              .Distinct()
-              .ToList();
+          : interfaces.Select(BuildTypeRef).ToList();
+
+      List<string> allInterfaces = type.AllInterfaces
+          .Where(IsPresentableReference)
+          .Select(DocIds.Of)
+          .Where(id => id is not null)
+          .Select(id => id!)
+          .Distinct()
+          .ToList();
+      apiType.AllInterfaces = allInterfaces.Count == 0 ? null : allInterfaces;
     }
 
     foreach (ISymbol member in DocumentableMembers(type))
@@ -456,10 +477,66 @@ sealed class ApiBuilder
          current is not null && current.SpecialType != SpecialType.System_Object;
          current = current.BaseType)
     {
-      chain.Add(BuildTypeRef(current));
+      if (IsPresentableReference(current))
+      {
+        chain.Add(BuildTypeRef(current));
+      }
     }
 
     return chain.Count == 0 ? null : chain;
+  }
+
+  /// <summary>
+  /// The nearest ancestor the model may name as the base, or null when nothing
+  /// presentable sits between the type and System.Object.
+  /// </summary>
+  INamedTypeSymbol? NearestPresentableBase(INamedTypeSymbol type)
+  {
+    for (INamedTypeSymbol? current = type.BaseType;
+         current is not null && current.SpecialType != SpecialType.System_Object;
+         current = current.BaseType)
+    {
+      if (IsPresentableReference(current))
+      {
+        return current;
+      }
+    }
+
+    return null;
+  }
+
+  /// <summary>
+  /// The directly declared interfaces, with every internal one replaced by the
+  /// presentable interfaces it extends: a type implementing an internal table
+  /// contract still visibly implements the IEnumerable behind it.
+  /// </summary>
+  List<INamedTypeSymbol> PresentableInterfaces(ImmutableArray<INamedTypeSymbol> interfaces)
+  {
+    var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+    var output = new List<INamedTypeSymbol>();
+
+    void Walk(ImmutableArray<INamedTypeSymbol> list)
+    {
+      foreach (INamedTypeSymbol iface in list)
+      {
+        if (!seen.Add(iface))
+        {
+          continue;
+        }
+
+        if (IsPresentableReference(iface))
+        {
+          output.Add(iface);
+        }
+        else
+        {
+          Walk(iface.Interfaces);
+        }
+      }
+    }
+
+    Walk(interfaces);
+    return output;
   }
 
   static string TypeKindOf(INamedTypeSymbol type)
@@ -571,11 +648,7 @@ sealed class ApiBuilder
     }
 
     // Straight from the symbol, so no '#'-separator parsing is needed.
-    if (method.ExplicitInterfaceImplementations.Length > 0)
-    {
-      IMethodSymbol first = method.ExplicitInterfaceImplementations[0];
-      target.ExplicitInterface = BuildTypeRef(first.ContainingType);
-    }
+    target.ExplicitInterface = ExplicitInterfaceRef(method.ExplicitInterfaceImplementations);
 
     target.Implements = CollectImplements(method);
     target.Overrides = DocIds.Of(method.OverriddenMethod);
@@ -602,10 +675,7 @@ sealed class ApiBuilder
 
     target.IsReadOnly = property.IsReadOnly;
 
-    if (property.ExplicitInterfaceImplementations.Length > 0)
-    {
-      target.ExplicitInterface = BuildTypeRef(property.ExplicitInterfaceImplementations[0].ContainingType);
-    }
+    target.ExplicitInterface = ExplicitInterfaceRef(property.ExplicitInterfaceImplementations);
 
     target.Implements = CollectImplements(property);
     target.Overrides = DocIds.Of(property.OverriddenProperty);
@@ -632,10 +702,7 @@ sealed class ApiBuilder
     target.ReturnType = BuildTypeRef(evt.Type);
     target.Signature = $"{target.ReturnType.Display} {evt.Name}";
 
-    if (evt.ExplicitInterfaceImplementations.Length > 0)
-    {
-      target.ExplicitInterface = BuildTypeRef(evt.ExplicitInterfaceImplementations[0].ContainingType);
-    }
+    target.ExplicitInterface = ExplicitInterfaceRef(evt.ExplicitInterfaceImplementations);
 
     target.Implements = CollectImplements(evt);
     target.Overrides = DocIds.Of(evt.OverriddenEvent);
@@ -646,20 +713,17 @@ sealed class ApiBuilder
   /// implicitly. The implicit case is invisible in the compiler's doc XML, so
   /// it is genuinely new information.
   /// </summary>
-  static List<string>? CollectImplements(ISymbol member)
+  List<string>? CollectImplements(ISymbol member)
   {
     var ids = new List<string>();
 
-    IEnumerable<ISymbol> explicitImpls = member switch
+    foreach (ISymbol impl in ExplicitImplementations(member))
     {
-      IMethodSymbol m => m.ExplicitInterfaceImplementations,
-      IPropertySymbol p => p.ExplicitInterfaceImplementations,
-      IEventSymbol e => e.ExplicitInterfaceImplementations,
-      _ => [],
-    };
+      if (!IsPresentableReference(impl.ContainingType))
+      {
+        continue;
+      }
 
-    foreach (ISymbol impl in explicitImpls)
-    {
       string? id = DocIds.Of(impl);
       if (id is not null)
       {
@@ -670,6 +734,11 @@ sealed class ApiBuilder
     INamedTypeSymbol containing = member.ContainingType;
     foreach (INamedTypeSymbol iface in containing.AllInterfaces)
     {
+      if (!IsPresentableReference(iface))
+      {
+        continue;
+      }
+
       foreach (ISymbol ifaceMember in iface.GetMembers())
       {
         ISymbol? implementation = containing.FindImplementationForInterfaceMember(ifaceMember);
@@ -687,6 +756,25 @@ sealed class ApiBuilder
     }
 
     return ids.Count == 0 ? null : ids;
+  }
+
+  /// <summary>
+  /// The interface an explicit implementation's heading names: the first one
+  /// the model may name, so an internal contract satisfied alongside a public
+  /// one does not take the heading. Null when there is nothing to name, which
+  /// leaves the member reading as an ordinary one.
+  /// </summary>
+  TypeRef? ExplicitInterfaceRef(IEnumerable<ISymbol> implementations)
+  {
+    foreach (ISymbol impl in implementations)
+    {
+      if (IsPresentableReference(impl.ContainingType))
+      {
+        return BuildTypeRef(impl.ContainingType);
+      }
+    }
+
+    return null;
   }
 
   static string MemberKindOf(ISymbol member) => member switch
@@ -709,15 +797,9 @@ sealed class ApiBuilder
   /// </summary>
   static Accessibility EffectiveAccessibility(ISymbol member)
   {
-    bool isExplicitImpl = member switch
-    {
-      IMethodSymbol m => m.ExplicitInterfaceImplementations.Length > 0,
-      IPropertySymbol p => p.ExplicitInterfaceImplementations.Length > 0,
-      IEventSymbol e => e.ExplicitInterfaceImplementations.Length > 0,
-      _ => false,
-    };
-
-    return isExplicitImpl ? Accessibility.Public : member.DeclaredAccessibility;
+    return ExplicitImplementations(member).Length > 0
+        ? Accessibility.Public
+        : member.DeclaredAccessibility;
   }
 
   /// <summary>

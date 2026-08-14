@@ -1815,25 +1815,18 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * What the type implements and what derives from it, as labelled rows.
+   * What derives from the type, as a labelled row.
    *
-   * Rows rather than a group with a heading and a rule over it: these sit in the page head beside
+   * A row rather than a group with a heading and a rule over it: it sits in the page head beside
    * the name and the declaration, where a heading the weight of a section would break the block in
-   * two. Each row says what it is on the left, the way a member card labels its parameters.
+   * two. The row says what it is on the left, the way a member card labels its parameters.
    */
   relationsHtml(type) {
     const rows = [];
 
     // No 'Inheritance:' row: the chain runs into the page title, where it is read against the name
-    // it belongs to rather than a second time further down.
-
-    if (type.interfaces && type.interfaces.length > 0) {
-      rows.push(
-        '<div class="section"><span class="section-label">Implements:</span> ' +
-          type.interfaces.map((r) => this.typeRefHtml(r)).join(', ') +
-          '</div>'
-      );
-    }
+    // it belongs to rather than a second time further down. No 'Implements:' row either - the
+    // declaration above already spells out every interface, and the tap-a-name links live there.
 
     if (type.derivedTypes && type.derivedTypes.length > 0) {
       const links = type.derivedTypes
