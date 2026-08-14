@@ -15,7 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { ID_PREFIX: ICON_PREFIX } = require('./icons');
-const { BADGE_PAINTS, CHIP_PAINTS, NOTE_PAINTS } = require('./theme');
+const { BADGE_PAINTS, NOTE_PAINTS } = require('./theme');
 
 /**
  * What MathML needs to draw correctly, from the converter that writes it.
@@ -85,12 +85,6 @@ const CSS = `
      reason - see --kind-ink. */
   --kind:        var(--oc-gray-4);
   --kind-ink:    var(--oc-gray-9);
-  /* The Readonly pill, which is the far end of the page's range: near-white here, where the light
-     theme has it near-black, so that under either one it is the strongest filled mark in the row of
-     chips and reads as inverted against them. Brighter than --kind, so it is not read as one of the
-     drawings beside it. */
-  --badge-mod:     var(--oc-gray-2);
-  --badge-mod-ink: var(--oc-gray-9);
   --flash:       #2196f3;
   --scrollbar:   #404040;
   --tok-keyword: #c4a7fd;
@@ -126,8 +120,6 @@ const CSS = `
   --fullname:    #a3a3a3;
   --kind:        var(--oc-gray-7);
   --kind-ink:    var(--oc-white);
-  --badge-mod:     var(--oc-gray-9);
-  --badge-mod-ink: var(--oc-white);
   --flash:       #0ea5e9;
   --scrollbar:   #d4d4d4;
   --tok-keyword: #7c3aed;
@@ -147,12 +139,11 @@ const CSS = `
 /* ---- Badge colours ----
    Written from lib/theme.js, so the palette is stated once and every badge, filter pill and search
    row reads it from here rather than carrying a colour of its own. Outside the two theme blocks
-   because a colour means the same thing under either one. The two that did need saying twice are
-   the ones that are not colours but ends of a range - the kind ink and the Readonly pill - and they
-   are up there with --flash, where a theme states what its ends are. */
+   because a colour means the same thing under either one. The one that did need saying twice is
+   not a colour but the end of a range - the kind ink - and it is up there with --flash, where a
+   theme states what its ends are. */
 :root {
 ${paintCss('badge', BADGE_PAINTS)}
-${paintCss('chip', CHIP_PAINTS)}
 ${paintCss('note', NOTE_PAINTS)}
 }
 
@@ -491,8 +482,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .chain-sep { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; vertical-align: -0.2rem; color: var(--text4); transform: rotate(90deg); }
 .chain-sep svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
 .page-title .page-kind { font-size: 0.6em; font-weight: 500; color: var(--text4); margin-left: 0.5rem; }
-/* Sized in rem, so it stays chip-sized rather than growing with the heading. */
-.page-title .chip { margin-left: 0.5rem; vertical-align: middle; font-weight: 500; }
 /* The drawing at its largest, since this is the one place a page says what it is about rather than
    listing things.
 
@@ -502,8 +491,6 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    the other's size. Only the titles that carry a drawing - a type's and a member's - are rows; the
    rest are a name and a small word after it, which reads as the line it is. */
 .page-title:has(.kind-icon) { display: flex; align-items: center; gap: 0.5rem; }
-/* The row's gap is the space now, so the chip drops the margin it used in a line of text. */
-.page-title:has(.kind-icon) .chip { margin-left: 0; }
 .page-title .kind-icon { width: 1.75rem; height: 1.75rem; }
 .page-subtitle { font-family: monospace; font-size: 0.76rem; color: var(--fullname); margin-top: 0.3rem; word-break: break-all; }
 .page-intro { color: var(--text2); font-size: 0.93rem; line-height: 1.6; margin-top: 0.6rem; }
@@ -583,23 +570,16 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); background: var(--bg3); border-radius: 3px; padding: 0.1rem 0.55rem; text-decoration: none; }
 a.chip:hover { color: var(--flash); }
-/* The modifiers worth telling apart at a glance: what a member is bound to, and whether it is yours
-   to override. Painted like the Readonly pill beside them, from lib/theme.js, so a chip that means
-   something and a chip that is just a word are not the same shape in a different colour. */
-.chip-static { background: var(--chip-static); color: var(--oc-white); }
-.chip-const { background: var(--chip-const); color: var(--oc-white); }
-.chip-abstract { background: var(--chip-abstract); color: var(--oc-white); }
-.chip-virtual { background: var(--chip-virtual); color: var(--oc-white); }
-/* When an API arrived, at the far end of the row rather than in the run of modifiers: it says
-   something about the API's history rather than about how it is written, and the left of the row is
-   where a reader scanning down a list of members is already looking. The same chip closes a type
-   page's title row, so the fact is in the same place whether the type is being read or listed.
+/* When an API arrived, at the far end of the row: it says something about the API's history rather
+   than about how it is written - everything about how it is written is on the declaration - and
+   the left of the row is where a reader scanning down a list of members is already looking. The
+   same chip closes a type page's title row, so the fact is in the same place whether the type is
+   being read or listed.
 
-   Quieter than the chips it shares a row with, in the grey the assembly name and the anchor use:
-   the modifiers beside it say how a member is written and are read down the column, while this is
-   a fact to be looked up on the one row that raised the question. Never shrunk: it is a handful of
-   characters, and a long chain or signature beside it has somewhere else to give. Where something
-   already claims the end of the row
+   In the grey the assembly name and the anchor use: this is a fact to be looked up on the one row
+   that raised the question, not read down the column. Never shrunk: it is a handful of characters,
+   and a long chain or signature beside it has somewhere else to give. Where something already
+   claims the end of the row
    - the assembly name on a type card, the Example button on a member's - it sits beside that
    instead, because two auto margins in one row split the free space between them and leave both
    adrift. */
@@ -676,13 +656,7 @@ ${TEMML_CSS}
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
    meant. */
-.badge, .explicit-badge, .tree-badge, .chip { user-select: none; -webkit-user-select: none; }
-/* The pill shape, worn by Readonly and SetOnly alone now that a kind is drawn rather than spelled:
-   what is left of it says how a property may be used, which is not a kind and takes no part in the
-   kind palette. Ground and ink swap ends with the theme - dark on light, light on dark - so that it
-   stays the most contrasted mark in the row either way. See --badge-mod. */
-.badge { padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em; }
-.badge-mod { background: var(--badge-mod); color: var(--badge-mod-ink); }
+.explicit-badge, .tree-badge, .chip { user-select: none; -webkit-user-select: none; }
 /* The small pill, worn by Explicit alone. */
 .explicit-badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 600; color: white; background: var(--badge-explicit); letter-spacing: 0.02em; }
 /* Which assembly a card's type came from, pushed to the far end of its header. Grey and unadorned:
@@ -780,12 +754,11 @@ code { font-family: monospace; }
 /* ---- Examples ----
    Tabs rather than one block after another: the same example in three languages is three ways of
    saying one thing, and stacking them makes a reader scroll past two of them to reach theirs. */
-/* Pushed to the far end of the header row, away from the name and badges that identify the member
-   and out of the way of the chips that qualify it.
+/* Pushed to the far end of the header row, away from the name that identifies the member.
 
    Painted and hovered as the header's own buttons are, because it is the same kind of thing: the
-   one control on a card otherwise made entirely of description. Set a size up from the chips it
-   sits among, which are labels rather than things to press. */
+   one control on a card otherwise made entirely of description. Set a size up from the Since chip
+   it can share the row's end with, which is a label rather than a thing to press. */
 .chip-action { background: var(--accent); color: var(--oc-white); font-size: 0.82rem; font-weight: 500; padding: 0.18rem 0.65rem; margin-left: auto; }
 a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter: brightness(1.1); }
 .example-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: 0.8rem 0 0; }

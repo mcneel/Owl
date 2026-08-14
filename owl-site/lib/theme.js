@@ -20,8 +20,8 @@
  * stylesheet paints every drawing, badge and tab marker from the one property, and lib/assets.js
  * chooses its value per theme, beside --flash and the rest of the colours a theme decides.
  *
- * It stays out of the way of the three marks that are allowed a colour, all of which say something is
- * unusual about the API rather than what kind it is: Readonly, Explicit and the obsolete note.
+ * It stays out of the way of the two marks that are allowed a colour, both of which say something is
+ * unusual about the API rather than what kind it is: Explicit and the obsolete note.
  */
 
 /**
@@ -29,33 +29,9 @@
  *
  * `explicit` paints the badge and the card's border together, since the border is there to make the
  * badge's point at a glance. One colour under either theme, which is why it is stated here.
- *
- * Readonly and SetOnly are not here, though they share a badge of their own: what that pill is is
- * the far end of the page's own range - the darkest ground under a light theme and the lightest
- * under a dark one - and a range is what a theme decides. It is written with --kind in lib/assets.js
- * for the same reason, as a ground and an ink that swap places between the two.
  */
 const BADGE_PAINTS = {
   explicit: 'var(--oc-blue-4)',
-};
-
-/**
- * Modifier chips that are filled rather than left plain, tunable the same way.
- *
- * These say what a member is bound to and whether it is yours to override, which is what a reader
- * scanning a card wants answered before the prose. What sets them apart from the rest - extension,
- * init, an accessibility - is that they are filled at all: a page where every chip is filled tells
- * nothing apart. Const is the darkest of them because a constant is the strongest form of the fact
- * static states - not merely reached through the type but fixed at the point of use.
- *
- * Filled in one colour under both themes, as every other badge is, so each has to carry white text
- * on either ground.
- */
-const CHIP_PAINTS = {
-  static: 'var(--oc-gray-6)',
-  const: 'var(--oc-gray-9)',
-  abstract: 'var(--oc-gray-6)',
-  virtual: 'var(--oc-gray-6)',
 };
 
 /**
@@ -330,7 +306,6 @@ function kindPlural(kind) {
 
 module.exports = {
   BADGE_PAINTS,
-  CHIP_PAINTS,
   NOTE_PAINTS,
   KIND_MAP,
   KIND_ICONS,

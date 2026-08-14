@@ -403,11 +403,6 @@ const FIRST_PAINT_RESULTS = 100;
  * declares Compare(T) where the type below overrides Compare(Mesh), which this does not catch;
  * `overrides` does, and the two are used together.
  */
-/** A modifier's class name. 'protected internal' is the only one that is not already a word. */
-function chipSlug(label) {
-  return String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-}
-
 function memberKey(member) {
   const parameters = (member.parameters || [])
     .map((p) => (p.type && p.type.display) || '')
@@ -614,30 +609,13 @@ class Renderer {
   /**
    * True when a member offers no way to write it: a property with no setter, or a readonly field.
    *
-   * The badge and the sort order both ask this, so neither can end up disagreeing with the other.
+   * What the sort order puts first; the declaration says the same thing in the member's own
+   * spelling - '{ get; }', or the readonly keyword.
    */
   isReadOnlyMember(member) {
     const accessors = member.accessors;
     if (accessors && (accessors.get || accessors.set)) return !accessors.set;
     return member.kind === 'field' && Boolean(member.isReadOnly);
-  }
-
-  /**
-   * Readonly or SetOnly, at the head of the chips.
-   *
-   * It sits among them because it says what they say - how the member may be used, not what it is
-   * - and 'init' beside it is the same kind of fact about the same accessors. Neither label is
-   * shown for the ordinary read-write property, which is what makes it worth noticing when it
-   * does appear.
-   */
-  accessBadgeHtml(member) {
-    const accessors = member.accessors;
-    let label = '';
-
-    if (this.isReadOnlyMember(member)) label = 'Readonly';
-    else if (accessors && accessors.set && !accessors.get) label = 'SetOnly';
-
-    return label ? `<span class="badge badge-mod">${label}</span>` : '';
   }
 
   /**
@@ -1007,11 +985,6 @@ class Renderer {
       '<div class="member-header">' +
       this.kindIconHtml(type.kind) +
       heading +
-      // Chipped only when it is not public, the way a member card does it: nested types are
-      // commonly protected or internal, and the card is otherwise silent about it.
-      (type.accessibility && type.accessibility !== 'public'
-        ? `<span class="chip">${escape(type.accessibility)}</span>`
-        : '') +
       (showAssembly ? this.assemblyNameHtml(assemblyName) : '') +
       this.sinceChipHtml(type.docs) +
       '</div>' +
@@ -1530,12 +1503,6 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     const members = this.sortedMembers(type, { pageOrder: true });
     const inherited = this.inheritedMembers(type);
 
-    // The same chip a member card wears, and in the same place: after the name, not before it.
-    const accessChip =
-      type.accessibility && type.accessibility !== 'public'
-        ? `<span class="chip">${escape(type.accessibility)}</span>`
-        : '';
-
     // At the foot of the head rather than in the chrome above it: the row says what the member list
     // shows, so it belongs at the bottom of the block that list scrolls under, not two blocks up
     // beside the breadcrumbs.
@@ -1589,7 +1556,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <article>
 <div class="page-head sticky-head">
   <div class="page-head-brief">
-    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}${accessChip}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
+    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly)}</div>
     ${
       summaryHtml
@@ -1615,7 +1582,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 ${
   type.kind === 'enum'
     ? this.enumValuesHtml(members)
-    : this.membersHtml(members, assembly, type.slug, inherited)
+    : this.membersHtml(members, assembly, type.slug, inherited, type.kind)
 }
 ${this.seeAlsoHtml(type.docs)}
 </article>
@@ -1734,29 +1701,47 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * A member's signature written out as it would be declared.
+   * A member's signature written out as it would be declared in source.
    *
-   * The model carries the bare form - 'bool IsComplete' - because the type page puts the modifiers
-   * beside it as chips. A search result has no chips, so it spells the whole thing out:
-   * 'public bool IsComplete { get; protected set; }'.
+   * The model carries the bare form - 'bool IsComplete' - so this spells the whole thing out:
+   * 'public bool IsComplete { get; protected set; }'. The member card and the search result both
+   * read it, which is what keeps the two from saying one member two ways.
+   *
+   * The owner's kind is here for the members whose source says less than the compiler does: an
+   * interface member is public and abstract to the compiler, and its declaration writes neither.
    */
-  memberDeclaration(member) {
+  memberDeclaration(member, ownerKind = '') {
     // An enum member is reported as public static const, none of which anyone writes.
     if (member.kind === 'enumvalue') return member.signature || '';
 
+    // A finalizer takes no modifiers at all: '~Name()' is the whole declaration.
+    if (member.kind === 'destructor') return member.signature || '';
+
+    const iface = ownerKind === 'interface';
+
     const parts = [];
-    if (member.accessibility) parts.push(member.accessibility);
-    if (member.isStatic) parts.push('static');
+    // An explicit implementation cannot name an accessibility, however public it is to callers.
+    if (member.accessibility && !member.explicitInterface && !(iface && member.accessibility === 'public')) {
+      parts.push(member.accessibility);
+    }
+    // A const is static to the compiler, but 'static const' is not something C# accepts written.
+    if (member.isStatic && !member.isConst) parts.push('static');
     if (member.isConst) parts.push('const');
-    if (member.isAbstract) parts.push('abstract');
+    if (member.kind === 'field' && member.isReadOnly) parts.push('readonly');
+    // A static abstract interface member is the one whose source does write the keyword.
+    if (member.isAbstract && !(iface && !member.isStatic)) parts.push('abstract');
     if (member.isVirtual) parts.push('virtual');
+    if (member.isSealed) parts.push('sealed');
     if (member.isOverride) parts.push('override');
 
     // The model leaves the keyword out of an event's signature, as it does the modifiers.
     if (member.kind === 'event') parts.push('event');
 
-    const out = parts.concat(member.signature || '').filter(Boolean).join(' ');
-    return out + this.accessorList(member);
+    const out =
+      parts.concat(member.signature || '').filter(Boolean).join(' ') + this.accessorList(member);
+
+    // The value is half the point of a constant, and the declaration is where the source states it.
+    return member.isConst && member.constantValue != null ? `${out} = ${member.constantValue}` : out;
   }
 
   /**
@@ -2043,7 +2028,7 @@ ${this.seeAlsoHtml(type.docs)}
    * this type's own. Rows rather than cards, because they are documented where they are declared
    * and what they owe this page is a name to find and a way through to the rest.
    */
-  membersHtml(members, assemblyName, selfSlug, inherited = []) {
+  membersHtml(members, assemblyName, selfSlug, inherited = [], ownerKind = '') {
     if (members.length === 0 && inherited.length === 0) return '';
 
     const groups = new Map();
@@ -2066,7 +2051,7 @@ ${this.seeAlsoHtml(type.docs)}
         `<section class="ns-section type-section" id="${attr(kind)}">` +
         `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
         '<div class="type-children">' +
-        group.map((m) => this.memberCardHtml(m, assemblyName, selfSlug)).join('') +
+        group.map((m) => this.memberCardHtml(m, assemblyName, selfSlug, ownerKind)).join('') +
         '</div></section>';
     }
 
@@ -2219,25 +2204,9 @@ ${this.seeAlsoHtml(type.docs)}
     );
   }
 
-  memberCardHtml(member, assemblyName, selfSlug) {
+  memberCardHtml(member, assemblyName, selfSlug, ownerKind = '') {
     const explicit = Boolean(member.explicitInterface);
     const filterKey = theme.memberFilterKey(member.kind);
-
-    const chips = [];
-    if (member.isStatic) chips.push('static');
-    if (member.isAbstract) chips.push('abstract');
-    if (member.isVirtual) chips.push('virtual');
-    if (member.isOverride) chips.push('override');
-    if (member.isConst) chips.push('const');
-    if (member.isExtensionMethod) chips.push('extension');
-    if (member.accessibility && member.accessibility !== 'public') chips.unshift(member.accessibility);
-
-    // The get/set chip is gone: what it had to say is now the Readonly or SetOnly badge, and a
-    // property with both is the ordinary case that needs no label at all. 'init' stays, being a
-    // real restriction on the setter rather than the default.
-    if (member.accessors && member.accessors.set && member.accessors.initOnly) {
-      chips.push('init');
-    }
 
     const detail = [];
 
@@ -2333,10 +2302,6 @@ ${this.seeAlsoHtml(type.docs)}
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
       this.kindIconHtml(member.kind) +
       `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(memberDisplayName(member))}</h3>` +
-      this.accessBadgeHtml(member) +
-      // Each chip names itself in a class, so the stylesheet can single one out - static, abstract
-      // and virtual do - without this having to know which of them it has decided to colour.
-      chips.map((c) => `<span class="chip chip-${attr(chipSlug(c))}">${escape(c)}</span>`).join('') +
       // Beside the name it links to, and before the Example button, which the row's own margin
       // holds at the far end: the anchor belongs to the member, not to the action next to it.
       // Out of the tab order, since only the pointer can bring it into view: tabbing onto a mark
@@ -2348,10 +2313,10 @@ ${this.seeAlsoHtml(type.docs)}
       exampleButton +
       this.sinceChipHtml(member.docs) +
       '</div>' +
-      // The accessors ride on the declaration rather than sitting beside it as chips: 'get; set;'
-      // is how the property is written, and a reader looking for whether one can be assigned to
-      // looks where the assignment would be declared.
-      `<div class="declaration">${this.signatureHtml(member.signature + this.accessorList(member), assemblyName, lastSegment(member.name))}</div>` +
+      // The whole declaration as source writes it, modifiers and all: a reader looking for whether
+      // a member is static, sealed or assignable looks where those facts would be declared, and a
+      // constant's value rides on the end the way the source states it.
+      `<div class="declaration">${this.signatureHtml(this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '') +
       (rest ? `<div class="member-detail">${rest}</div>` : '') +
@@ -3100,7 +3065,7 @@ ${this.seeAlsoHtml(type.docs)}
             // Searched, unlike a type's: the parameters and the return are what a member is, and the
             // haystack below carries them. The modifiers this puts on the front are the exception -
             // they are not in the haystack, so 'static' can still mark a word it did not match.
-            signature: this.memberDeclaration(member),
+            signature: this.memberDeclaration(member, type.kind),
             declarationSearched: true,
             assembly: assemblyName,
             namespace: type.namespace || '',
