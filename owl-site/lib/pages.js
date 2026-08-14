@@ -1507,7 +1507,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // shows, so it belongs at the bottom of the block that list scrolls under, not two blocks up
     // beside the breadcrumbs.
     //
-    // Inherited members count towards the tabs, since they are listed under the declared ones: a
+    // Inherited members count towards the tabs, since they are listed among the declared ones: a
     // type that declares no events but inherits three still has events to filter to.
     //
     // Its own vocabulary, not the one a list of types filters by: the reader here has already
@@ -2016,16 +2016,23 @@ ${this.seeAlsoHtml(type.docs)}
    * Members grouped under .ns-section headings, each card inside .type-children so it picks up the
    * indented, rule-on-the-left styling.
    *
-   * What the type inherits goes in one group at the end rather than into each kind's section: the
-   * page is about what this type adds, and a base's members mixed in among them would be read as
-   * this type's own. Rows rather than cards, because they are documented where they are declared
-   * and what they owe this page is a name to find and a way through to the rest.
+   * What the type inherits is merged into each kind's section and sorted with the declared members
+   * as one list: the reader is looking a member up by name and does not know which type declared
+   * it. An inherited entry keeps its one-line shape on a grey card, so what this type adds and
+   * what it merely carries stay tellable apart at a glance.
    */
   membersHtml(members, assemblyName, selfSlug, inherited = [], ownerKind = '') {
     if (members.length === 0 && inherited.length === 0) return '';
 
+    // Where a member came from, for the ones this type did not declare. Keyed by the member itself,
+    // so the merged list sorts as one and each entry still knows which shape to render as.
+    const from = new Map();
+    for (const entry of inherited) from.set(entry.member, entry.from);
+
+    const merged = this.sortMembers(members.concat([...from.keys()]), { pageOrder: true });
+
     const groups = new Map();
-    for (const member of members) {
+    for (const member of merged) {
       if (!groups.has(member.kind)) groups.set(member.kind, []);
       groups.get(member.kind).push(member);
     }
@@ -2044,46 +2051,30 @@ ${this.seeAlsoHtml(type.docs)}
         `<section class="ns-section type-section" id="${attr(kind)}">` +
         `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
         '<div class="type-children">' +
-        group.map((m) => this.memberCardHtml(m, assemblyName, selfSlug, ownerKind)).join('') +
+        group
+          .map((m) =>
+            from.has(m)
+              ? this.inheritedRowHtml({ member: m, from: from.get(m) })
+              : this.memberCardHtml(m, assemblyName, selfSlug, ownerKind)
+          )
+          .join('') +
         '</div></section>';
     }
 
-    return out + this.inheritedHtml(inherited);
+    return out;
   }
 
   /**
-   * Everything the type inherits, in one group under the members it declares.
+   * One inherited member: badge, name, and the type it came from, on a card that is all one link
+   * to where the member is documented.
    *
-   * Ordered the way the sections above are - data before behaviour, then by name - so the same
-   * member is looked for in the same place whether this type declares it or a base does. Which
-   * base each came from is on the row rather than in a heading per base: the reader is looking a
-   * name up, and where it came from is the answer, not the index.
-   */
-  inheritedHtml(inherited) {
-    if (inherited.length === 0) return '';
-
-    const rows = [...inherited]
-      .sort(
-        (a, b) =>
-          MEMBER_ORDER.indexOf(a.member.kind) - MEMBER_ORDER.indexOf(b.member.kind) ||
-          a.member.name.localeCompare(b.member.name)
-      )
-      .map((entry) => this.inheritedRowHtml(entry))
-      .join('');
-
-    return (
-      '<section class="ns-section type-section" id="inherited">' +
-      '<h2 class="ns-heading">Inherited members</h2>' +
-      `<div class="type-children">${rows}</div></section>`
-    );
-  }
-
-  /**
-   * One inherited member: badge, signature, and the type it came from, on a line that is all one
-   * link to where the member is documented.
+   * The name and not the signature, written the way a card's header writes it, so the merged list
+   * reads in one voice. Overloads share a name, so the full signature rides in the tooltip and the
+   * card the link lands on is what tells them apart.
    *
-   * The signature is highlighted but not cross-linked, since a link inside a link is neither: the
-   * row leads to the member, which is the one place every type in its signature is linked anyway.
+   * The provenance rides in a nested span: the outer one is the grey segment, held to one width
+   * across the list so the split reads as one line, and the inner one is what a base name too long
+   * for that width ellipsizes in.
    *
    * It carries the same data-filter the cards do, so the member tabs act on it without knowing it
    * is a different shape. No id: the anchor belongs to the member's own page, and a second element
@@ -2097,8 +2088,9 @@ ${this.seeAlsoHtml(type.docs)}
       `data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
       `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
       this.kindIconHtml(member.kind) +
-      `<code class="inherited-sig">${highlight(member.signature || member.name, 'csharp')}</code>` +
-      `<span class="inherited-from">from ${escape(from.name)}</span>` +
+      `<span class="member-name inherited-name" title="${attr(member.signature || member.name)}">` +
+      `${escape(memberDisplayName(member))}</span>` +
+      `<span class="inherited-from"><span>from ${escape(from.name)}</span></span>` +
       '</a>'
     );
   }

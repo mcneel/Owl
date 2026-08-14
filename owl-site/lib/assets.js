@@ -79,6 +79,9 @@ const CSS = `
   --card-hover:  #2e2e2e;
   --card-detail: #1b1b1b;
   --card-split:  #2b2b2b;
+  /* The grey segment on an inherited member's card, for what the page lists but does not own:
+     dimmer than the card ground here, grey against the white cards in the light theme. */
+  --card-dim:    #212121;
   --fullname:    #737373;
   /* Light against a dark page, where the light theme's kind ink is dark against a light one: a
      drawing has to sit above its ground either way. Its text goes the other way for the same
@@ -117,6 +120,7 @@ const CSS = `
   --card-hover:  #f8f8f8;
   --card-detail: #fbfbfb;
   --card-split:  #efefef;
+  --card-dim:    #f1f1f1;
   --fullname:    #a3a3a3;
   --kind:        var(--oc-gray-7);
   --kind-ink:    var(--oc-white);
@@ -640,18 +644,29 @@ ${TEMML_CSS}
 .member-detail > :first-child { margin-top: 0; }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
 .member.explicit-impl { border-color: var(--badge-explicit); }
-/* An inherited member is a line, not a card: it is documented on the type that declares it, and
-   what it owes this page is a name to find and a way through to the rest. Held to one line, so a
-   hundred of them stay a list the reader can run an eye down rather than a second page of cards.
-   The whole row is the link, since going to where it is written is the only thing to do with it. */
-.member.inherited { display: flex; align-items: baseline; gap: 0.5rem; background: none; border-color: transparent; border-radius: 6px; padding: 0.3rem 0.7rem; margin-bottom: 0.1rem; text-decoration: none; }
-.member.inherited:hover { background: var(--card-bg); border-color: var(--card-border); }
-.member.inherited:hover .inherited-sig { color: var(--text); }
+/* An inherited member sits among the declared members' cards, held to one line: it is documented
+   on the type that declares it, and what it owes this page is a name to find and a way through to
+   the rest. Two grounds inside its one border, the member-detail split turned sideways: the member
+   itself on the card ground the declared ones stand on, and the provenance on a grey segment at
+   the right edge, which is what says at a glance that this type carries it rather than adds it.
+   The whole card is the link, since going to where it is written is the only thing to do with it. */
+.member.inherited { display: flex; align-items: stretch; gap: 0.5rem; padding: 0 0 0 1.1rem; text-decoration: none; }
+.member.inherited:hover { background: var(--card-hover); }
 .member.inherited .kind-icon { align-self: center; }
-.inherited-sig { flex: 1; min-width: 0; font-family: monospace; font-size: 0.78rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Dimmer than the signature: which base it came from answers a question the reader only asks once
-   they have found the name they were looking for. */
-.inherited-from { flex-shrink: 0; font-size: 0.72rem; color: var(--text4); white-space: nowrap; }
+/* Layout only: the name wears .member-name too, so its type is the card header's by construction. */
+.inherited-name { flex: 1; min-width: 0; align-self: center; padding: 0.5rem 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dimmer than the name: which base it came from answers a question the reader only asks once they
+   have found the name they were looking for. The negative-margin trick member-detail uses is not
+   needed here - the row has no right padding, and the card's overflow clip takes the corners.
+
+   One width for every card rather than the label's own, so the split reads as one line down the
+   list instead of a ragged edge. The labels hang from the card's right edge for the same reason:
+   both ends of the segment hold still, and what varies is swallowed by the empty grey between
+   them. 14rem seats every base name the model renders today except the longest, which the inner
+   span ellipsizes - text-overflow wants a block container, and the flex that centres the label is
+   not one. */
+.inherited-from { flex: 0 0 14rem; min-width: 0; display: flex; align-items: center; justify-content: flex-end; background: var(--card-dim); border-left: 1px solid var(--card-split); padding: 0 1.1rem 0 0.9rem; font-size: 0.72rem; color: var(--text4); }
+.inherited-from > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
@@ -879,6 +894,9 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
   .sidebar { display: none; }
   .resize-handle { display: none; }
   #search { width: 150px; }
+  /* Too narrow to hold a fixed column open: the grey segment goes back to the label's own width,
+     and the aligned split is given up for the member name it was crowding out. */
+  .inherited-from { flex-basis: auto; }
 }
 `;
 
