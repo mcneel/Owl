@@ -118,8 +118,10 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
 <script>
 /* Applied before first paint, so the appearance the site opens as does not flash the other one.
    The session's store, not the origin's: a toggle holds across the links of one read and is gone by
-   the next, so the site opens as the system says every time and no choice outlives the tab. */
-(function(){try{var t=sessionStorage.getItem('docs-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+   the next, so the site opens as the system says every time and no choice outlives the tab.
+   The sidebar's visibility rides in the same store for the same reason - put back this early, a
+   hidden column stays hidden across a navigation instead of flashing in and out. */
+(function(){try{var d=document.documentElement;var t=sessionStorage.getItem('docs-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');d.setAttribute('data-theme',t);if(sessionStorage.getItem('docs-sidebar')==='hidden')d.setAttribute('data-sidebar','hidden');}catch(e){}})();
 </script>
 </head>
 <body${bodyClass ? ` class="${attr(bodyClass)}"` : ''}>
@@ -129,7 +131,7 @@ ${icons.spriteHtml()}
 <a class="skip-link" href="#main">Skip to content</a>
 
 <header>
-  <span class="site-title"><a href="${attr(homeUrl || routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
+  ${sidebarToggle(sidebar)}<span class="site-title"><a href="${attr(homeUrl || routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
   <form action="${attr(routes.search())}" method="get" role="search">
     <label class="skip-link" for="search">Search the API</label>
     <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
@@ -209,6 +211,25 @@ ${body}
 </body>
 </html>
 `;
+}
+
+/**
+ * The header's sidebar toggle, first in the bar so it sits against the column it acts on.
+ *
+ * Only on pages that carry a sidebar; anywhere else there is nothing to toggle. aria-expanded is
+ * written as shown, which is what a page without the script has; the script corrects it where a
+ * hidden column was remembered. The mark is Octicons' three-bars, drawn rather than typed: a glyph
+ * sits on a baseline and lands low in a square button, while a viewBox centres on the geometry.
+ */
+function sidebarToggle(sidebar) {
+  if (!sidebar) return '';
+
+  return (
+    '<button id="sidebar-toggle" type="button" title="Toggle sidebar" ' +
+    'aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true">' +
+    '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+    '<path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg></button>'
+  );
 }
 
 /**

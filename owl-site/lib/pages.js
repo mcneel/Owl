@@ -2565,14 +2565,35 @@ ${this.seeAlsoHtml(type.docs)}
     );
   }
 
-  sidebarToolbar() {
+  /**
+   * The bar pinned over the tree: a title saying what the column's groups are, and one button that
+   * collapses every group at once.
+   *
+   * The title names the tree's vocabulary - Categories, Namespaces, Assemblies - which is the one
+   * thing the rows below cannot say for themselves, since a list of names does not say what kind
+   * of name it lists.
+   *
+   * The button collapses only. Opening every group at once buys nothing a reader wants, so the
+   * other direction is not offered - and with only one thing to do, the button sits disabled and
+   * dimmed while every group is shut, rather than gone: a control that vanishes reads as the bar
+   * changing shape. anyOpen writes the state the page loads with; the script keeps it current as
+   * groups open and close. The mark is a list with one row set in under the others - the tree in
+   * miniature.
+   */
+  sidebarToolbar(label, anyOpen) {
     return (
       '<div class="sidebar-toolbar">' +
-      // Drawn rather than typed: a glyph sits on a baseline and lands low in a square button,
-      // while a viewBox centres on the geometry.
-      '<button id="collapse-all-btn" type="button" title="Collapse all" aria-label="Collapse all">' +
-      '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
-      '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>' +
+      `<span class="sidebar-title">${escape(label)}</span>` +
+      `<button id="collapse-all-btn"${anyOpen ? '' : ' disabled'} type="button" ` +
+      'title="Collapse all" aria-label="Collapse all">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none">' +
+      '<circle cx="4.443" cy="5.081" r="1.331" fill="currentColor"/>' +
+      '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.123 5.08h11.765"/>' +
+      '<circle cx="4.443" cy="12" r="1.331" fill="currentColor"/>' +
+      '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.123 12h11.765"/>' +
+      '<circle cx="9.701" cy="18.919" r="1.331" fill="currentColor"/>' +
+      '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.38 18.92h6.508"/>' +
+      '</g></svg></button>' +
       '</div>'
     );
   }
@@ -2590,25 +2611,28 @@ ${this.seeAlsoHtml(type.docs)}
     assemblyName,
     { activeType = null, activeCategory = null, activeOverview = false } = {}
   ) {
-    let out = this.sidebarToolbar();
+    const groups = this.model.categoryTreeOfAssembly(assemblyName);
+
+    // Open the group holding whatever is being viewed; collapse the rest so the tree is scannable.
+    const containsActiveType = (group) =>
+      activeType !== null && group.types.some(({ type }) => type.docId === activeType.docId);
+    const isActiveGroup = (group) =>
+      group.category === activeCategory || containsActiveType(group);
+
+    let out = this.sidebarToolbar('Categories', groups.some(isActiveGroup));
 
     // The assembly's own page is the only thing in this tree with nothing above it, so without a
     // row of its own there is no way back to the prose once you have clicked into a type. Marked
     // active only by the assembly page itself - search borrows this tree without being in it.
     out += this.assemblyOverviewRow(assemblyName, activeOverview);
 
-    const groups = this.model.categoryTreeOfAssembly(assemblyName);
     if (groups.length === 0) return out;
 
-    // Open the group holding whatever is being viewed; collapse the rest so the tree is scannable.
-    const containsActiveType = (group) =>
-      activeType !== null && group.types.some(({ type }) => type.docId === activeType.docId);
-
     for (const group of groups) {
-      const isActiveGroup = group.category === activeCategory || containsActiveType(group);
+      const activeGroup = isActiveGroup(group);
 
       // Only the group being read is written out; the browser fills the rest from the tree asset.
-      const rows = !isActiveGroup
+      const rows = !activeGroup
         ? ''
         : group.types
             .map(({ type }) => {
@@ -2651,8 +2675,8 @@ ${this.seeAlsoHtml(type.docs)}
       // The Overview row is written whether or not the group is filled in, so a category's own
       // page is one click away with the script off as well as on.
       out += this.treeGroup(`cat_${group.category}`, group.category, overview + rows, {
-        collapsed: !isActiveGroup,
-        lazy: !isActiveGroup,
+        collapsed: !activeGroup,
+        lazy: !activeGroup,
       });
     }
 
@@ -2667,7 +2691,8 @@ ${this.seeAlsoHtml(type.docs)}
    * a result page still has somewhere to go next.
    */
   assembliesTree() {
-    let out = this.sidebarToolbar();
+    // Every group starts shut here, so there is nothing for the collapse button to do yet.
+    let out = this.sidebarToolbar('Assemblies', false);
 
     const row = (inner) =>
       '<div class="tree-type"><div class="tree-type-label">' +
@@ -2719,9 +2744,13 @@ ${this.seeAlsoHtml(type.docs)}
    * @param {object} options   activeType: the type whose page this is, expanded to show members
    */
   namespaceTree(activeNamespace = null, { activeType = null } = {}) {
-    let out = this.sidebarToolbar();
+    const buckets = this.model.sortedNamespaces();
+    let out = this.sidebarToolbar(
+      'Namespaces',
+      buckets.some((bucket) => bucket.name === activeNamespace)
+    );
 
-    for (const bucket of this.model.sortedNamespaces()) {
+    for (const bucket of buckets) {
       const open = bucket.name === activeNamespace;
 
       // Members are listed under the type being read and nowhere else, so a namespace the size of

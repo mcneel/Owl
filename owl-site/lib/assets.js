@@ -193,7 +193,14 @@ header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellips
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #version-current, #theme-toggle { height: 30px; }
+#asm-filter, #search, #version-filter, #version-current, #theme-toggle, #sidebar-toggle { height: 30px; }
+
+/* ---- Sidebar toggle ----
+   The theme toggle's face, before the title and against the column it shows and hides. */
+#sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; width: 30px; padding: 0; border: none; border-radius: 4px; background: var(--nav-field); color: var(--nav-fg); cursor: pointer; flex-shrink: 0; }
+#sidebar-toggle:hover { background: var(--nav-focus); }
+/* A filled mark, unlike the stroked moon and sun beside it: the path carries its own weight. */
+#sidebar-toggle svg { display: block; width: 1.05rem; height: 1.05rem; fill: currentColor; }
 
 /* The magnifier sits inside the field, so the field owns the position it is measured against. */
 header form[role="search"] { position: relative; display: flex; align-items: center; flex-shrink: 0; }
@@ -275,15 +282,29 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    than it tells you. The three properties cover Firefox, old Edge and the WebKit/Blink family. */
 .sidebar { width: 280px; min-width: 150px; max-width: 600px; background: var(--bg2); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 0; }
 .sidebar::-webkit-scrollbar { display: none; }
+/* Hidden as a fact about the whole page rather than the column: the attribute lives on the root so
+   the head script can put a remembered state back before the sidebar is even parsed, and the handle
+   goes with the column it resizes. */
+:root[data-sidebar="hidden"] .sidebar,
+:root[data-sidebar="hidden"] .resize-handle { display: none; }
 /* Pinned, like the rows under it: it acts on the whole tree, so it is no use only while the top of
    the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
    written on rather than left to the contents, because those rows pin against it - see --tree-bar.
    Anything added here that makes the bar taller - a second row of controls, a taller field - is a
    change to --tree-bar and nothing else: the rows read their offsets from it. */
-.sidebar-toolbar { position: sticky; top: 0; z-index: 3; height: var(--tree-bar); background: var(--bg2); padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; align-items: center; }
-#collapse-all-btn { flex-shrink: 0; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); width: 1.8rem; height: 1.8rem; padding: 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-#collapse-all-btn:hover { background: var(--bg4); }
-#collapse-all-btn svg { display: block; width: 0.9rem; height: 0.9rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.sidebar-toolbar { position: sticky; top: 0; z-index: 3; height: var(--tree-bar); background: var(--bg2); padding: 0.3rem 0.6rem; display: flex; gap: 0.4rem; align-items: center; }
+/* Written the way the group headings under it are: it is one rung further out on the same ladder,
+   naming what kind of name the column lists. */
+.sidebar-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* At the right end of the bar, and bare until pointed at: the bar is quiet chrome, and a drawn
+   face on its one control would be the loudest thing in the column. The border surfacing under
+   the pointer is what says it is a button; transparent rather than absent, so nothing shifts. */
+#collapse-all-btn { flex-shrink: 0; margin-left: auto; background: none; border: 1px solid transparent; color: var(--text2); width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#collapse-all-btn:hover:not(:disabled) { border-color: var(--border2); }
+/* Still in the bar when everything is shut - a control that vanishes reads as the bar changing
+   shape - just drawn back until a group opens and gives it something to do. */
+#collapse-all-btn:disabled { opacity: 0.35; cursor: default; }
+#collapse-all-btn svg { display: block; width: 1rem; height: 1rem; }
 .resize-handle { width: 4px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; user-select: none; -webkit-user-select: none; }
 .resize-handle:hover, .resize-handle.dragging { background: var(--flash); }
 
@@ -384,7 +405,7 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    into a gap or an overlap. The toolbar is the first of the pinned slots and stacks the same way,
    so both offsets are measured from the bottom of it. --tree-bar carries a little slack over what
    the button needs, since a clipped control costs more than a hair of extra bar. */
-.sidebar { --tree-bar: 2.9rem; --tree-head: 2rem; }
+.sidebar { --tree-bar: 2.2rem; --tree-head: 2rem; }
 .tree-ns-plain { --tree-head: 1.66rem; }
 .tree-ns-label { min-height: var(--tree-head); }
 .tree-ns-plain > .tree-type-label { min-height: var(--tree-head); }
@@ -927,6 +948,29 @@ const JS = `
     });
   }
 
+  // ---- Sidebar visibility ----
+  // Kept as an attribute on the root, like the theme and for the same reason: the head script puts
+  // a remembered state back before first paint, when the sidebar itself is not parsed yet. The same
+  // session store too - a column hidden mid-read stays hidden for the read, not for next week.
+  var SIDEBAR_KEY = 'docs-sidebar';
+  var sidebarToggleBtn = document.getElementById('sidebar-toggle');
+  if (sidebarToggleBtn) {
+    var sidebarShown = function () { return root.getAttribute('data-sidebar') !== 'hidden'; };
+
+    // The markup says expanded, which is true everywhere except where the head script hid it.
+    sidebarToggleBtn.setAttribute('aria-expanded', String(sidebarShown()));
+
+    sidebarToggleBtn.addEventListener('click', function () {
+      if (sidebarShown()) root.setAttribute('data-sidebar', 'hidden');
+      else root.removeAttribute('data-sidebar');
+
+      sidebarToggleBtn.setAttribute('aria-expanded', String(sidebarShown()));
+      try {
+        sessionStorage.setItem(SIDEBAR_KEY, sidebarShown() ? '' : 'hidden');
+      } catch (e) {}
+    });
+  }
+
   // ---- Version filter ----
   // An API belongs to a version unless a <since> puts it after that version. Untagged means it
   // predates every version on the list, which is why the absence of the attribute shows it.
@@ -1330,6 +1374,9 @@ const JS = `
   }
 
   restoreTreeState();
+  // What was restored may not match what the page was written with, and the collapse button's
+  // visibility follows the groups. Hoisted, from where the button and its logic live below.
+  syncCollapseAll();
 
   // ---- Tree: the rows the page left out ----
   // A tree is the same list of types on every page that carries it - what changes is which group
@@ -1386,6 +1433,7 @@ const JS = `
         // now, and the version menu has rows to hide that were not there when it last ran.
         restoreTreeState();
         applyTreeVersion();
+        syncCollapseAll();
         if (!treeRoot || treeRoot.scrollTop === placedScroll) placeTree();
       })
       .catch(function () {
@@ -1409,6 +1457,7 @@ const JS = `
       if (children) children.classList.toggle('collapsed');
       if (arrow) arrow.classList.toggle('collapsed');
       label.setAttribute('aria-expanded', String(children && !children.classList.contains('collapsed')));
+      syncCollapseAll();
       saveTreeState();
     });
   });
@@ -1443,23 +1492,32 @@ const JS = `
     });
   });
 
-  // The burger in the sidebar toolbar toggles the whole tree: collapse everything if anything
-  // is open, otherwise expand everything.
+  // The toolbar button collapses every group at once, and that is all it does: a reader expands
+  // the one branch they are after, so the other direction is never worth a click. With only one
+  // thing to do, it sits disabled - dimmed by the stylesheet - while there is nothing to do it to.
+  function syncCollapseAll() {
+    var button = document.getElementById('collapse-all-btn');
+    if (!button) return;
+
+    var anyOpen = [].slice.call(document.querySelectorAll('.tree-ns-children')).some(function (g) {
+      return !g.classList.contains('collapsed');
+    });
+    button.disabled = !anyOpen;
+  }
+
   var treeToggleAll = document.getElementById('collapse-all-btn');
   if (treeToggleAll) {
     treeToggleAll.addEventListener('click', function () {
-      var groups = [].slice.call(document.querySelectorAll('.tree-ns-children'));
-      var anyOpen = groups.some(function (g) { return !g.classList.contains('collapsed'); });
-
-      groups.forEach(function (g) { g.classList.toggle('collapsed', anyOpen); });
+      document.querySelectorAll('.tree-ns-children').forEach(function (g) {
+        g.classList.add('collapsed');
+      });
       document.querySelectorAll(GROUP_CONTROLS).forEach(function (el) {
-        el.setAttribute('aria-expanded', String(!anyOpen));
+        el.setAttribute('aria-expanded', 'false');
         var arrow = el.querySelector('.tree-arrow');
-        if (arrow) arrow.classList.toggle('collapsed', anyOpen);
+        if (arrow) arrow.classList.add('collapsed');
       });
 
-      treeToggleAll.setAttribute('aria-expanded', String(!anyOpen));
-      treeToggleAll.title = anyOpen ? 'Expand all' : 'Collapse all';
+      syncCollapseAll();
       saveTreeState();
     });
   }
