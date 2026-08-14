@@ -97,7 +97,7 @@ const KIND_MAP = {
   constructor: ['C', 'Constructor'],
   destructor: ['F', 'Finalizer'],
   operator: ['M', 'Operator'],
-  conversion: ['M', 'Conversion'],
+  conversion: ['M', 'Convertor'],
   property: ['P', 'Property'],
   indexer: ['P', 'Indexer'],
   field: ['F', 'Field'],
@@ -197,8 +197,10 @@ const FILTER_KINDS = [
  * what nobody browses by kind. A type page is already about one type, so the only question left is
  * which of its members you came for, and the tabs answer it in the words the sections below use.
  *
- * Operators and conversions are methods and an indexer is a property, as they are in the sections.
- * A finalizer files with the constructors, which is why that tab names both: a type declares at
+ * An indexer is a property, as it is in the sections. Operators and conversions carry tabs of
+ * their own rather than filing under Methods: each is a section of its own on the page, a table
+ * of the type's operations rather than more of what it does by name, and the tab is worded from
+ * the section it narrows to. A finalizer files with the constructors, which is why that tab names both: a type declares at
  * most one, and a tab that narrows a list to a single row is a tab nobody needs - the two together
  * are the one thing they state, which is how the type begins and ends. An enum value is the field
  * it is underneath: an enum page lists nothing else, so a Values tab would be a button that never
@@ -211,8 +213,8 @@ const MEMBER_FILTERS = {
   constructor: 'constructor',
   destructor: 'constructor',
   method: 'method',
-  operator: 'method',
-  conversion: 'method',
+  operator: 'operator',
+  conversion: 'conversion',
   property: 'property',
   indexer: 'property',
   field: 'field',
@@ -226,7 +228,8 @@ const MEMBER_FILTERS = {
  * Members in the order the page lists them would open on the enum values and fields, which is where
  * a type's members are least often looked up. These read the other way about: how the type is made,
  * then what it does, then the data behind it - so the tabs a reader reaches for are the ones nearest
- * the left edge they start from.
+ * the left edge they start from. Operators and conversions close the row: most types declare
+ * neither, so trailing them keeps the everyday tabs in the same place on every page.
  *
  * A page renders only the ones its own members use, inherited members included, and memberFilterTabs
  * is what settles both that and the wording of the first tab.
@@ -238,6 +241,8 @@ const MEMBER_FILTER_KINDS = [
   { key: 'property', label: 'Properties' },
   { key: 'field', label: 'Fields' },
   { key: 'event', label: 'Events' },
+  { key: 'operator', label: 'Operators' },
+  { key: 'conversion', label: 'Convertors' },
 ];
 
 function kindLetter(kind) {
