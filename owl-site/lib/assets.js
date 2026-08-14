@@ -15,7 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { ID_PREFIX: ICON_PREFIX } = require('./icons');
-const { BADGE_PAINTS, CHIP_PAINTS } = require('./theme');
+const { BADGE_PAINTS, CHIP_PAINTS, NOTE_PAINTS } = require('./theme');
 
 /**
  * What MathML needs to draw correctly, from the converter that writes it.
@@ -153,6 +153,7 @@ const CSS = `
 :root {
 ${paintCss('badge', BADGE_PAINTS)}
 ${paintCss('chip', CHIP_PAINTS)}
+${paintCss('note', NOTE_PAINTS)}
 }
 
 /* The header keeps one colour under both themes: it is chrome rather than content, and holding it
@@ -569,9 +570,6 @@ a.chip:hover { color: var(--flash); }
 .chip-const { background: var(--chip-const); color: var(--oc-white); }
 .chip-abstract { background: var(--chip-abstract); color: var(--oc-white); }
 .chip-virtual { background: var(--chip-virtual); color: var(--oc-white); }
-/* A chip like the rest of them rather than a pill of its own size: it sits in the same run, and a
-   label a size smaller or larger than the ones either side of it reads as an afterthought. */
-.chip-obsolete { background: var(--chip-obsolete); color: var(--oc-white); }
 /* When an API arrived, at the far end of the row rather than in the run of modifiers: it says
    something about the API's history rather than about how it is written, and the left of the row is
    where a reader scanning down a list of members is already looking. The same chip closes a type
@@ -750,11 +748,11 @@ code { font-family: monospace; }
 /* ---- Notes, tables, lists in doc content ---- */
 .note { border-left: 3px solid var(--flash); background: var(--bg3); padding: 0.5rem 0.8rem; border-radius: 0 6px 6px 0; margin: 0.6rem 0; font-size: 0.85rem; }
 .note-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--flash); margin-bottom: 0.15rem; }
-/* The one note that is a warning rather than an aside, in the colour its chip is painted from, so
-   the pill on the card and the reason spelled out here are one mark. Removed is obsolete with the
-   compiler's answer changed from a warning to an error, not a different fact, so it reads the same. */
-.note-obsolete, .note-removed { border-left-color: var(--chip-obsolete); }
-.note-obsolete .note-label, .note-removed .note-label { color: var(--chip-obsolete); }
+/* The one note that is a warning rather than an aside, and the one mark the page gives the fact.
+   Removed is obsolete with the compiler's answer changed from a warning to an error, not a
+   different fact, so it reads the same. */
+.note-obsolete, .note-removed { border-left-color: var(--note-obsolete); }
+.note-obsolete .note-label, .note-removed .note-label { color: var(--note-obsolete); }
 .table-scroll { overflow-x: auto; margin: 0.6rem 0; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .table-scroll th, .table-scroll td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }

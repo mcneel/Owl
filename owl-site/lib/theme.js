@@ -21,7 +21,7 @@
  * chooses its value per theme, beside --flash and the rest of the colours a theme decides.
  *
  * It stays out of the way of the three marks that are allowed a colour, all of which say something is
- * unusual about the API rather than what kind it is: Readonly, Explicit and Obsolete.
+ * unusual about the API rather than what kind it is: Readonly, Explicit and the obsolete note.
  */
 
 /**
@@ -48,11 +48,6 @@ const BADGE_PAINTS = {
  * nothing apart. Const is the darkest of them because a constant is the strongest form of the fact
  * static states - not merely reached through the type but fixed at the point of use.
  *
- * `obsolete` is the one chip here that is a warning rather than a fact about how the member works,
- * which is why it is the one that is not grey; orange is what a reader already reads as a warning.
- * The note spelling out why the API is obsolete takes the same paint, so the chip on the card and
- * the note on the page are recognisably the same thing said twice rather than two unrelated marks.
- *
  * Filled in one colour under both themes, as every other badge is, so each has to carry white text
  * on either ground.
  */
@@ -61,6 +56,17 @@ const CHIP_PAINTS = {
   const: 'var(--oc-gray-9)',
   abstract: 'var(--oc-gray-6)',
   virtual: 'var(--oc-gray-6)',
+};
+
+/**
+ * The one note that is a warning rather than an aside: the message saying why an API is obsolete.
+ *
+ * It is a warning rather than a fact about how the member works, which is why it is not grey;
+ * orange is what a reader already reads as a warning. The note is the only mark the fact gets -
+ * no chip repeats it - so this is the one paint that says it. One colour under both themes, like
+ * the badges above.
+ */
+const NOTE_PAINTS = {
   obsolete: 'var(--oc-orange-5)',
 };
 
@@ -320,6 +326,7 @@ function kindPlural(kind) {
 module.exports = {
   BADGE_PAINTS,
   CHIP_PAINTS,
+  NOTE_PAINTS,
   KIND_MAP,
   KIND_ICONS,
   FILTER_LETTERS,

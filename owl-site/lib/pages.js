@@ -1004,7 +1004,6 @@ class Renderer {
       '<div class="member-header">' +
       this.kindIconHtml(type.kind) +
       heading +
-      (type.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
       // Chipped only when it is not public, the way a member card does it: nested types are
       // commonly protected or internal, and the card is otherwise silent about it.
       (type.accessibility && type.accessibility !== 'public'
@@ -1930,7 +1929,7 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * Why an API is obsolete, as a note under the name that wears the Obsolete chip.
+   * Why an API is obsolete, as a note under the name: the one mark the page gives the fact.
    *
    * Classed the way &lt;note&gt; in a doc comment is, so the stylesheet paints this one warning
    * without having to tell it apart from the asides it shares a shape with.
@@ -2179,14 +2178,11 @@ ${this.seeAlsoHtml(type.docs)}
 
     const left = binary ? operands[0] : '';
     const right = binary ? operands.slice(1).join(', ') : operands[0] || '';
-    const obsolete = member.obsolete
-      ? ' <span class="chip chip-obsolete">Obsolete</span>'
-      : '';
 
     return (
       `<td class="op-left">${left}</td>` +
       `<td class="op-mark">${escape(operatorSymbol(member))}</td>` +
-      `<td class="op-right">${right}${obsolete}</td>`
+      `<td class="op-right">${right}</td>`
     );
   }
 
@@ -2209,7 +2205,6 @@ ${this.seeAlsoHtml(type.docs)}
           '<td class="enum-name"><span class="enum-name-row">' +
           this.kindIconHtml(member.kind) +
           escape(member.name) +
-          (member.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
           '</span></td>' +
           `<td class="enum-value">${escape(member.constantValue || '')}</td>` +
           `<td>${this.summaryHtml(member.docs)}</td>` +
@@ -2341,7 +2336,6 @@ ${this.seeAlsoHtml(type.docs)}
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
       this.kindIconHtml(member.kind) +
       `<h3 class="member-name">${explicit ? this.explicitNameHtml(member) : escape(memberDisplayName(member))}</h3>` +
-      (member.obsolete ? '<span class="chip chip-obsolete">Obsolete</span>' : '') +
       this.accessBadgeHtml(member) +
       // Each chip names itself in a class, so the stylesheet can single one out - static, abstract
       // and virtual do - without this having to know which of them it has decided to colour.
