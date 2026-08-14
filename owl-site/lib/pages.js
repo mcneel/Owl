@@ -2317,7 +2317,7 @@ ${this.seeAlsoHtml(type.docs)}
 
     const exampleButton =
       exampleFiles.length > 0
-        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Examples</a>`
+        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
         : '';
 
     // Everything past the description, which the card sets on a dimmer ground of its own. What a
@@ -2340,7 +2340,7 @@ ${this.seeAlsoHtml(type.docs)}
       // Each chip names itself in a class, so the stylesheet can single one out - static, abstract
       // and virtual do - without this having to know which of them it has decided to colour.
       chips.map((c) => `<span class="chip chip-${attr(chipSlug(c))}">${escape(c)}</span>`).join('') +
-      // Beside the name it links to, and before the Examples button, which the row's own margin
+      // Beside the name it links to, and before the Example button, which the row's own margin
       // holds at the far end: the anchor belongs to the member, not to the action next to it.
       // Out of the tab order, since only the pointer can bring it into view: tabbing onto a mark
       // that stays invisible is worse than not reaching it, and the tree link beside it goes to the

@@ -600,7 +600,7 @@ a.chip:hover { color: var(--flash); }
    a fact to be looked up on the one row that raised the question. Never shrunk: it is a handful of
    characters, and a long chain or signature beside it has somewhere else to give. Where something
    already claims the end of the row
-   - the assembly name on a type card, the Examples button on a member's - it sits beside that
+   - the assembly name on a type card, the Example button on a member's - it sits beside that
    instead, because two auto margins in one row split the free space between them and leave both
    adrift. */
 .chip-since { margin-left: auto; flex-shrink: 0; color: var(--text4); background: transparent; }
@@ -1023,7 +1023,7 @@ const JS = `
   });
 
   // ---- Examples dock ----
-  // The Examples chip is a link to a real page. This opens that page's examples in a column
+  // The Example chip is a link to a real page. This opens that page's examples in a column
   // beside the member instead, so the two can be read together - and anything that stops it
   // working falls back to following the link, which is the whole feature minus the convenience.
   var dock = document.getElementById('example-dock');
