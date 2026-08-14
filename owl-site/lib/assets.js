@@ -774,7 +774,7 @@ code { font-family: monospace; }
    Painted and hovered as the header's own buttons are, because it is the same kind of thing: the
    one control on a card otherwise made entirely of description. Set a size up from the Since chip
    it can share the row's end with, which is a label rather than a thing to press. */
-.chip-action { background: var(--accent); color: var(--oc-white); font-size: 0.82rem; font-weight: 500; padding: 0.18rem 0.65rem; margin-left: auto; }
+.chip-action { background: var(--accent); color: var(--oc-white); font-weight: 500; padding: 0.18rem 0.65rem; margin-left: auto; }
 a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter: brightness(1.1); }
 .example-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: 0.8rem 0 0; }
 .example-tab { appearance: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); padding: 0.4rem 0.8rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
