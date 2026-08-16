@@ -586,8 +586,11 @@ a.chip:hover { color: var(--flash); }
    claims the end of the row
    - the assembly name on a type card, the Example button on a member's - it sits beside that
    instead, because two auto margins in one row split the free space between them and leave both
-   adrift. */
-.chip-since { margin-left: auto; flex-shrink: 0; color: var(--text4); background: transparent; }
+   adrift.
+
+   With the panel gone the chip's right padding is only air, holding the text short of the inset
+   the row's other content ends at. Dropped, so the fact ends at the row's own edge. */
+.chip-since { margin-left: auto; flex-shrink: 0; color: var(--text4); background: transparent; padding-right: 0; }
 .asm-name ~ .chip-since, .chip-action ~ .chip-since { margin-left: 0; }
 
 /* ---- Category overview doc ---- */
@@ -666,9 +669,6 @@ ${TEMML_CSS}
    item is only one once max-width pins it. */
 .inherited-from { flex: 0 0 8rem; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; background: var(--card-dim); border-left: 1px solid var(--card-split); padding: 0.9rem 1.1rem 0 0.9rem; font-size: 0.72rem; color: var(--text4); text-decoration: none; }
 .inherited-from > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The since sits above the provenance pair, and the gap under it is what says it is a fact of its
-   own rather than a third line of the 'inherited from' phrase. */
-.inherited-since { margin-bottom: 0.5rem; }
 /* The type is the payload of the two lines, so it takes the reading colour, a step up in size,
    and the hover that says the segment leads somewhere. */
 .inherited-from-type { font-size: 0.78rem; color: var(--text3); margin-top: 0.15rem; }

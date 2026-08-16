@@ -2291,8 +2291,9 @@ ${this.seeAlsoHtml(type.docs)}
           // Named as the heading beside it is, so the two do not read as different members.
           `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>`) +
       exampleButton +
-      // No since chip in an inherited card's header: there it rides atop the provenance segment,
-      // with the rest of what the member owes to its declaring type.
+      // No since chip on an inherited card: the fact is read on the page that documents the
+      // member, and here it would crowd the provenance segment that already ends the row. The
+      // card still carries its data-since, so version filtering sees the member either way.
       (inheritedFrom ? '' : this.sinceChipHtml(member.docs)) +
       '</div>' +
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
@@ -2304,18 +2305,15 @@ ${this.seeAlsoHtml(type.docs)}
       (rest ? `<div class="member-detail">${rest}</div>` : '');
 
     if (inheritedFrom) {
-      // The provenance reads as two stacked lines, 'inherited from' over the type it names, with
-      // the member's since above the pair when it has one. Each line rides in a span of its own,
-      // which is what a name too long for the segment's width ellipsizes in.
+      // The provenance reads as two stacked lines, 'inherited from' over the type it names. Each
+      // line rides in a span of its own, which is what a name too long for the segment's width
+      // ellipsizes in.
       return (
         '<div class="member inherited" ' +
         `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
         `${this.sinceAttr(member.docs)}>` +
         `<div class="member-main">${body}</div>` +
         `<a class="inherited-from" href="${attr(this.routes.member(inheritedFrom.slug, member.anchor))}">` +
-        (member.docs && member.docs.since
-          ? `<span class="inherited-since">Since ${escape(versionLabel(member.docs.since))}</span>`
-          : '') +
         '<span>inherited from</span>' +
         `<span class="inherited-from-type">${escape(inheritedFrom.name)}</span></a>` +
         '</div>'
