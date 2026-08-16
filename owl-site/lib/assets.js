@@ -644,29 +644,35 @@ ${TEMML_CSS}
 .member-detail > :first-child { margin-top: 0; }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
 .member.explicit-impl { border-color: var(--badge-explicit); }
-/* An inherited member sits among the declared members' cards, held to one line: it is documented
-   on the type that declares it, and what it owes this page is a name to find and a way through to
-   the rest. Two grounds inside its one border, the member-detail split turned sideways: the member
-   itself on the card ground the declared ones stand on, and the provenance on a grey segment at
-   the right edge, which is what says at a glance that this type carries it rather than adds it.
-   The whole card is the link, since going to where it is written is the only thing to do with it. */
-.member.inherited { display: flex; align-items: stretch; gap: 0.5rem; padding: 0 0 0 1.1rem; text-decoration: none; }
-.member.inherited:hover { background: var(--card-hover); }
-.member.inherited .kind-icon { align-self: center; }
-/* Layout only: the name wears .member-name too, so its type is the card header's by construction. */
-.inherited-name { flex: 1; min-width: 0; align-self: center; padding: 0.5rem 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Dimmer than the name: which base it came from answers a question the reader only asks once they
-   have found the name they were looking for. The negative-margin trick member-detail uses is not
-   needed here - the row has no right padding, and the card's overflow clip takes the corners.
+/* An inherited member wears the declared members' full card: what it shows is the member itself,
+   and the reader who found the name they were looking for should not have to leave the page to
+   read the rest. What still tells it apart at a glance is the grey provenance segment down the
+   right edge - the member-detail split turned sideways - naming the type that declared it, and
+   doubling as the card's one link through to where the member is documented and owns its anchor.
+   The card's padding moves onto the inner column so the segment can run the full height; the
+   column's padding matches the card's, which is what keeps member-detail's negative margins
+   reaching its edges. The card's overflow clip takes the segment's corners. */
+.member.inherited { display: flex; align-items: stretch; padding: 0; }
+.member.inherited > .member-main { flex: 1; min-width: 0; padding: 0.9rem 1.1rem; }
+/* Dimmer than the card's own text: which base a member came from answers a question the reader
+   only asks once they have found the name they were looking for.
 
-   One width for every card rather than the label's own, so the split reads as one line down the
-   list instead of a ragged edge. The labels hang from the card's right edge for the same reason:
-   both ends of the segment hold still, and what varies is swallowed by the empty grey between
-   them. 14rem seats every base name the model renders today except the longest, which the inner
-   span ellipsizes - text-overflow wants a block container, and the flex that centres the label is
-   not one. */
-.inherited-from { flex: 0 0 14rem; min-width: 0; display: flex; align-items: center; justify-content: flex-end; background: var(--card-dim); border-left: 1px solid var(--card-split); padding: 0 1.1rem 0 0.9rem; font-size: 0.72rem; color: var(--text4); }
-.inherited-from > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   Two stacked lines at the top of the segment, 'inherited from' over the type it names: the top
+   padding is the card's own, so the label sits level with the member's name across the split
+   rather than floating mid-air on a tall card. Right-aligned, and one width for every card rather
+   than the label's own, so the split reads as one line down the list instead of a ragged edge.
+   The width is set by the 'inherited from' line, which it just seats; a type name longer than
+   that ellipsizes in its span - text-overflow wants a block container, and a shrink-to-fit flex
+   item is only one once max-width pins it. */
+.inherited-from { flex: 0 0 8rem; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; background: var(--card-dim); border-left: 1px solid var(--card-split); padding: 0.9rem 1.1rem 0 0.9rem; font-size: 0.72rem; color: var(--text4); text-decoration: none; }
+.inherited-from > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The since sits above the provenance pair, and the gap under it is what says it is a fact of its
+   own rather than a third line of the 'inherited from' phrase. */
+.inherited-since { margin-bottom: 0.5rem; }
+/* The type is the payload of the two lines, so it takes the reading colour, a step up in size,
+   and the hover that says the segment leads somewhere. */
+.inherited-from-type { font-size: 0.78rem; color: var(--text3); margin-top: 0.15rem; }
+.inherited-from:hover .inherited-from-type { color: var(--text2); }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
@@ -1974,6 +1980,14 @@ const JS = `
       '<use href="#${ICON_PREFIX}' + escapeHtml(e[8] || 'class') + '"/></svg>';
   }
 
+  // Which shelf a row sits on: interfaces, then the other types, then members. Flag 2 marks the
+  // rows whose declaration was never searched, which is every type's and only theirs, and the
+  // interface drawing is worn by interfaces alone. Mirrors searchGroup in lib/pages.js.
+  function kindGroup(e) {
+    if (!(e[9] & 2)) return 2;
+    return e[8] === 'interface' ? 0 : 1;
+  }
+
   function findMatches(q) {
     // The assembly the header is scoped to, as an index into the table the asset carries. -1
     // means no scope, or a name this build does not know, which searches everything.
@@ -2005,13 +2019,17 @@ const JS = `
       // lib/pages.js, which ranks the server's answer to the same query the same way.
       var subject = qualified ? name : name.slice(name.lastIndexOf('.') + 1);
       var rank = subject === q ? 0 : (subject.indexOf(q) === 0 ? 1 : (subject.indexOf(q) >= 0 ? 2 : 3));
-      matches.push([rank, pos, e]);
+      matches.push([rank, pos, e, kindGroup(e)]);
     }
 
-    // Rank, then the earliest match, then the shortest name - the row with the least around what was
-    // matched. The same order searchIndexEntries puts the ?q= answer in.
+    // The rows the query named first - rank 3 is the one rank that says it never did - each side
+    // shelved interfaces, then types, then members: a word in the box is usually a type's name, and
+    // 'Geometry' should offer GeometryBase before the members also called Geometry. Then rank, the
+    // earliest match, and the shortest name - the row with the least around what was matched. The
+    // same order searchIndexEntries puts the ?q= answer in.
     matches.sort(function (a, b) {
-      return a[0] - b[0] || a[1] - b[1] ||
+      return (a[0] === 3 ? 1 : 0) - (b[0] === 3 ? 1 : 0) || a[3] - b[3] ||
+        a[0] - b[0] || a[1] - b[1] ||
         a[2][0].length - b[2][0].length || a[2][0].localeCompare(b[2][0]);
     });
 
@@ -2052,8 +2070,8 @@ const JS = `
       return;
     }
 
-    // Sorted by rank, so the name matches are already the front of the list; the scan is what stops
-    // once there are enough of them.
+    // The sort put the name matches at the front of the list; the scan is what stops once there are
+    // enough of them.
     var named = [];
     for (var i = 0; i < matches.length && named.length < NAV_LIMIT; i++) {
       if (matches[i][0] < NAMELESS_RANK) named.push(matches[i]);

@@ -137,6 +137,18 @@ function searchRank(name, q, qualified) {
   return subject.indexOf(q) >= 0 ? 2 : 3;
 }
 
+/**
+ * Which shelf a row sits on: interfaces, then the other types, then members. A word typed into the
+ * box is usually a type's name, and the type is the way in - 'Geometry' should offer GeometryBase
+ * before the many members also called Geometry, and the interface before the types that implement
+ * it. The sort applies the shelf ahead of the rank, so it is what separates them; the rank orders
+ * each shelf. app.js shelves the same way, reading a type off flag 2 and an interface off its icon.
+ */
+function searchGroup(row) {
+  if (row.declarationSearched) return 2;
+  return row.kind === 'interface' ? 0 : 1;
+}
+
 /** The '&lt;T, TOut&gt;' a generic method writes after its name. Empty for everything else. */
 function genericSuffix(member) {
   const names = (member.typeParameters || []).map((tp) => tp.name);
@@ -1969,7 +1981,7 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * What a type gets from the types above it, as {member, from}, nearest first.
+   * What a type gets from the types above it, as {member, from, assembly}, nearest first.
    *
    * The model records a type's own members and nothing else, so this walks what inheritedFrom
    * gives back and gathers the rest. A type outside the documented set - System.Object, and
@@ -2005,7 +2017,7 @@ ${this.seeAlsoHtml(type.docs)}
 
         seen.add(key);
         if (member.overrides) overridden.add(member.overrides);
-        out.push({ member, from: found.type });
+        out.push({ member, from: found.type, assembly: found.assembly });
       }
     }
 
@@ -2018,18 +2030,19 @@ ${this.seeAlsoHtml(type.docs)}
    *
    * What the type inherits is merged into each kind's section and sorted with the declared members
    * as one list: the reader is looking a member up by name and does not know which type declared
-   * it. An inherited entry keeps its one-line shape on a grey card, so what this type adds and
-   * what it merely carries stay tellable apart at a glance.
+   * it. An inherited entry wears the full card the declared ones do, with a grey segment down its
+   * right edge naming the type it came from, so what this type adds and what it merely carries
+   * stay tellable apart at a glance.
    */
   membersHtml(members, assemblyName, selfSlug, inherited = [], ownerKind = '') {
     if (members.length === 0 && inherited.length === 0) return '';
 
     // Where a member came from, for the ones this type did not declare. Keyed by the member itself,
     // so the merged list sorts as one and each entry still knows which shape to render as.
-    const from = new Map();
-    for (const entry of inherited) from.set(entry.member, entry.from);
+    const origins = new Map();
+    for (const entry of inherited) origins.set(entry.member, entry);
 
-    const merged = this.sortMembers(members.concat([...from.keys()]), { pageOrder: true });
+    const merged = this.sortMembers(members.concat([...origins.keys()]), { pageOrder: true });
 
     const groups = new Map();
     for (const member of merged) {
@@ -2052,47 +2065,19 @@ ${this.seeAlsoHtml(type.docs)}
         `<h2 class="ns-heading">${escape(theme.kindPlural(kind))}</h2>` +
         '<div class="type-children">' +
         group
-          .map((m) =>
-            from.has(m)
-              ? this.inheritedRowHtml({ member: m, from: from.get(m) })
-              : this.memberCardHtml(m, assemblyName, selfSlug, ownerKind)
-          )
+          .map((m) => {
+            // The declaring type's kind and assembly, not this page's: they are what the
+            // declaration is written and cross-linked against.
+            const origin = origins.get(m);
+            return origin
+              ? this.memberCardHtml(m, origin.assembly, selfSlug, origin.from.kind, origin.from)
+              : this.memberCardHtml(m, assemblyName, selfSlug, ownerKind);
+          })
           .join('') +
         '</div></section>';
     }
 
     return out;
-  }
-
-  /**
-   * One inherited member: badge, name, and the type it came from, on a card that is all one link
-   * to where the member is documented.
-   *
-   * The name and not the signature, written the way a card's header writes it, so the merged list
-   * reads in one voice. Overloads share a name, so the full signature rides in the tooltip and the
-   * card the link lands on is what tells them apart.
-   *
-   * The provenance rides in a nested span: the outer one is the grey segment, held to one width
-   * across the list so the split reads as one line, and the inner one is what a base name too long
-   * for that width ellipsizes in.
-   *
-   * It carries the same data-filter the cards do, so the member tabs act on it without knowing it
-   * is a different shape. No id: the anchor belongs to the member's own page, and a second element
-   * answering to it here would take the link away from the card that documents it.
-   */
-  inheritedRowHtml({ member, from }) {
-    const url = this.routes.member(from.slug, member.anchor);
-
-    return (
-      `<a class="member inherited" href="${attr(url)}" ` +
-      `data-filter="${attr(theme.memberFilterKey(member.kind))}" ` +
-      `data-kind="${attr(member.kind)}"${this.sinceAttr(member.docs)}>` +
-      this.kindIconHtml(member.kind) +
-      `<span class="member-name inherited-name" title="${attr(member.signature || member.name)}">` +
-      `${escape(memberDisplayName(member))}</span>` +
-      `<span class="inherited-from"><span>from ${escape(from.name)}</span></span>` +
-      '</a>'
-    );
   }
 
   /**
@@ -2189,7 +2174,16 @@ ${this.seeAlsoHtml(type.docs)}
     );
   }
 
-  memberCardHtml(member, assemblyName, selfSlug, ownerKind = '') {
+  /**
+   * One member's card: header, declaration, summary, and the detail ground under them.
+   *
+   * With inheritedFrom set, the card is an inherited member's: the same shape, with the grey
+   * provenance segment down its right edge saying which type declared it. The segment is the
+   * card's one link through to where the member is documented, and the card carries no id and no
+   * # of its own: the anchor belongs to the member's own page, and a second element answering to
+   * it here would take links away from the card that documents it.
+   */
+  memberCardHtml(member, assemblyName, selfSlug, ownerKind = '', inheritedFrom = null) {
     const explicit = Boolean(member.explicitInterface);
     const filterKey = theme.memberFilterKey(member.kind);
 
@@ -2266,9 +2260,11 @@ ${this.seeAlsoHtml(type.docs)}
         ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(member.docs.example, this.docContext)}</div>`
         : '';
 
+    // An inherited member's example page was built under the type that declares it.
+    const exampleSlug = inheritedFrom ? inheritedFrom.slug : selfSlug;
     const exampleButton =
       exampleFiles.length > 0
-        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
+        ? `<a class="chip chip-action" href="${attr(this.routes.example(exampleSlug, member.anchor))}">Example</a>`
         : '';
 
     // Everything past the description, which the card sets on a dimmer ground of its own. What a
@@ -2279,10 +2275,7 @@ ${this.seeAlsoHtml(type.docs)}
       .filter(Boolean)
       .join('');
 
-    return (
-      `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
-      `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
-      `${this.sinceAttr(member.docs)}>` +
+    const body =
       '<div class="member-header">' +
       (explicit ? '<span class="explicit-badge">Explicit</span>' : '') +
       this.kindIconHtml(member.kind) +
@@ -2292,11 +2285,15 @@ ${this.seeAlsoHtml(type.docs)}
       // Out of the tab order, since only the pointer can bring it into view: tabbing onto a mark
       // that stays invisible is worse than not reaching it, and the tree link beside it goes to the
       // same member. A reader on the page still finds it, which is what the label is for.
-      `<a class="member-anchor" href="#${attr(member.anchor)}" tabindex="-1" ` +
-      // Named as the heading beside it is, so the two do not read as different members.
-      `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>` +
+      (inheritedFrom
+        ? ''
+        : `<a class="member-anchor" href="#${attr(member.anchor)}" tabindex="-1" ` +
+          // Named as the heading beside it is, so the two do not read as different members.
+          `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>`) +
       exampleButton +
-      this.sinceChipHtml(member.docs) +
+      // No since chip in an inherited card's header: there it rides atop the provenance segment,
+      // with the rest of what the member owes to its declaring type.
+      (inheritedFrom ? '' : this.sinceChipHtml(member.docs)) +
       '</div>' +
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
@@ -2304,7 +2301,32 @@ ${this.seeAlsoHtml(type.docs)}
       `<div class="declaration">${this.signatureHtml(this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '') +
-      (rest ? `<div class="member-detail">${rest}</div>` : '') +
+      (rest ? `<div class="member-detail">${rest}</div>` : '');
+
+    if (inheritedFrom) {
+      // The provenance reads as two stacked lines, 'inherited from' over the type it names, with
+      // the member's since above the pair when it has one. Each line rides in a span of its own,
+      // which is what a name too long for the segment's width ellipsizes in.
+      return (
+        '<div class="member inherited" ' +
+        `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
+        `${this.sinceAttr(member.docs)}>` +
+        `<div class="member-main">${body}</div>` +
+        `<a class="inherited-from" href="${attr(this.routes.member(inheritedFrom.slug, member.anchor))}">` +
+        (member.docs && member.docs.since
+          ? `<span class="inherited-since">Since ${escape(versionLabel(member.docs.since))}</span>`
+          : '') +
+        '<span>inherited from</span>' +
+        `<span class="inherited-from-type">${escape(inheritedFrom.name)}</span></a>` +
+        '</div>'
+      );
+    }
+
+    return (
+      `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
+      `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
+      `${this.sinceAttr(member.docs)}>` +
+      body +
       '</div>'
     );
   }
@@ -2974,18 +2996,23 @@ ${this.seeAlsoHtml(type.docs)}
         if (pos < 0) continue;
       }
 
-      hits.push({ rank: searchRank(name, q, qualified), pos, row });
+      hits.push({ rank: searchRank(name, q, qualified), group: searchGroup(row), pos, row });
     }
 
     // Ordered rather than handed back in the order the model happens to hold: the first hundred rows
     // of a scan are the first hundred types the assembly declares, which for a common word is a
     // hundred rows nobody asked about. Sorted the way app.js sorts, so the ?q= answer and the list
     // the browser draws over it are the same list in the same order.
-    // Then the shortest name, which is the one with the least around the match: 'Sphere' the struct
+    // The rows the query named come ahead of the ones it reached through a summary or a signature -
+    // rank 3, the one rank that says the name never matched - and each side is shelved by what a
+    // row is before how well its name matched: see searchGroup. Then the rank, the earliest match,
+    // and the shortest name, which is the one with the least around the match: 'Sphere' the struct
     // ahead of the enum values also called Sphere. Alphabetical last, so the order is settled and
     // does not depend on where in the model a row was found.
     hits.sort(
       (a, b) =>
+        (a.rank === 3 ? 1 : 0) - (b.rank === 3 ? 1 : 0) ||
+        a.group - b.group ||
         a.rank - b.rank ||
         a.pos - b.pos ||
         a.row.name.length - b.row.name.length ||
