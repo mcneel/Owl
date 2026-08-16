@@ -2516,7 +2516,7 @@ ${this.seeAlsoHtml(type.docs)}
    * The bar pinned over the tree: a title saying what the column's groups are, and one button that
    * collapses every group at once.
    *
-   * The title names the tree's vocabulary - Categories, Namespaces, Assemblies - which is the one
+   * The title names the tree's vocabulary - Topics, Namespaces, Assemblies - which is the one
    * thing the rows below cannot say for themselves, since a list of names does not say what kind
    * of name it lists.
    *
@@ -2566,7 +2566,7 @@ ${this.seeAlsoHtml(type.docs)}
     const isActiveGroup = (group) =>
       group.category === activeCategory || containsActiveType(group);
 
-    let out = this.sidebarToolbar('Categories', groups.some(isActiveGroup));
+    let out = this.sidebarToolbar('Topics', groups.some(isActiveGroup));
 
     // The assembly's own page is the only thing in this tree with nothing above it, so without a
     // row of its own there is no way back to the prose once you have clicked into a type. Marked
