@@ -606,7 +606,10 @@ class Renderer {
   }
 
   /**
-   * The same version as a chip at the end of a card's header row.
+   * The version an API arrived in - and left in - as a chip at the end of a card's header row:
+   * 'Since 8.0', or 'Since 8.0 Obsolete 8.1' when a &lt;deprecated&gt; names where it ended.
+   * Spelled 'Obsolete' the way the note under the name spells it, so the chip and the note do not
+   * name one fact two ways.
    *
    * Written whether or not the header offers a picker: when an API arrived is worth reading on a
    * site that has no versions to filter by, and on one that has, it says what the filter is acting
@@ -614,8 +617,15 @@ class Renderer {
    * control a reader is comparing it against do not name one version two ways.
    */
   sinceChipHtml(docs) {
-    if (!docs || !docs.since) return '';
-    return `<span class="chip chip-since">Since ${escape(versionLabel(docs.since))}</span>`;
+    if (!docs || (!docs.since && !docs.deprecated)) return '';
+    const parts = [];
+    if (docs.since) parts.push(escape(`Since ${versionLabel(docs.since)}`));
+    // The leaving is the warning's to colour, the way the note under the name is: the arrival
+    // stays in the chip's own grey, and the colour split is what parts the two - no comma needed.
+    if (docs.deprecated) {
+      parts.push(`<span class="chip-deprecated">${escape(`Obsolete ${versionLabel(docs.deprecated)}`)}</span>`);
+    }
+    return `<span class="chip chip-since">${parts.join(' ')}</span>`;
   }
 
   /**
@@ -1528,6 +1538,16 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       kinds: new Set(
         members.concat(inherited.map((entry) => entry.member)).map((member) => member.kind)
       ),
+      // The two switches at the bar's right end hide whole classes of member rather than kinds:
+      // what the type only inherits, and what its authors have deprecated. Written pressed - both
+      // default on - and restyled by the script when a remembered choice says otherwise.
+      extra:
+        '<div class="member-toggles">' +
+        '<button type="button" class="toggle-btn" id="toggle-obsolete" aria-pressed="true" ' +
+        'title="Show or hide obsolete members">Obsolete</button>' +
+        '<button type="button" class="toggle-btn" id="toggle-inherited" aria-pressed="true" ' +
+        'title="Show or hide members inherited from base types">Inherited</button>' +
+        '</div>',
     });
 
     // Everything between the name and the first group of members: what the type relates to, what it
@@ -1917,17 +1937,25 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * Why an API is obsolete, as a note under the name: the one mark the page gives the fact.
+   * Why an API is obsolete, as a note under the name. The when is the chip's to say: 'since x.x'
+   * is spelled out of the message, and a note with nothing else to say is not drawn at all - the
+   * greyed card and the chip already carry the fact, and a warning box repeating it earns nothing.
    *
    * Classed the way &lt;note&gt; in a doc comment is, so the stylesheet paints this one warning
    * without having to tell it apart from the asides it shares a shape with.
    */
   obsoleteHtml(obsolete) {
     if (!obsolete) return '';
+    const message = String(obsolete.message || '')
+      .replace(/[,(]?\s*\bsince\s+v?\d+(?:\.\d+)*\s*\)?/gi, ' ')
+      .replace(/\s+([.,;:!?])/g, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (!/[0-9A-Za-z]/.test(message)) return '';
     const label = obsolete.isError ? 'removed' : 'obsolete';
     return (
       `<div class="note note-${label}"><span class="note-label">${escape(label)}</span>` +
-      escape(obsolete.message || 'This API is obsolete.') +
+      escape(message) +
       '</div>'
     );
   }
@@ -2260,11 +2288,9 @@ ${this.seeAlsoHtml(type.docs)}
         ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(member.docs.example, this.docContext)}</div>`
         : '';
 
-    // An inherited member's example page was built under the type that declares it.
-    const exampleSlug = inheritedFrom ? inheritedFrom.slug : selfSlug;
     const exampleButton =
       exampleFiles.length > 0
-        ? `<a class="chip chip-action" href="${attr(this.routes.example(exampleSlug, member.anchor))}">Example</a>`
+        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
         : '';
 
     // Everything past the description, which the card sets on a dimmer ground of its own. What a
@@ -2290,41 +2316,57 @@ ${this.seeAlsoHtml(type.docs)}
         : `<a class="member-anchor" href="#${attr(member.anchor)}" tabindex="-1" ` +
           // Named as the heading beside it is, so the two do not read as different members.
           `aria-label="Link to ${attr(memberDisplayName(member))}">#</a>`) +
-      exampleButton +
-      // No since chip on an inherited card: the fact is read on the page that documents the
-      // member, and here it would crowd the provenance segment that already ends the row. The
-      // card still carries its data-since, so version filtering sees the member either way.
-      (inheritedFrom ? '' : this.sinceChipHtml(member.docs)) +
+      // No Example button and no since chip on an inherited card: the row ends in the provenance
+      // text alone, and both facts are read on the page that documents the member - where the
+      // whole card already leads. The card still carries its data-since, so version filtering
+      // sees the member either way.
+      (inheritedFrom ? '' : exampleButton + this.sinceChipHtml(member.docs)) +
       '</div>' +
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
       // constant's value rides on the end the way the source states it.
       `<div class="declaration">${this.signatureHtml(this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name))}</div>` +
       this.obsoleteHtml(member.obsolete) +
-      (summary ? `<div class="summary">${summary}</div>` : '') +
-      (rest ? `<div class="member-detail">${rest}</div>` : '');
+      (summary ? `<div class="summary">${summary}</div>` : '');
+
+    // Kept out of the body so an inherited card can seat it below the head row: the provenance
+    // segment belongs beside what identifies the member, not beside its parameter tables.
+    const detailHtml = rest ? `<div class="member-detail">${rest}</div>` : '';
 
     if (inheritedFrom) {
-      // The provenance reads as two stacked lines, 'inherited from' over the type it names. Each
-      // line rides in a span of its own, which is what a name too long for the segment's width
-      // ellipsizes in.
+      // The provenance reads as two stacked lines, 'inherited from' over the type it names, each
+      // line in a span of its own so a long name wraps within the segment's width.
       return (
-        '<div class="member inherited" ' +
+        `<div class="member inherited${member.obsolete ? ' obsolete' : ''}" ` +
+        // The id is what the tree's row lands on; the reader-facing link still leads away, through
+        // the provenance segment, to where the member is documented.
+        `id="${attr(member.anchor)}" ` +
         `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
         `${this.sinceAttr(member.docs)}>` +
+        '<div class="inherited-head">' +
         `<div class="member-main">${body}</div>` +
         `<a class="inherited-from" href="${attr(this.routes.member(inheritedFrom.slug, member.anchor))}">` +
+        // The fact without the when, above the provenance: the version is read on the page that
+        // documents the member, and the segment is already two lines of small text.
+        (member.docs && member.docs.deprecated ? '<span class="chip-deprecated">Obsolete</span>' : '') +
         '<span>inherited from</span>' +
-        `<span class="inherited-from-type">${escape(inheritedFrom.name)}</span></a>` +
+        // The same '>' the tree hangs on an inherited row, saying the same destination - ahead of
+        // the name, and drawn by the stylesheet only while the pointer is on the card.
+        `<span class="inherited-from-type">${this.treeArrowHtml(true)}${escape(inheritedFrom.name)}</span>` +
+        '</a>' +
+        '</div>' +
+        detailHtml +
         '</div>'
       );
     }
 
     return (
-      `<div class="member${explicit ? ' explicit-impl' : ''}" id="${attr(member.anchor)}" ` +
+      `<div class="member${explicit ? ' explicit-impl' : ''}${member.obsolete ? ' obsolete' : ''}" ` +
+      `id="${attr(member.anchor)}" ` +
       `data-filter="${attr(filterKey)}" data-kind="${attr(member.kind)}"` +
       `${this.sinceAttr(member.docs)}>` +
       body +
+      detailHtml +
       '</div>'
     );
   }
@@ -2369,15 +2411,19 @@ ${this.seeAlsoHtml(type.docs)}
       .map((m) => {
         const source = from.get(m);
 
-        // An inherited row leads to the page that documents it; a declared one to the card below.
-        const href = source ? this.routes.member(source.slug, m.anchor) : `#${m.anchor}`;
+        // Every row leads to a card below: an inherited member is listed on this page in full,
+        // so sending the reader to the declaring type's page would walk past the nearer answer.
+        const href = `#${m.anchor}`;
 
         // The row truncates, and the part that tells overloads apart is at the end, so the full
         // signature is on the title where it can still be read.
         const title = (m.signature || m.name) + (source ? ` - inherited from ${source.name}` : '');
 
         return (
-          `<a class="tree-child-link${source ? ' tree-child-inherited' : ''}" ` +
+          `<a class="tree-child-link${source ? ' tree-child-inherited' : ''}` +
+          // Marked so the Obsolete toggle can take the row with the card: a tree that still lists
+          // what the page no longer shows is a link to nowhere.
+          `${m.obsolete ? ' tree-child-obsolete' : ''}" ` +
           `href="${attr(href)}"${this.sinceAttr(m.docs)} title="${attr(title)}">` +
           this.kindIconHtml(m.kind) +
           // Outlined rather than filled, and after the kind rather than instead of it: this is a
@@ -2390,6 +2436,16 @@ ${this.seeAlsoHtml(type.docs)}
             ? '<span class="tree-badge tree-badge-static">S</span>'
             : '') +
           this.treeMemberLabelHtml(m) +
+          // A second destination at an inherited row's end: the '>' leads to the type that
+          // declared the member, the way the card's provenance segment does. A span the script
+          // steers rather than a link, since a row cannot nest one; without the script it simply
+          // follows the row to the card, which says the same thing one step shorter.
+          (source
+            ? `<span class="tree-child-goto" data-href="${attr(this.routes.member(source.slug, m.anchor))}" ` +
+              `title="Go to ${attr(source.name)}">` +
+              this.treeArrowHtml(true) +
+              '</span>'
+            : '') +
           '</a>'
         );
       })
@@ -2486,22 +2542,13 @@ ${this.seeAlsoHtml(type.docs)}
     );
   }
 
-  treeTypeRow(type, { active = false, children = '', childrenId = null, inherited = false } = {}) {
+  treeTypeRow(type, { active = false, children = '', childrenId = null } = {}) {
     const hasChildren = Boolean(children);
     const arrow = hasChildren
       ? `<button class="tree-toggle" type="button" data-target="${attr(childrenId)}" aria-label="Toggle members">` +
         this.treeArrowHtml(!active) +
         '</button>'
       : '<span class="tree-arrow-spacer"></span>';
-
-    // Its own arrow at the end of the row, for the rows that are in the list but not drawn: what it
-    // opens is a second helping of the same list, so it opens the way everything else here does.
-    const inheritedArrow = inherited
-      ? `<button class="tree-inherited-toggle" type="button" data-target="${attr(childrenId)}" ` +
-        'aria-pressed="false" title="Show inherited members" aria-label="Show inherited members">' +
-        this.treeArrowHtml(true) +
-        '</button>'
-      : '';
 
     return (
       `<div class="tree-type"${this.sinceAttr(type.docs)}>` +
@@ -2510,7 +2557,6 @@ ${this.seeAlsoHtml(type.docs)}
       `<a class="tree-link${active ? ' active' : ''}" href="${attr(this.routes.type(type.slug))}">` +
       this.kindIconHtml(type.kind) +
       `${escape(type.name)}</a>` +
-      inheritedArrow +
       '</div>' +
       (hasChildren
         ? `<div class="tree-type-children${active ? '' : ' collapsed'}" id="${attr(childrenId)}">${children}</div>`
@@ -2614,7 +2660,6 @@ ${this.seeAlsoHtml(type.docs)}
                 active,
                 children,
                 childrenId: `tc_${type.slug}`,
-                inherited: inherited.length > 0,
               });
             })
             .join('');
@@ -2735,7 +2780,6 @@ ${this.seeAlsoHtml(type.docs)}
                 active,
                 children: lists ? this.treeMemberLinksHtml(type, inherited) : '',
                 childrenId: `tc_${type.slug}`,
-                inherited: inherited.length > 0,
               });
             })
             .join('');

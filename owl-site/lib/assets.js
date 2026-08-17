@@ -79,9 +79,10 @@ const CSS = `
   --card-hover:  #2e2e2e;
   --card-detail: #1b1b1b;
   --card-split:  #2b2b2b;
-  /* The grey segment on an inherited member's card, for what the page lists but does not own:
-     dimmer than the card ground here, grey against the white cards in the light theme. */
-  --card-dim:    #212121;
+  /* The ground of an obsolete member's whole card: the page's own, so the card reads as the page
+     showing through rather than a card worth stopping at. Named for the inherited cards that wore
+     it first and have since gone back to the common ground. */
+  --card-inherited: var(--bg);
   --fullname:    #737373;
   /* Light against a dark page, where the light theme's kind ink is dark against a light one: a
      drawing has to sit above its ground either way. Its text goes the other way for the same
@@ -120,7 +121,7 @@ const CSS = `
   --card-hover:  #f8f8f8;
   --card-detail: #fbfbfb;
   --card-split:  #efefef;
-  --card-dim:    #f1f1f1;
+  --card-inherited: var(--bg);
   --fullname:    #a3a3a3;
   --kind:        var(--oc-gray-7);
   --kind-ink:    var(--oc-white);
@@ -265,6 +266,23 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    keeps the accent. */
 .filter-btn.active { color: var(--text); border-bottom-color: var(--kind); }
 .filter-btn.active[data-kind="all"] { border-bottom-color: var(--flash); }
+/* The switches at the bar's right end, which hide whole classes of member rather than kinds. On
+   wears the active tabs' underline, each in the ink of what it shows - the warning's orange under
+   Obsolete, the All tab's accent under Inherited - sitting on the bar's rule the way the tabs'
+   does; off fades the bar to the border grey, a switch drawn in the off position, so half a list
+   going missing never reads as the type having less API. The wrapper stretches to the bar's
+   height so the underline lands on the rule instead of floating above it. */
+.member-toggles { margin-left: auto; align-self: stretch; display: flex; gap: 0.35rem; }
+/* One width for both states, because the label gains weight when the switch is on: text that
+   resizes under the pointer walks the row, and a control should hold still while it is used. */
+.toggle-btn { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; width: 4.5rem; padding: 0.4rem 0; text-align: center; font: inherit; font-size: 0.78rem; color: var(--text3); cursor: pointer; }
+.toggle-btn:hover { color: var(--text); }
+/* On also carries the tabs' weight, so a live switch reads in the bar's own voice and a dead one
+   a step quieter. */
+.toggle-btn[aria-pressed="true"] { font-weight: 500; }
+#toggle-obsolete[aria-pressed="true"] { border-bottom-color: var(--note-obsolete); }
+#toggle-inherited[aria-pressed="true"] { border-bottom-color: var(--flash); }
+.toggle-btn[aria-pressed="false"] { border-bottom-color: var(--border2); }
 .asm-legend { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: 0.5rem; }
 .legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text3); white-space: nowrap; text-decoration: none; }
 .legend-item:hover { color: var(--text); }
@@ -374,19 +392,17 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    a hair of space in front - the row's own 0.35rem gap was far too much. */
 .tree-child-link .tree-sig { color: var(--text4); margin-left: 0.12rem; }
 .tree-toggle, .tree-ns-toggle { background: none; border: none; padding: 0; cursor: pointer; color: inherit; display: inline-flex; align-items: center; }
-/* Inherited rows sit in the list in their alphabetical place, drawn back to the shade the parameter
-   types beside them use: there, and plainly not what this type declares. Not drawn at all until the
-   arrow at the end of the type's row asks for them. */
-.tree-child-inherited { display: none; color: var(--text4); }
-.tree-type-children.show-inherited .tree-child-inherited { display: flex; }
-/* Drawn well back, the way the row's text is: a drawing holds its own against a dimmed name far
-   better than a filled square did, so what read as inherited at 0.6 now needs 0.3. */
-.tree-child-inherited .kind-icon, .tree-child-inherited .tree-badge { opacity: 0.3; }
-.tree-child-inherited:hover { color: var(--text2); }
-/* At the end of the row, where it cannot be mistaken for the arrow that opens the type's members. */
-.tree-inherited-toggle { background: none; border: none; padding: 0 0.15rem; cursor: pointer; color: var(--text4); display: inline-flex; align-items: center; flex-shrink: 0; }
-.tree-inherited-toggle:hover { color: var(--text); }
-.tree-inherited-toggle[aria-pressed="true"] { color: var(--text2); }
+/* An inherited row is drawn the way a declared one is: it lands on a full card on this same page,
+   and which page first declared the member is that card's business to say. An obsolete row dims
+   mark and name together - a row kept only to be recognized. Whether either shows at all follows
+   the header's toggles: see applyTreeFilters. */
+.tree-child-obsolete { color: var(--text4); }
+.tree-child-obsolete .kind-icon, .tree-child-obsolete .tree-badge { opacity: 0.3; }
+.tree-child-obsolete:hover { color: var(--text2); }
+/* The '>' at an inherited row's end, which leads to the declaring type: held at the right edge,
+   and quiet until the pointer asks. */
+.tree-child-goto { margin-left: auto; flex-shrink: 0; color: var(--text4); }
+.tree-child-goto:hover { color: var(--text); }
 
 /* ---- Tree: a branch names itself while you are inside it ---- */
 /* A namespace of a few hundred types, or a type of a few hundred members, is taller than the column
@@ -591,6 +607,11 @@ a.chip:hover { color: var(--flash); }
    With the panel gone the chip's right padding is only air, holding the text short of the inset
    the row's other content ends at. Dropped, so the fact ends at the row's own edge. */
 .chip-since { margin-left: auto; flex-shrink: 0; color: var(--text4); background: transparent; padding-right: 0; }
+/* The deprecated mark in the warning's own orange, wherever it rides - the half of the since
+   chip that parts when the API arrived from when it stopped being the way, and the bare word
+   atop an inherited card's provenance. */
+.chip-deprecated { color: var(--note-obsolete); }
+.inherited-from .chip-deprecated { margin-bottom: 0.15rem; }
 .asm-name ~ .chip-since, .chip-action ~ .chip-since { margin-left: 0; }
 
 /* ---- Category overview doc ---- */
@@ -647,32 +668,63 @@ ${TEMML_CSS}
 .member-detail > :first-child { margin-top: 0; }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
 .member.explicit-impl { border-color: var(--badge-explicit); }
-/* An inherited member wears the declared members' full card: what it shows is the member itself,
-   and the reader who found the name they were looking for should not have to leave the page to
-   read the rest. What still tells it apart at a glance is the grey provenance segment down the
-   right edge - the member-detail split turned sideways - naming the type that declared it, and
-   doubling as the card's one link through to where the member is documented and owns its anchor.
-   The card's padding moves onto the inner column so the segment can run the full height; the
-   column's padding matches the card's, which is what keeps member-detail's negative margins
-   reaching its edges. The card's overflow clip takes the segment's corners. */
-.member.inherited { display: flex; align-items: stretch; padding: 0; }
-.member.inherited > .member-main { flex: 1; min-width: 0; padding: 0.9rem 1.1rem; }
+/* An inherited member wears the declared members' full card, ground and all: what it shows is
+   the member itself, and the reader who found the name they were looking for should not have to
+   leave the page to read the rest. What still tells it apart at a glance is the provenance
+   segment at the top right naming the type that declared it, doubling as the card's one real
+   link through to where the member is documented and owns its anchor - a link the script widens
+   to the whole card, which is why the card takes the pointer cursor and the hover. */
+.member.inherited { cursor: pointer; }
+/* Under the pointer the border lights up: the card is one click through to where the member is
+   documented, and the lit edge is what says so before a word is read. */
+.member.inherited:hover { border-color: var(--flash); }
+/* The head row seats the member's identity and the provenance side by side; the detail block sits
+   below it and spans the card, so the segment reaches only as deep as the part it annotates. */
+.inherited-head { display: flex; }
+.inherited-head > .member-main { flex: 1; min-width: 0; }
+/* The detail keeps the card's ground: its own shade exists to step the block off a card, and an
+   obsolete card's ground is the page's - there is nothing to step off of. */
+.member.obsolete .member-detail { background: transparent; }
+/* An obsolete member keeps its card but loses its voice: the inherited cards' ground and the
+   reading text stepped down to grey, so a reader scanning the list passes it the way they pass
+   what the page does not own. The note under the name still says why in the warning's colour. */
+.member.obsolete { background: var(--card-inherited); color: var(--text3); }
+.member.obsolete .member-name, .member.obsolete .member-name a, .member.obsolete .summary { color: var(--text3); }
+/* The declaration and the detail go grey whole - syntax paint, section text, parameter names and
+   type links alike: colour is what says a line is worth reading, and this card is kept only to be
+   recognized. Swept with the universal selector rather than left to the card's colour, because
+   the pieces - .section, .param-name, .see-ref and the rest - each set a colour of their own, and
+   inheritance does not outrank a rule. The links still work and underline under the pointer,
+   affordance enough for a deprecated API. The obsolete note sits outside these blocks and keeps
+   its orange: the warning is the one thing on the card still speaking at full voice. */
+.member.obsolete .declaration, .member.obsolete .declaration *, .member.obsolete .member-detail, .member.obsolete .member-detail * { color: var(--text3); }
+.member.obsolete .see-ref { color: var(--text3); }
 /* Dimmer than the card's own text: which base a member came from answers a question the reader
    only asks once they have found the name they were looking for.
 
-   Two stacked lines at the top of the segment, 'inherited from' over the type it names: the top
-   padding is the card's own, so the label sits level with the member's name across the split
-   rather than floating mid-air on a tall card. Right-aligned, and one width for every card rather
-   than the label's own, so the split reads as one line down the list instead of a ragged edge.
-   The width is set by the 'inherited from' line, which it just seats; a type name longer than
-   that ellipsizes in its span - text-overflow wants a block container, and a shrink-to-fit flex
-   item is only one once max-width pins it. */
-.inherited-from { flex: 0 0 8rem; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; background: var(--card-dim); border-left: 1px solid var(--card-split); padding: 0.9rem 1.1rem 0 0.9rem; font-size: 0.72rem; color: var(--text4); text-decoration: none; }
-.inherited-from > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The type is the payload of the two lines, so it takes the reading colour, a step up in size,
-   and the hover that says the segment leads somewhere. */
+   Two stacked lines, 'inherited from' over the type it names, seated at the top of the head row
+   where the label sits level with the member's name, and the tree's '>' ahead of the name saying
+   the same thing it says there: this leads to the type that declared the member. Sized by its
+   own two lines - with no split line to keep straight down the list, a fixed column would only
+   hold the member's space open - and the name is shown whole: naming where the member came from
+   is the segment's one job, and a name cut to fit does it halfway. Capped at under half the card
+   and wrapping past the cap, so a long generic name folds onto more lines instead of crowding
+   out the member it annotates. */
+.inherited-from { flex: 0 0 auto; max-width: 45%; display: flex; flex-direction: column; align-items: flex-end; padding: 0 0 0 0.9rem; font-size: 0.72rem; color: var(--text4); text-decoration: none; }
+.inherited-from > span { max-width: 100%; text-align: right; overflow-wrap: anywhere; }
+/* Lit in the accent and drawn only under the pointer: the hovered border already says the card
+   leads somewhere, and this says where the reader will land. A step larger than the tree draws
+   it, and out of the flow entirely - seated just left of the name and centred on it - because a
+   drawing taller than the name's line would stretch that line every time it appeared, and the
+   name must not stir when the pointer arrives. The centring is top and margin rather than a
+   transform, which the arrow's own collapsed rotation is already using. */
+.inherited-from-type { position: relative; }
+.inherited-from-type .tree-arrow { display: none; position: absolute; right: 100%; top: 50%; margin-top: -0.6rem; width: 1.2rem; height: 1.2rem; color: var(--flash); }
+.inherited-from-type .tree-arrow svg { width: 1.05rem; height: 1.05rem; }
+.member.inherited:hover .inherited-from-type .tree-arrow { display: inline-flex; }
+/* The type is the payload of the two lines, so it takes the reading colour and a step up in
+   size; saying the card leads somewhere is the border's job, not the text's. */
 .inherited-from-type { font-size: 0.78rem; color: var(--text3); margin-top: 0.15rem; }
-.inherited-from:hover .inherited-from-type { color: var(--text2); }
 .member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
@@ -761,12 +813,14 @@ code { font-family: monospace; }
 .tok-punct { color: var(--tok-punct); }
 
 /* ---- Notes, tables, lists in doc content ---- */
-.note { border-left: 3px solid var(--flash); background: var(--bg3); padding: 0.5rem 0.8rem; border-radius: 0 6px 6px 0; margin: 0.6rem 0; font-size: 0.85rem; }
+.note { border-left: 3px solid var(--flash); background: var(--bg3); padding: 0.5rem 0.8rem; margin: 0.6rem 0; font-size: 0.85rem; }
 .note-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--flash); margin-bottom: 0.15rem; }
 /* The one note that is a warning rather than an aside, and the one mark the page gives the fact.
    Removed is obsolete with the compiler's answer changed from a warning to an error, not a
-   different fact, so it reads the same. */
-.note-obsolete, .note-removed { border-left-color: var(--note-obsolete); }
+   different fact, so it reads the same. Its ground is the warning's own orange thinned to a wash
+   rather than the asides' grey - translucent, so the one value warms either theme's ground, and a
+   browser without color-mix falls back to the grey. */
+.note-obsolete, .note-removed { border-left-color: var(--note-obsolete); background: color-mix(in srgb, var(--note-obsolete) 12%, transparent); }
 .note-obsolete .note-label, .note-removed .note-label { color: var(--note-obsolete); }
 .table-scroll { overflow-x: auto; margin: 0.6rem 0; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
@@ -900,9 +954,6 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
   .sidebar { display: none; }
   .resize-handle { display: none; }
   #search { width: 150px; }
-  /* Too narrow to hold a fixed column open: the grey segment goes back to the label's own width,
-     and the aligned split is given up for the member name it was crowding out. */
-  .inherited-from { flex-basis: auto; }
 }
 `;
 
@@ -981,17 +1032,34 @@ const JS = `
   if (versionSelect) activeVersion = versionSelect.value;
   else if (versionFixed) activeVersion = versionFixed.getAttribute('data-version') || '';
 
-  // A leading prefix is dropped before the number is read, since a version offered as 'V9' is
+  // A leading prefix is dropped before the numbers are read, since a version offered as 'V9' is
   // labelled the way the reader knows it while a <since> is written as the bare 8.0.
-  function majorOf(value) {
-    var n = parseInt(String(value || '').replace(/^[^0-9]*/, '').split('.')[0], 10);
-    return isNaN(n) ? 0 : n;
+  function versionNumsOf(value) {
+    return String(value || '')
+      .replace(/^[^0-9]*/, '')
+      .split('.')
+      .map(function (part) {
+        var n = parseInt(part, 10);
+        return isNaN(n) ? 0 : n;
+      });
+  }
+
+  // Negative when a is before b. Numeric segment by segment rather than as strings, so '10' comes
+  // after '9'; a missing segment reads as 0, which is what makes '2' and '2.0' the same version.
+  function compareVersions(a, b) {
+    var as = versionNumsOf(a);
+    var bs = versionNumsOf(b);
+    for (var i = 0; i < Math.max(as.length, bs.length); i++) {
+      var d = (as[i] || 0) - (bs[i] || 0);
+      if (d !== 0) return d;
+    }
+    return 0;
   }
 
   function withinVersion(el) {
     var since = el.getAttribute('data-since');
     if (!since || !activeVersion) return true;
-    return majorOf(since) <= majorOf(activeVersion);
+    return compareVersions(since, activeVersion) <= 0;
   }
 
   // ---- Example tabs ----
@@ -1017,6 +1085,39 @@ const JS = `
     set.querySelectorAll('.example-panel').forEach(function (panel, i) {
       panel.classList.toggle('hidden', String(i) !== chosen);
     });
+  });
+
+  // ---- Inherited member cards ----
+  // The provenance segment is the card's one real link; this widens it to the whole card, so the
+  // reader who stopped on an inherited member follows it from wherever their pointer already is.
+  // Clicks that mean something else keep meaning it: a link or button on the card, a modified
+  // click asking for a new tab, and a drag that left text selected all pass through - a reader
+  // copying a declaration did not ask to leave the page.
+  document.addEventListener('click', function (e) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
+    var card = e.target.closest && e.target.closest('.member.inherited');
+    if (!card) return;
+    if (e.target.closest('a, button')) return;
+
+    var sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+
+    var link = card.querySelector('.inherited-from');
+    if (link) link.click();
+  });
+
+  // ---- Tree: the '>' on an inherited row ----
+  // The row lands on the card below; its tail end leads to the page that declared the member. A
+  // plain click is steered there; a modified one is left to the row, which is still a real link.
+  document.addEventListener('click', function (e) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
+    var jump = e.target.closest && e.target.closest('.tree-child-goto');
+    if (!jump) return;
+
+    e.preventDefault();
+    window.location.href = jump.getAttribute('data-href');
   });
 
   // ---- Examples dock ----
@@ -1153,11 +1254,29 @@ const JS = `
     });
   }
 
+  // The 'Show Obsolete' / 'Show Inherited' switches: whole classes of member hidden regardless of
+  // kind. Read from storage here, before the first filter pass, so a remembered 'off' hides its
+  // members on this page too - the choice follows the reader the way the version menu's does.
+  var TOGGLE_KEYS = { obsolete: 'docs-show-obsolete', inherited: 'docs-show-inherited' };
+  var memberToggles = { obsolete: true, inherited: true };
+  Object.keys(TOGGLE_KEYS).forEach(function (name) {
+    try {
+      memberToggles[name] = localStorage.getItem(TOGGLE_KEYS[name]) !== 'off';
+    } catch (e) {}
+  });
+
+  function passesToggles(el) {
+    if (!memberToggles.obsolete && el.classList.contains('obsolete')) return false;
+    if (!memberToggles.inherited && el.classList.contains('inherited')) return false;
+    return true;
+  }
+
   function applyFilter() {
-    // Kind and version both hide entries, so they resolve to one class rather than fighting.
+    // Kind, version and the toggles all hide entries, so they resolve to one class rather than
+    // fighting.
     document.querySelectorAll(MAIN_LISTED)
       .forEach(function (el) {
-        el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el)));
+        el.classList.toggle('hidden', !(matchesKind(el) && withinVersion(el) && passesToggles(el)));
       });
 
     // Search results are the same filter over a different shape, but the rows in the page are only
@@ -1214,6 +1333,32 @@ const JS = `
       selectKind(button.getAttribute('data-kind'));
     });
   });
+
+  // The buttons live on type pages only; the stylesheet reads the state off aria-pressed, which
+  // is also what a screen reader reads, so the two cannot disagree.
+  Object.keys(TOGGLE_KEYS).forEach(function (name) {
+    var button = document.getElementById('toggle-' + name);
+    if (!button) return;
+
+    button.setAttribute('aria-pressed', String(memberToggles[name]));
+    button.addEventListener('click', function () {
+      memberToggles[name] = !memberToggles[name];
+      button.setAttribute('aria-pressed', String(memberToggles[name]));
+      try { localStorage.setItem(TOGGLE_KEYS[name], memberToggles[name] ? 'on' : 'off'); } catch (e) {}
+      applyFilter();
+      // The tree follows both switches, so it never points at a card the list dropped.
+      applyTreeFilters();
+    });
+  });
+
+  // A remembered 'off' has members to hide before anything else runs a filter pass - a page with
+  // no version menu and a bare url never calls applyFilter on load otherwise. The tree pass runs
+  // on every page, not only where the buttons are: the stored choice travels, and so must what
+  // the sidebar shows.
+  if (!memberToggles.obsolete || !memberToggles.inherited) {
+    applyFilter();
+    applyTreeFilters();
+  }
 
   /**
    * The bar, narrowed to what a query actually found: a button that would take nothing out of the
@@ -1430,7 +1575,7 @@ const JS = `
         // Over the whole tree this time: what was remembered may name a group that was empty until
         // now, and the version menu has rows to hide that were not there when it last ran.
         restoreTreeState();
-        applyTreeVersion();
+        applyTreeFilters();
         syncCollapseAll();
         if (!treeRoot || treeRoot.scrollTop === placedScroll) placeTree();
       })
@@ -1471,25 +1616,6 @@ const JS = `
     });
   });
 
-  // ---- Tree: inherited members ----
-  // The rows are already in the tree, in their alphabetical place and drawn back. This only says
-  // whether they are drawn, and only for the one type whose members are listed.
-  document.querySelectorAll('.tree-inherited-toggle').forEach(function (button) {
-    button.addEventListener('click', function (event) {
-      event.preventDefault();
-      var row = button.closest('.tree-type');
-      var children = row && row.querySelector('.tree-type-children');
-      if (!children) return;
-
-      var shown = !children.classList.contains('show-inherited');
-      children.classList.toggle('show-inherited', shown);
-      button.setAttribute('aria-pressed', String(shown));
-
-      var arrow = button.querySelector('.tree-arrow');
-      if (arrow) arrow.classList.toggle('collapsed', !shown);
-    });
-  });
-
   // The toolbar button collapses every group at once, and that is all it does: a reader expands
   // the one branch they are after, so the other direction is never worth a click. With only one
   // thing to do, it sits disabled - dimmed by the stylesheet - while there is nothing to do it to.
@@ -1520,13 +1646,17 @@ const JS = `
     });
   }
 
-  // The tree's side of the version menu: rows for API that arrived after the chosen version are
-  // hidden, and a group left holding nothing visible goes with them rather than opening onto an
-  // empty list.
-  function applyTreeVersion() {
+  // The tree's side of the version menu and the two toggles: rows for API that arrived after the
+  // chosen version, or that the reader has switched off, are hidden - a tree that still lists
+  // what the page is not showing is a link to nowhere. A group left holding nothing visible goes
+  // with them rather than opening onto an empty list.
+  function applyTreeFilters() {
     document.querySelectorAll('.tree-type').forEach(function (el) {
       el.querySelectorAll('.tree-child-link').forEach(function (row) {
-        row.classList.toggle('hidden', !withinVersion(row));
+        var off =
+          (!memberToggles.obsolete && row.classList.contains('tree-child-obsolete')) ||
+          (!memberToggles.inherited && row.classList.contains('tree-child-inherited'));
+        row.classList.toggle('hidden', off || !withinVersion(row));
       });
       el.classList.toggle('hidden', !withinVersion(el));
     });
@@ -1553,16 +1683,16 @@ const JS = `
       activeVersion = versionSelect.value;
       try { localStorage.setItem(VERSION_KEY, activeVersion); } catch (e) {}
       applyFilter();
-      applyTreeVersion();
+      applyTreeFilters();
     });
 
     applyFilter();
-    applyTreeVersion();
+    applyTreeFilters();
   } else if (activeVersion) {
     // The one-version label: nothing to remember and nothing to listen to, but what came after that
     // version is hidden here exactly as the menu would hide it.
     applyFilter();
-    applyTreeVersion();
+    applyTreeFilters();
   }
 
   // ---- Draggable columns ----

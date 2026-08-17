@@ -38,9 +38,8 @@ const BADGE_PAINTS = {
  * The one note that is a warning rather than an aside: the message saying why an API is obsolete.
  *
  * It is a warning rather than a fact about how the member works, which is why it is not grey;
- * orange is what a reader already reads as a warning. The note is the only mark the fact gets -
- * no chip repeats it - so this is the one paint that says it. One colour under both themes, like
- * the badges above.
+ * orange is what a reader already reads as a warning - the one voice left at full volume on a
+ * card the stylesheet otherwise greys out. One colour under both themes, like the badges above.
  */
 const NOTE_PAINTS = {
   obsolete: 'var(--oc-orange-5)',

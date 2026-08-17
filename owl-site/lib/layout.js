@@ -293,8 +293,11 @@ function memberFilterBar({ kinds = new Set(), extra = '' } = {}) {
  *                               rendered; the rest are written hidden for a script to reveal
  */
 function tabsHtml(tabs, extra, offered = null) {
-  // 'All' plus one kind is not a choice, so there is nothing to put a bar around.
-  if (tabs.length < 3) return '';
+  // 'All' plus one kind is not a choice, so the tabs are dropped - but a bar something else
+  // shares still renders for that something: the toggles at its right end act on the list
+  // whatever kinds it holds.
+  const withTabs = tabs.length >= 3;
+  if (!withTabs && !extra) return '';
 
   // Nothing is painted here: 'All' opens active, and the stylesheet knows what that looks like.
   // The kinds are coloured by the script, from the same palette their badges are drawn from.
@@ -312,7 +315,7 @@ function tabsHtml(tabs, extra, offered = null) {
   const idle = offered !== null && offered.size < 2;
 
   return `<div class="filter-bar"${idle ? ' hidden' : ''}>
-  ${buttons}
+  ${withTabs ? buttons : ''}
   ${extra}
 </div>`;
 }
