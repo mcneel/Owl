@@ -208,6 +208,20 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 /* A filled mark like the sidebar toggle's: the path carries its own weight. */
 .nav-search-icon { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); width: 1.05rem; height: 1.05rem; pointer-events: none; fill: var(--nav-dim); }
 
+/* The magnifier's corner while the index is on the wire, which on a static host is a wait the
+   first query sits through. The ring takes the magnifier's exact footprint and ink, so the swap
+   reads as the same mark set turning. Held invisible for the first beat: a cached index answers
+   faster than a flash can be read, and the ring is for the wait a reader can feel. */
+header form[role="search"].index-loading .nav-search-icon { visibility: hidden; }
+header form[role="search"].index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
+@keyframes search-spin { to { transform: rotate(360deg); } }
+@keyframes search-spin-in { to { opacity: 1; } }
+/* Motion is the one thing this drawing is made of, so reduced motion gets a slower turn rather
+   than a still ring that would read as a broken icon. */
+@media (prefers-reduced-motion: reduce) {
+  header form[role="search"].index-loading::after { animation-duration: 2.5s, 0s; }
+}
+
 /* ---- Header search results ----
    Hangs off the form, which is the positioned element, and takes the page's colours rather than
    the header's: it is content the header happens to be pointing at, not part of the bar.
@@ -2005,11 +2019,20 @@ const JS = `
   var loading = false;
   var queued = null;
 
+  // The class puts a spinner in the magnifier's corner - see .index-loading in the stylesheet -
+  // because on every page but the search page the wait would otherwise show nothing at all: the
+  // dropdown stays hidden until there is an index to answer from.
+  function setLoading(on) {
+    if (input.form) input.form.classList.toggle('index-loading', on);
+    input.setAttribute('aria-busy', on ? 'true' : 'false');
+  }
+
   function ensureIndex(then) {
     if (index) { then(); return; }
     if (loading) { queued = then; return; }
 
     loading = true;
+    setLoading(true);
     if (status) status.textContent = 'Loading search index\\u2026';
 
     fetch(input.getAttribute('data-index-url') || results.getAttribute('data-index-url'))
@@ -2017,11 +2040,13 @@ const JS = `
       .then(function (data) {
         index = data;
         loading = false;
+        setLoading(false);
         then();
         if (queued) { var q = queued; queued = null; q(); }
       })
       .catch(function () {
         loading = false;
+        setLoading(false);
         if (status) status.textContent = 'Could not load the search index. Browse by namespace instead.';
       });
   }
