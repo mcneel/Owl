@@ -356,6 +356,10 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .tree-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
 /* docify swaps a chevron-right for a chevron-down; rotating the one is the same picture. */
 .tree-arrow.collapsed { transform: rotate(-90deg); }
+/* The chevron's box holding the go-elsewhere arrow instead: never rotated, because it always
+   means the same leaving. */
+.goto-arrow { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex-shrink: 0; }
+.goto-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
 .tree-arrow-spacer { display: inline-block; width: 1rem; flex-shrink: 0; }
 .tree-ns-children.collapsed { display: none; }
 /* Where a group's rows should be, when the fetch that carries them did not arrive. */
@@ -417,8 +421,8 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .tree-child-obsolete { color: var(--text4); }
 .tree-child-obsolete .kind-icon, .tree-child-obsolete .tree-badge { opacity: 0.3; }
 .tree-child-obsolete:hover { color: var(--text2); }
-/* The '>' at an inherited row's end, which leads to the declaring type: held at the right edge,
-   and quiet until the pointer asks. */
+/* The arrow at an inherited row's end, which leads to the declaring type: held at the right
+   edge, and quiet until the pointer asks. */
 .tree-child-goto { margin-left: auto; flex-shrink: 0; color: var(--text4); }
 .tree-child-goto:hover { color: var(--text); }
 
@@ -721,25 +725,24 @@ ${TEMML_CSS}
    only asks once they have found the name they were looking for.
 
    Two stacked lines, 'inherited from' over the type it names, seated at the top of the head row
-   where the label sits level with the member's name, and the tree's '>' ahead of the name saying
-   the same thing it says there: this leads to the type that declared the member. Sized by its
-   own two lines - with no split line to keep straight down the list, a fixed column would only
-   hold the member's space open - and the name is shown whole: naming where the member came from
-   is the segment's one job, and a name cut to fit does it halfway. Capped at under half the card
-   and wrapping past the cap, so a long generic name folds onto more lines instead of crowding
-   out the member it annotates. */
+   where the label sits level with the member's name, and the tree's arrow ahead of the name
+   saying the same thing it says there: this leads to the type that declared the member. Sized
+   by its own two lines - with no split line to keep straight down the list, a fixed column would
+   only hold the member's space open - and the name is shown whole: naming where the member came
+   from is the segment's one job, and a name cut to fit does it halfway. Capped at under half the
+   card and wrapping past the cap, so a long generic name folds onto more lines instead of
+   crowding out the member it annotates. */
 .inherited-from { flex: 0 0 auto; max-width: 45%; display: flex; flex-direction: column; align-items: flex-end; padding: 0 0 0 0.9rem; font-size: 0.72rem; color: var(--text4); text-decoration: none; }
 .inherited-from > span { max-width: 100%; text-align: right; overflow-wrap: anywhere; }
 /* Lit in the accent and drawn only under the pointer: the hovered border already says the card
    leads somewhere, and this says where the reader will land. A step larger than the tree draws
    it, and out of the flow entirely - seated just left of the name and centred on it - because a
    drawing taller than the name's line would stretch that line every time it appeared, and the
-   name must not stir when the pointer arrives. The centring is top and margin rather than a
-   transform, which the arrow's own collapsed rotation is already using. */
+   name must not stir when the pointer arrives. */
 .inherited-from-type { position: relative; }
-.inherited-from-type .tree-arrow { display: none; position: absolute; right: 100%; top: 50%; margin-top: -0.6rem; width: 1.2rem; height: 1.2rem; color: var(--flash); }
-.inherited-from-type .tree-arrow svg { width: 1.05rem; height: 1.05rem; }
-.member.inherited:hover .inherited-from-type .tree-arrow { display: inline-flex; }
+.inherited-from-type .goto-arrow { display: none; position: absolute; right: 100%; top: 50%; margin-top: -0.6rem; width: 1.2rem; height: 1.2rem; color: var(--flash); }
+.inherited-from-type .goto-arrow svg { width: 1.05rem; height: 1.05rem; }
+.member.inherited:hover .inherited-from-type .goto-arrow { display: inline-flex; }
 /* The type is the payload of the two lines, so it takes the reading colour and a step up in
    size; saying the card leads somewhere is the border's job, not the text's. */
 .inherited-from-type { font-size: 0.78rem; color: var(--text3); margin-top: 0.15rem; }

@@ -100,6 +100,20 @@ function chevronHtml(className) {
   );
 }
 
+/**
+ * mdi's arrow, pointing right, in the chevron's square. The marks that lead to a declaring type -
+ * the tree's inherited rows and the inherited cards' provenance - are both this rather than the
+ * chevron, so leaving the page reads as its own gesture and not as another branch to open.
+ */
+function gotoArrowHtml() {
+  return (
+    '<span class="goto-arrow">' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M4 11V13H16L10.5 18.5 11.92 19.92 19.84 12 11.92 4.08 10.5 5.5 16 11H4Z"/></svg>' +
+    '</span>'
+  );
+}
+
 /** The last step of a dotted path: 'LibrarySet&lt;T&gt;.EventArgs' is declared by 'EventArgs'. */
 function lastSegment(name) {
   return name.slice(name.lastIndexOf('.') + 1);
@@ -2354,9 +2368,9 @@ ${this.seeAlsoHtml(type.docs)}
         // documents the member, and the segment is already two lines of small text.
         (member.docs && member.docs.deprecated ? '<span class="chip-deprecated">Obsolete</span>' : '') +
         '<span>inherited from</span>' +
-        // The same '>' the tree hangs on an inherited row, saying the same destination - ahead of
-        // the name, and drawn by the stylesheet only while the pointer is on the card.
-        `<span class="inherited-from-type">${this.treeArrowHtml(true)}${escape(inheritedFrom.name)}</span>` +
+        // The same arrow the tree hangs on an inherited row, saying the same destination - ahead
+        // of the name, and drawn by the stylesheet only while the pointer is on the card.
+        `<span class="inherited-from-type">${gotoArrowHtml()}${escape(inheritedFrom.name)}</span>` +
         '</a>' +
         '</div>' +
         detailHtml +
@@ -2440,14 +2454,14 @@ ${this.seeAlsoHtml(type.docs)}
             ? '<span class="tree-badge tree-badge-static">S</span>'
             : '') +
           this.treeMemberLabelHtml(m) +
-          // A second destination at an inherited row's end: the '>' leads to the type that
+          // A second destination at an inherited row's end: the arrow leads to the type that
           // declared the member, the way the card's provenance segment does. A span the script
           // steers rather than a link, since a row cannot nest one; without the script it simply
           // follows the row to the card, which says the same thing one step shorter.
           (source
             ? `<span class="tree-child-goto" data-href="${attr(this.routes.member(source.slug, m.anchor))}" ` +
               `title="Go to ${attr(source.name)}">` +
-              this.treeArrowHtml(true) +
+              gotoArrowHtml() +
               '</span>'
             : '') +
           '</a>'
