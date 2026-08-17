@@ -160,10 +160,10 @@ let bytes = 0;
 // Static export cannot answer ?q=, so the search page ships the client-side path plus a
 // noscript fallback that links into the browse hierarchy.
 //
-// The mirrors are the namespace-mode copies of the type and example pages. They are files like any
-// other - a static host has no way to render one url as another - but they are not in the sitemap,
-// so they are written from a list of their own.
-const urls = site.renderer.sitemapUrls().concat(site.renderer.mirrorUrls());
+// The stubs stand where the namespace-mode copies of the type and example pages used to be
+// published, forwarding old links to the plain page with the mode flag on. Not in the sitemap, so
+// they are written from a list of their own.
+const urls = site.renderer.sitemapUrls().concat(site.renderer.stubUrls());
 
 for (const url of urls) {
   const result = site.resolve(url, null, false);

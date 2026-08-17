@@ -15,7 +15,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { ID_PREFIX: ICON_PREFIX } = require('./icons');
+const { NS_FLAG } = require('./routes');
 const { BADGE_PAINTS, NOTE_PAINTS } = require('./theme');
+
+/** The query flag that marks the namespace-mode reading of a page, as the client appends it. */
+const NS_QUERY = `?${NS_FLAG}`;
 
 /**
  * What MathML needs to draw correctly, from the converter that writes it.
@@ -1462,6 +1466,73 @@ const JS = `
     });
   }
 
+  // ---- Browse mode ----
+  // The namespace-mode reading of a type or example page: the same file with '?ns' on the url. A
+  // second full copy of every one of these pages once carried the other mode, and the copies were
+  // half the export, so the mode became a flag only the browser sees. The page arrives wearing its
+  // category tree and an inert template holding the namespace tree's skeleton; seeing the flag, it
+  // puts the skeleton on instead - before the tree code below runs, so everything that binds,
+  // fills and remembers the tree finds the namespace one and never knows there was another.
+  //
+  // The flag has to survive navigation, so every type and example url the page offers gets it
+  // appended - which is also what the old shape did, with a path segment and a copied page.
+
+  // The flag, put where the page keeps its own: ahead of the fragment, never doubled.
+  function nsUrl(url) {
+    if (url.indexOf('?') >= 0) return url;
+    var hash = url.indexOf('#');
+    if (hash < 0) return url + '${NS_QUERY}';
+    return url.slice(0, hash) + '${NS_QUERY}' + url.slice(hash);
+  }
+
+  var nsTemplate = document.getElementById('ns-tree');
+  var nsMode = nsTemplate && urlParams().get('${NS_FLAG}') !== null;
+
+  if (nsMode) {
+    var swapRoot = document.getElementById('sidebar');
+
+    if (swapRoot) {
+      // The one row the category tree wrote - the type being read, member links and all - rides
+      // over into the group the skeleton holds open. The namespace tree cannot draw it itself.
+      var carriedLink = swapRoot.querySelector('.tree-link.active');
+      var carried = carriedLink ? carriedLink.closest('.tree-type') : null;
+
+      swapRoot.setAttribute('data-tree', nsTemplate.getAttribute('data-tree') || '');
+      swapRoot.setAttribute('data-tree-src', nsTemplate.getAttribute('data-tree-src') || '');
+      swapRoot.textContent = '';
+      swapRoot.appendChild(nsTemplate.content);
+
+      if (carried) {
+        var openGroup = swapRoot.querySelector('.tree-ns-children:not(.collapsed)');
+        if (openGroup) openGroup.appendChild(carried);
+      }
+    }
+
+    // No selector while browsing by namespace, exactly as the server leaves it off the pages it
+    // writes in this mode: a namespace belongs to no one assembly.
+    var asmFilter = document.getElementById('asm-filter');
+    if (asmFilter) {
+      asmFilter.hidden = true;
+      var asmLabel = document.querySelector('label[for="asm-filter"]');
+      if (asmLabel) asmLabel.hidden = true;
+    }
+
+    // What the server sets on the pages it writes in this mode - see data-ns in lib/layout.js -
+    // set here by the page on itself, so search results open in the mode too.
+    var searchBox = document.getElementById('search');
+    if (searchBox) searchBox.setAttribute('data-ns', '${NS_QUERY}');
+
+    // Every way from this page to a type or an example carries the flag on: the links the server
+    // wrote plain, and the declaring-type arrows the tree steers by data-href.
+    document.querySelectorAll('a[href], [data-href]').forEach(function (el) {
+      var name = el.hasAttribute('data-href') ? 'data-href' : 'href';
+      var value = el.getAttribute(name);
+      if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) return;
+      if (!/\\/(type|example)\\//.test(value)) return;
+      el.setAttribute(name, nsUrl(value));
+    });
+  }
+
   // ---- Tree state, carried across navigations ----
   // Every page re-renders the tree from scratch, so an expansion made on one would be undone by
   // the next. Kept per tree shape - data-tree - because an assembly's categories are not another's
@@ -1537,7 +1608,7 @@ const JS = `
 
   // ---- Tree: the rows the page left out ----
   // A tree is the same list of types on every page that carries it - what changes is which group
-  // is open and which row is marked - so the page is written with only the group being read in it,
+  // is open and which row is marked - so the page is written with only the row being read in it,
   // and the rest arrive once from an asset the browser then has cached for the whole read. See
   // treeGroup and treeAsset in lib/pages.js, which decide what is left out and write what fills it.
   var lazyGroups = [].slice.call(document.querySelectorAll('.tree-ns-children[data-lazy]'));
@@ -1549,13 +1620,13 @@ const JS = `
 
   // Mirrors treeTypeRow in lib/pages.js, for the rows that have no members listed under them,
   // which is every row but the one being read. The mark references the sprite already on the page.
-  function treeRowHtml(row, prefix) {
+  function treeRowHtml(row, prefix, suffix) {
     var since = row.length > 3 && row[3] ? ' data-since="' + escapeHtml(row[3]) + '"' : '';
 
     return (
       '<div class="tree-type"' + since + '><div class="tree-type-label">' +
       '<span class="tree-arrow-spacer"></span>' +
-      '<a class="tree-link" href="' + escapeHtml(prefix + row[1] + '/') + '">' +
+      '<a class="tree-link" href="' + escapeHtml(prefix + row[1] + '/' + suffix) + '">' +
       '<svg class="kind-icon" aria-hidden="true" focusable="false"><use href="#${ICON_PREFIX}' +
       escapeHtml(row[2] || 'class') + '"/></svg>' +
       escapeHtml(row[0]) +
@@ -1565,18 +1636,46 @@ const JS = `
 
   function fillTree(asset) {
     var prefix = (asset && asset.prefix) || '';
+    var suffix = (asset && asset.suffix) || '';
     var groups = (asset && asset.groups) || {};
 
     lazyGroups.forEach(function (container) {
       var rows = groups[container.getAttribute('data-lazy')];
       if (!rows) return;
 
-      var html = '';
-      for (var i = 0; i < rows.length; i++) html += treeRowHtml(rows[i], prefix);
+      // The one row the page wrote ahead of this - the type being read, whose member links only
+      // the server can draw - found by the url the asset would give it, which an Overview row's
+      // never is. Its siblings are strung back around it, so the column keeps the asset's order.
+      // Matched without the query, where a swapped page has already put the mode flag.
+      var have = {};
+      container.querySelectorAll('.tree-link').forEach(function (link) {
+        have[(link.getAttribute('href') || '').split('?')[0]] = link.closest('.tree-type');
+      });
 
-      // Appended rather than written over: a category group already holds its Overview row, which
-      // is in the page so that it is there with the script off as well.
-      container.insertAdjacentHTML('beforeend', html);
+      var written = null;
+      var before = '';
+      var after = '';
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = have[prefix + rows[i][1] + '/'];
+        if (row) {
+          written = row;
+        } else if (written) {
+          after += treeRowHtml(rows[i], prefix, suffix);
+        } else {
+          before += treeRowHtml(rows[i], prefix, suffix);
+        }
+      }
+
+      if (written) {
+        written.insertAdjacentHTML('beforebegin', before);
+        written.insertAdjacentHTML('afterend', after);
+      } else {
+        // Appended rather than written over: a category group already holds its Overview row,
+        // which is in the page so that it is there with the script off as well.
+        container.insertAdjacentHTML('beforeend', before + after);
+      }
+
       container.removeAttribute('data-lazy');
     });
   }
@@ -2000,19 +2099,13 @@ const JS = `
   // the page it is written into is built once for every reader.
   if (!input.value) input.placeholder = input.placeholder + '  ' + shortcutHint;
 
-  // Namespace mode is a url shape, and the index is built once in the plain one. A result opened
-  // from a namespace-mode page therefore has the segment put back, so following it keeps the mode
-  // the way every other link on the page does. Empty everywhere else, where plain is the shape.
-  var nsInsert = input.getAttribute('data-ns') || '';
+  // Namespace mode is a url flag, and the index is built once in the plain shape. A result opened
+  // from a namespace-mode page therefore has the flag put back, so following it keeps the mode
+  // the way every other link on the page does. Absent everywhere else, where plain is the shape.
+  var nsResults = Boolean(input.getAttribute('data-ns'));
 
   function rowUrl(url) {
-    if (!nsInsert) return url;
-
-    // From the right, so a site served under a prefix that happens to contain /type/ is not cut
-    // at the prefix instead of at the page.
-    var at = url.lastIndexOf('/type/');
-    if (at < 0) at = url.lastIndexOf('/example/');
-    return at < 0 ? url : url.slice(0, at) + nsInsert + url.slice(at);
+    return nsResults ? nsUrl(url) : url;
   }
 
   var index = null;

@@ -116,11 +116,11 @@ function collectPages() {
     else readTreeAsset(url, result.body);
   }
 
-  // The namespace-mode copies too: the namespace pages link at them, so leaving them out would
-  // report every one of those links as broken.
+  // The namespace-mode stubs too: links written against the old url shape still point at them,
+  // and a stub that forwards to a page this site no longer has is exactly what this catches.
   const urls = site.renderer
     .sitemapUrls()
-    .concat(site.renderer.mirrorUrls())
+    .concat(site.renderer.stubUrls())
     .concat([site.routes.search()]);
   for (const url of urls) {
     const result = site.resolve(url.replace(/\?.*$/, ''), null, false);
@@ -244,26 +244,41 @@ for (const [target, count] of [...brokenLinks].slice(0, 20)) {
 let lazyGroups = 0;
 
 for (const [url, html] of pages) {
-  const source = (html.match(/data-tree-src="([^"]+)"/) || [])[1] || '';
-  const groups = [...html.matchAll(/data-lazy="([^"]*)"/g)].map((m) => unescapeAttr(m[1]));
-  if (groups.length === 0) continue;
+  // A page can carry more than one tree - its own, and the other mode's in a template - each
+  // naming its asset ahead of the groups it holds, so a group is matched against the nearest
+  // source above it.
+  const sources = new Map();
+  let source = '';
 
-  lazyGroups += groups.length;
+  for (const m of html.matchAll(/data-tree-src="([^"]+)"|data-lazy="([^"]*)"/g)) {
+    if (m[1] !== undefined) {
+      source = m[1];
+      continue;
+    }
 
-  // By name where the url does not match, which is what --dist on a site exported with --base
-  // gives: the files are written without the prefix their pages name them by.
-  const asset =
-    treeAssets.get(source) ||
-    treeAssets.get([...treeAssets.keys()].find((u) => u.endsWith(source.slice(source.lastIndexOf('/')))));
-
-  if (!asset) {
-    fail(`${url}: leaves ${groups.length} tree group(s) empty but names no readable tree asset`);
-    continue;
+    if (!sources.has(source)) sources.set(source, []);
+    sources.get(source).push(unescapeAttr(m[2]));
   }
 
-  for (const group of groups) {
-    if (!asset.groups || !asset.groups[group]) {
-      fail(`${url}: tree group '${group}' has no rows in ${source}`);
+  for (const [src, groups] of sources) {
+    lazyGroups += groups.length;
+
+    // By name where the url does not match, which is what --dist on a site exported with --base
+    // gives: the files are written without the prefix their pages name them by.
+    const asset = src
+      ? treeAssets.get(src) ||
+        treeAssets.get([...treeAssets.keys()].find((u) => u.endsWith(src.slice(src.lastIndexOf('/')))))
+      : null;
+
+    if (!asset) {
+      fail(`${url}: leaves ${groups.length} tree group(s) empty but names no readable tree asset`);
+      continue;
+    }
+
+    for (const group of groups) {
+      if (!asset.groups || !asset.groups[group]) {
+        fail(`${url}: tree group '${group}' has no rows in ${src}`);
+      }
     }
   }
 }

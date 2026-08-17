@@ -1376,7 +1376,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
    * lines, usually three of them saying the same thing in three languages, and putting that on the
    * type page would bury every member under it.
    */
-  example(slug, anchor, mode = '') {
+  example(slug, anchor) {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
@@ -1387,7 +1387,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
     // Only a file-backed example gets a page; anything else is on the card already.
     if (exampleFileNodes(member.docs).length === 0) return null;
 
-    return this.inMode(mode, () => this.exampleBody(type, assembly, member));
+    return this.exampleBody(type, assembly, member);
   }
 
   exampleBody(type, assembly, member) {
@@ -1474,7 +1474,6 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       title: `${type.name}.${name} examples`,
       description,
       canonical: this.baseRoutes.example(type.slug, member.anchor),
-      noindex: Boolean(this.routes.mode),
       breadcrumbs: [
         this.homeCrumb(),
         ...(type.namespace
@@ -1487,6 +1486,9 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       sidebar: this.browsingNamespaces
         ? this.namespaceTree(type.namespace || '', { activeType: type })
         : this.categoryTree(assembly, { activeType: type }),
+      sidebarAlt: this.browsingNamespaces
+        ? ''
+        : this.namespaceTree(type.namespace || '', { skeleton: true }),
       treeKey: this.browsingNamespaces ? 'namespaces' : slugify(assembly),
       assemblies: this.assemblyChoices(assembly),
       currentAssembly: assembly,
@@ -1498,7 +1500,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     });
   }
 
-  type(slug, mode = '') {
+  type(slug) {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
@@ -1513,7 +1515,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // types can answer to one bare name, and the assembly is what breaks the tie.
     this.docContext.selfAssembly = assembly;
     try {
-      return this.inMode(mode, () => this.typeBody(type, assembly));
+      return this.typeBody(type, assembly);
     } finally {
       this.docContext.selfType = null;
       this.docContext.selfAssembly = null;
@@ -1639,15 +1641,17 @@ ${this.seeAlsoHtml(type.docs)}
         ? `${type.name} ${type.kind} (${type.namespace})`
         : `${type.name} ${type.kind}`,
       description,
-      // The plain url, in both modes: the two pages are the same type read two ways, so only one of
-      // them is worth indexing and the marked one points at it.
+      // The plain url, in both modes: the flagged url is the same type read the other way, so only
+      // the one is worth indexing.
       canonical: this.baseRoutes.type(type.slug),
-      noindex: Boolean(this.routes.mode),
       breadcrumbs,
       body,
       sidebar: this.browsingNamespaces
         ? this.namespaceTree(type.namespace || '', { activeType: type })
         : this.categoryTree(assembly, { activeType: type }),
+      sidebarAlt: this.browsingNamespaces
+        ? ''
+        : this.namespaceTree(type.namespace || '', { skeleton: true }),
       treeKey: this.browsingNamespaces ? 'namespaces' : slugify(assembly),
       assemblies: this.assemblyChoices(assembly),
       currentAssembly: assembly,
@@ -2487,12 +2491,12 @@ ${this.seeAlsoHtml(type.docs)}
    * split: the arrow opens the group and the name goes to the page. One row cannot do both, and of
    * the two the arrow is the one a reader can find no other way.
    *
-   * A group the page is not standing in is written without the rows it holds, and marked with the
-   * name the browser puts them back under. Nothing is lost by leaving them out: the group is
-   * collapsed, so they are not drawn, and the only thing that opens it is the script that fills it.
-   * The rows are the whole weight of a tree - every page carried every type in the set, which on a
-   * few thousand types is most of what the page weighs - and they are the same rows on every page.
-   * See treeAsset.
+   * A group is written without the rows it holds, and marked with the name the browser puts them
+   * back under. The rows are the whole weight of a tree - every page once carried every type in
+   * its group, which in a group of hundreds was most of what every page in it weighed - and they
+   * are the same rows on every page, so they are sent once instead, as the tree asset. The one row
+   * still written is the type being read: its member links are drawn from the model, which the
+   * asset does not carry, and it is the row the reader is standing on. See treeAsset.
    *
    * @param {object} options  collapsed: start closed
    *                          icon: kind mark to draw before the label, which also plains the row
@@ -2644,20 +2648,19 @@ ${this.seeAlsoHtml(type.docs)}
     for (const group of groups) {
       const activeGroup = isActiveGroup(group);
 
-      // Only the group being read is written out; the browser fills the rest from the tree asset.
-      const rows = !activeGroup
+      // Only the type being read is written out - the tree asset cannot draw its member links -
+      // and the browser puts the rest of the group back around it.
+      const rows = !containsActiveType(group)
         ? ''
         : group.types
+            .filter(({ type }) => type.docId === activeType.docId)
             .map(({ type }) => {
-              const active = activeType !== null && type.docId === activeType.docId;
-
-              // Only the current type lists its members, so a large category stays readable.
-              const lists = active && this.treeListsMembers(type);
+              const lists = this.treeListsMembers(type);
               const inherited = lists ? this.inheritedMembers(type) : [];
               const children = lists ? this.treeMemberLinksHtml(type, inherited) : '';
 
               return this.treeTypeRow(type, {
-                active,
+                active: true,
                 children,
                 childrenId: `tc_${type.slug}`,
               });
@@ -2688,7 +2691,7 @@ ${this.seeAlsoHtml(type.docs)}
       // page is one click away with the script off as well as on.
       out += this.treeGroup(`cat_${group.category}`, group.category, overview + rows, {
         collapsed: !activeGroup,
-        lazy: !activeGroup,
+        lazy: true,
       });
     }
 
@@ -2754,8 +2757,11 @@ ${this.seeAlsoHtml(type.docs)}
    *
    * @param {string|null} activeNamespace  the namespace being read, expanded
    * @param {object} options   activeType: the type whose page this is, expanded to show members
+   *                           skeleton: a page's other-mode tree, written for the script to fill;
+   *                             the type's own row rides over from the tree the page shows, so
+   *                             writing it here as well would carry its member links twice
    */
-  namespaceTree(activeNamespace = null, { activeType = null } = {}) {
+  namespaceTree(activeNamespace = null, { activeType = null, skeleton = false } = {}) {
     const buckets = this.model.sortedNamespaces();
     let out = this.sidebarToolbar(
       'Namespaces',
@@ -2765,33 +2771,33 @@ ${this.seeAlsoHtml(type.docs)}
     for (const bucket of buckets) {
       const open = bucket.name === activeNamespace;
 
-      // Members are listed under the type being read and nowhere else, so a namespace the size of
-      // Rhino.Geometry stays a list of types. The namespaces that are not open are not written at
-      // all - the browser puts their rows back from the tree asset.
-      const rows = !open
-        ? ''
-        : bucket.types
-            .map(({ type }) => {
-              const active = activeType !== null && type.docId === activeType.docId;
-              const lists = active && this.treeListsMembers(type);
-              const inherited = lists ? this.inheritedMembers(type) : [];
+      // Only the type being read is written out - the tree asset cannot draw its member links -
+      // and the browser puts the rest of the namespace back around it.
+      const rows =
+        activeType === null || skeleton
+          ? ''
+          : bucket.types
+              .filter(({ type }) => type.docId === activeType.docId)
+              .map(({ type }) => {
+                const lists = this.treeListsMembers(type);
+                const inherited = lists ? this.inheritedMembers(type) : [];
 
-              return this.treeTypeRow(type, {
-                active,
-                children: lists ? this.treeMemberLinksHtml(type, inherited) : '',
-                childrenId: `tc_${type.slug}`,
-              });
-            })
-            .join('');
+                return this.treeTypeRow(type, {
+                  active: true,
+                  children: lists ? this.treeMemberLinksHtml(type, inherited) : '',
+                  childrenId: `tc_${type.slug}`,
+                });
+              })
+              .join('');
 
       out += this.treeGroup(slugify(bucket.name) || 'global', bucket.name || '(global)', rows, {
         collapsed: !open,
-        lazy: !open,
+        lazy: true,
         icon: 'namespace',
         href: this.routes.namespace(bucket.name),
         // Marked only where the namespace itself is what is being read: on a type's page the
         // highlight belongs to the type, and two of them would leave neither meaning anything.
-        active: open && activeType === null,
+        active: open && activeType === null && !skeleton,
       });
     }
 
@@ -2809,7 +2815,8 @@ ${this.seeAlsoHtml(type.docs)}
    *
    * Rows are positional, as the search index's are: a name, a slug and the mark to draw, with the
    * version a type arrived in only where it has one. Urls are a prefix and the slug rather than a
-   * url each, since every type page under one tree sits under the same path.
+   * url each, since every type page under one tree sits under the same path. The suffix is the
+   * mode flag the drawn rows carry, so following one keeps the reader in the mode they are in.
    *
    * @param {string} key  'namespaces', or an assembly's slug for one of the category trees
    * @returns {object|null} null when the key names no tree this site has
@@ -2818,8 +2825,8 @@ ${this.seeAlsoHtml(type.docs)}
     const groups = {};
 
     if (key === 'namespaces') {
-      // Namespace mode's urls carry its segment, and this tree is only ever rendered under it. A
-      // site with no authored pages has the one shape and no segment to insert.
+      // Namespace mode's urls carry its flag, and this tree is only ever rendered under it. A
+      // site with no authored pages has the one shape and no flag to append.
       const routes = this.baseRoutes.withMode(this.namespaceMode ? '' : NAMESPACE_MODE);
 
       for (const bucket of this.model.sortedNamespaces()) {
@@ -2828,7 +2835,7 @@ ${this.seeAlsoHtml(type.docs)}
         );
       }
 
-      return { schema: 1, prefix: routes.typePrefix(), groups };
+      return { schema: 1, prefix: routes.typePrefix(), suffix: routes.modeSuffix, groups };
     }
 
     const assemblyName = this.assemblyNames.find((name) => slugify(name) === key);
@@ -2838,7 +2845,7 @@ ${this.seeAlsoHtml(type.docs)}
       groups[`cat_${group.category}`] = group.types.map(({ type }) => this.treeAssetRow(type));
     }
 
-    return { schema: 1, prefix: this.baseRoutes.typePrefix(), groups };
+    return { schema: 1, prefix: this.baseRoutes.typePrefix(), suffix: '', groups };
   }
 
   /** One type as the tree asset carries it. Mirrors treeTypeRow, which draws the same row here. */
@@ -3082,7 +3089,7 @@ ${this.seeAlsoHtml(type.docs)}
           name: type.name,
           kind: type.kind,
           // Plain urls, always: the index is one asset shared by every page, and a namespace-mode
-          // page puts its own segment back on the row it opens. See modeInsert.
+          // page puts its own flag back on the row it opens. See modeSuffix.
           url: this.baseRoutes.type(type.slug),
           summary,
           // A type's declaration is the closest thing it has to a member's signature. Shown, not
@@ -3232,30 +3239,81 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * The namespace-mode copies of the pages that read both ways: types, and the example pages
-   * hanging off them.
+   * Where the namespace-mode copies of the type and example pages used to be published, one stub
+   * per page. Each is a few hundred bytes that send the reader to the plain url with the mode flag
+   * on - the copies themselves were half of what the export weighed.
    *
-   * Kept apart from sitemapUrls because they are the same content under a second url. They are not
-   * in the sitemap and they are not indexed - each names the plain url as its canonical - but the
-   * exporter still has to write them, since a static host cannot make one url render as another.
+   * Kept apart from sitemapUrls because they are not pages: not in the sitemap, not indexed, only
+   * standing where links written against the old shape still point.
    */
-  mirrorUrls() {
+  stubUrls() {
     if (this.namespaceMode) return [];
 
-    const routes = this.routes.withMode(NAMESPACE_MODE);
     const urls = [];
 
     for (const { type } of this.model.allTypes()) {
-      urls.push(routes.type(type.slug));
+      urls.push(this.routes.typeStub(type.slug));
 
       for (const member of type.members || []) {
         if (exampleFileNodes(member.docs).length > 0) {
-          urls.push(routes.example(type.slug, member.anchor));
+          urls.push(this.routes.exampleStub(type.slug, member.anchor));
         }
       }
     }
 
     return urls;
+  }
+
+  /**
+   * The page a namespace-mode url is answered with: the plain page's address with the flag on,
+   * written as a page because a file host cannot send a 301. The canonical is what a crawler
+   * follows, the refresh is what a reader with no javascript follows, and replace() keeps the old
+   * url out of the history so Back leaves the site instead of bouncing.
+   */
+  typeStubPage(slug) {
+    const found = this.model.typeBySlug(slug);
+    if (!found) return null;
+
+    const { type } = found;
+    return this.stubHtml(
+      `${type.name} ${type.kind}`,
+      this.baseRoutes.withMode(NAMESPACE_MODE).type(type.slug),
+      this.baseRoutes.type(type.slug)
+    );
+  }
+
+  /** As typeStubPage, for the example pages that hung off the copied types. */
+  exampleStubPage(slug, anchor) {
+    const found = this.model.typeBySlug(slug);
+    if (!found) return null;
+
+    const member = (found.type.members || []).find((m) => m.anchor === anchor);
+    if (!member || exampleFileNodes(member.docs).length === 0) return null;
+
+    return this.stubHtml(
+      `${found.type.name}.${memberDisplayName(member)} examples`,
+      this.baseRoutes.withMode(NAMESPACE_MODE).example(slug, anchor),
+      this.baseRoutes.example(slug, anchor)
+    );
+  }
+
+  stubHtml(title, target, canonical) {
+    const origin = this.siteUrl ? this.siteUrl.replace(/\/$/, '') : '';
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escape(title)}</title>
+<meta name="description" content="${attr(`${title} in the ${this.siteName} reference.`)}">
+<meta name="robots" content="noindex,follow">
+<link rel="canonical" href="${attr(origin + canonical)}">
+<meta http-equiv="refresh" content="0; url=${attr(target)}">
+<script>location.replace(${JSON.stringify(target)})</script>
+</head>
+<body><h1>${escape(title)}</h1><p>This page has moved to <a href="${attr(target)}">${escape(target)}</a>.</p></body>
+</html>
+`;
   }
 
   sitemap(lastModified) {

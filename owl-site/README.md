@@ -180,14 +180,15 @@ organised into categories, or nothing but the API.
 **With authored pages**, the sidebar is the assembly's categories and the reader is in *category
 mode*. Namespaces are still there — a type's breadcrumbs name the one it lives in — and following
 that crumb switches to *namespace mode*, where the sidebar is a group per namespace holding its
-types. The two modes are two sets of urls, so a page cannot be in both: `/type/x/` is the category
-one and `/namespace/type/x/` is the namespace one, and every link a page writes is written in its
-own mode. Clicking through the tree therefore stays where it was, a link can be handed to somebody
-else as the thing they will see, and none of it needs JavaScript or a stored preference.
+types. The mode rides on the url as a query flag, so a link can still be handed to somebody else
+as the thing they will see: `/type/x/` is the category reading and `/type/x/?ns` the namespace
+one, and every link a namespace-mode page writes carries the flag. The two readings are one file —
+the page carries the other mode's tree in an inert template and its script swaps it in when it
+sees the flag — which is what keeps the export from writing a full copy of every type page.
 
-The marked copies are the same content under a second url, so they carry `noindex` and name the
-plain url as their canonical, and they are absent from the sitemap. The exporter still writes them:
-a static host has no way to render one url as another.
+The urls the copies used to be published at, `/namespace/type/x/` and its example twin, are still
+written: each is a small stub that forwards to the plain page with the flag on, `noindex`, naming
+the plain url as its canonical, and absent from the sitemap.
 
 **Without authored pages** there is only namespace mode, so nothing is marked and the urls stay
 plain. Category pages do not exist, the landing page is the namespace index rather than a note
@@ -203,24 +204,25 @@ single group holding every type it has.
 | `/assembly/<assembly>/` | that assembly's page, its categories and namespaces |
 | `/namespace/<namespace>/` | types in a namespace |
 | `/category/<assembly>/<category>/` | category overview plus its types; only with authored pages |
-| `/type/<type>/` | one type, with its members as `#anchor` sections |
-| `/example/<type>/<member>/` | one member's examples, tabbed by language |
-| `/namespace/type/<type>/`, `/namespace/example/<type>/<member>/` | the same two pages in namespace mode; only on a site that has both modes |
+| `/type/<type>/` | one type, with its members as `#anchor` sections; `?ns` reads it in namespace mode |
+| `/example/<type>/<member>/` | one member's examples, tabbed by language; `?ns` as above |
+| `/namespace/type/<type>/`, `/namespace/example/<type>/<member>/` | stubs forwarding the urls namespace mode used to publish; only on a site that has both modes |
 | `/search/` | search; the dev server also answers `?q=` without JavaScript |
 | `/sitemap.xml`, `/robots.txt` | |
 
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
-JSON-LD, and every link is a real `href`. The site works with JavaScript disabled; JavaScript adds
-the theme toggle, the kind filter, the collapsible tree, the resizable sidebar, the assembly
-selector, the version picker where there is one, and client-side search. Syntax highlighting,
-diagrams and math all happen at render time and nothing loads from a CDN, so an exported site works
-with no network at all.
+JSON-LD, and every link is a real `href`. Every page reads with JavaScript disabled; JavaScript
+adds the theme toggle, the kind filter, the resizable sidebar, the assembly selector, the version
+picker where there is one, and client-side search, and is what fills the sidebar tree and switches
+the browse mode. Syntax highlighting, diagrams and math all happen at render time and nothing
+loads from a CDN, so an exported site works with no network at all.
 
-A page is written with only the tree group it is standing in; the rest arrive from
-`/assets/tree-<tree>.json`, once per read rather than once per page. Without JavaScript the reader
-keeps that group, every group's heading and every category's Overview link — which is what the
-groups were worth with the script off anyway, since only the script can open a collapsed one.
-On RhinoCommon this is the difference between a 944 MB export and a 226 MB one.
+A page is written with only the tree row it is standing on — the type being read, its member
+links under it; the rest arrive from `/assets/tree-<tree>.json`, once per read rather than once
+per page. Without JavaScript the reader keeps that row, every group's heading and every category's
+Overview link, and the category and namespace pages carry the full lists the tree would have
+shown. The tree's rows and the namespace-mode copies were each about half of what an export
+weighed, and both are gone from it.
 
 ## Layout
 

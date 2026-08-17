@@ -9,18 +9,23 @@
  */
 
 /**
- * The segment that marks the namespace-mode copy of a page.
+ * The path segment under which the namespace-mode copies of the type and example pages used to be
+ * published, kept so those urls still land: each is a stub that sends the reader to the plain page.
  *
  * A site with authored pages browses two ways - by category, which is what the prose is organised
  * around, and by namespace, which is the shape the compiler sees - and a type reads the same in
- * both. Which one a reader is in therefore cannot be a property of the reader, because a static
- * host serves one file per url and that file has to carry a sidebar: it is a property of the url.
- * '/type/x/' is the category-mode page and '/namespace/type/x/' is the namespace-mode one, and
- * every link a page writes is written in its own mode, so no click falls out of it.
+ * both. The mode rides on the url as a query flag: '/type/x/' is the category-mode page and
+ * '/type/x/?ns' the namespace-mode reading of it, and every link a namespace-mode page writes
+ * carries the flag, so no click falls out of it. A file host serves the two as one file - which is
+ * the point, a full copy of every type page cost more than the rest of the site - and the page
+ * swaps its own tree when it sees the flag. See the browse-mode section of assets.js.
  *
- * A site with no authored pages has only the one mode, so it needs no marker and gets none.
+ * A site with no authored pages has only the one mode, so it needs no flag and gets none.
  */
 const NAMESPACE_MODE = 'namespace';
+
+/** The query flag that marks the namespace-mode reading of a page. */
+const NS_FLAG = 'ns';
 
 /**
  * The directory Sandcastle put its topics in, and where owl writes the redirects that replace them.
@@ -76,13 +81,13 @@ class Routes {
   }
 
   /**
-   * What namespace mode puts in front of the pages it has a copy of, and '' outside it.
+   * What namespace mode hangs on the end of the pages it has a reading of, and '' outside it.
    *
    * Public because the browser needs it too: the search index is built once, in the plain shape,
-   * so a result opened from a namespace-mode page has the segment put back on the way out.
+   * so a result opened from a namespace-mode page has the flag put back on the way out.
    */
-  get modeInsert() {
-    return this.mode ? `/${this.mode}` : '';
+  get modeSuffix() {
+    return this.mode ? `?${NS_FLAG}` : '';
   }
 
   home() {
@@ -109,15 +114,16 @@ class Routes {
 
   /** Page url for a type, from the slug in the model. */
   type(typeSlug) {
-    return `${this.base}${this.modeInsert}/type/${typeSlug}/`;
+    return `${this.base}/type/${typeSlug}/${this.modeSuffix}`;
   }
 
   /**
    * What every type url under these routes begins with, for the tree asset: a slug and a slash
    * make the rest. One prefix rather than a url per row, since a tree holds thousands of them.
+   * The mode flag is not part of it - it rides behind the slash, as the asset's suffix.
    */
   typePrefix() {
-    return `${this.base}${this.modeInsert}/type/`;
+    return `${this.base}/type/`;
   }
 
   /** Url for a member, which lives as a fragment on its type's page. */
@@ -132,7 +138,20 @@ class Routes {
    * example is the normal case, so inlining them would bury the member list they belong to.
    */
   example(typeSlug, anchor) {
-    return `${this.base}${this.modeInsert}/example/${typeSlug}/${anchor}/`;
+    return `${this.base}/example/${typeSlug}/${anchor}/${this.modeSuffix}`;
+  }
+
+  /**
+   * Where the namespace-mode copy of a type page used to live, and where the stub that forwards
+   * its readers is written now. Mode-independent: the old urls had the one shape.
+   */
+  typeStub(typeSlug) {
+    return `${this.base}/${NAMESPACE_MODE}/type/${typeSlug}/`;
+  }
+
+  /** As typeStub, for the example pages that hung off the copied types. */
+  exampleStub(typeSlug, anchor) {
+    return `${this.base}/${NAMESPACE_MODE}/example/${typeSlug}/${anchor}/`;
   }
 
   /**
@@ -198,9 +217,9 @@ class Routes {
       return { kind: 'example', slug: parts[1], anchor: parts[2] };
     }
 
-    // Namespace mode's copies, before the namespace page itself. They cannot be confused with it -
-    // a namespace page is two segments and these are three and four - so a namespace really called
-    // Type still gets its page at /namespace/type/.
+    // The stubs standing where namespace mode's copies used to be, before the namespace page
+    // itself. They cannot be confused with it - a namespace page is two segments and these are
+    // three and four - so a namespace really called Type still gets its page at /namespace/type/.
     if (parts[0] === NAMESPACE_MODE && parts[1] === 'type' && parts.length === 3) {
       return { kind: 'type', slug: parts[2], mode: NAMESPACE_MODE };
     }
@@ -248,4 +267,4 @@ function matchSandcastle(parts) {
   return '';
 }
 
-module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, SANDCASTLE_DIR };
+module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, NS_FLAG, SANDCASTLE_DIR };

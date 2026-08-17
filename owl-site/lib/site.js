@@ -227,12 +227,18 @@ class Site {
         return this.asset(route.name);
 
       case 'type': {
-        const html = this.renderer.type(route.slug, route.mode);
+        // A mode-marked url is where the namespace-mode copy used to be: a stub now, sending the
+        // reader to the one page with the mode flag on.
+        const html = route.mode
+          ? this.renderer.typeStubPage(route.slug)
+          : this.renderer.type(route.slug);
         return html ? this.html(html) : this.notFound(pathname);
       }
 
       case 'example': {
-        const html = this.renderer.example(route.slug, route.anchor, route.mode);
+        const html = route.mode
+          ? this.renderer.exampleStubPage(route.slug, route.anchor)
+          : this.renderer.example(route.slug, route.anchor);
         return html ? this.html(html) : this.notFound(pathname);
       }
 

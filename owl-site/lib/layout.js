@@ -26,6 +26,9 @@ const DEFAULT_SITE_NAME = 'API Reference';
  *   breadcrumbs  [{label, url}] innermost last
  *   body         main content HTML
  *   sidebar      optional sidebar HTML (renders the tree column)
+ *   sidebarAlt   the namespace tree this page swaps in when its url carries the mode flag, or ''.
+ *                Written into an inert template: a reader in the other mode is the exception, and
+ *                a second tree drawn into the page proper would cost every reader its weight
  *   treeKey      identifies the tree, so its expanded groups are remembered per shape rather
  *                than smeared across every assembly's
  *   treeSrc      where the rows this page left out of its tree are fetched from, or '' for a
@@ -54,6 +57,7 @@ function page(options) {
     breadcrumbs = [],
     body,
     sidebar = null,
+    sidebarAlt = '',
     treeKey = '',
     treeSrc = '',
     filterBar = null,
@@ -140,13 +144,14 @@ ${icons.spriteHtml()}
          The scope is the slug, not the name: the index keys its assemblies by slug, and a name here
          matched none of them, so every page but the search page quietly searched the whole API. -->
     <!-- data-ns is what keeps a result opened from a namespace-mode page in that mode: the index is
-         built once in the plain shape, and this is the segment put back on the row's url. Absent on
-         every other page, where the plain shape is the right one. -->
+         built once in the plain shape, and this is the flag put back on the row's url. Absent on
+         every other page, where the plain shape is the right one; a page that swaps its tree for
+         the mode sets it on itself. -->
     <input type="search" id="search" name="q" placeholder="Search"
            value="${attr(currentQuery)}" autocomplete="off"
            data-index-url="${attr(routes.asset('search.json'))}"
            data-scope="${attr(currentAssembly ? slugify(currentAssembly) : '')}"${
-             routes.modeInsert ? `\n           data-ns="${attr(routes.modeInsert)}"` : ''
+             routes.modeSuffix ? `\n           data-ns="${attr(routes.modeSuffix)}"` : ''
            }>
     ${
       // Carries the assembly being read into the search, so the box searches what the selector
@@ -182,7 +187,15 @@ ${
       }>
 ${sidebar}
   </aside>
-  <div class="resize-handle" id="resize-handle" role="separator" aria-orientation="vertical"></div>`
+${
+  // Inert until the script adopts it, so the second tree costs no drawing and no duplicate ids.
+  sidebarAlt
+    ? `  <template id="ns-tree" data-tree="namespaces" data-tree-src="${attr(routes.asset('tree-namespaces.json'))}">
+${sidebarAlt}
+  </template>
+`
+    : ''
+}  <div class="resize-handle" id="resize-handle" role="separator" aria-orientation="vertical"></div>`
     : ''
 }
   <main class="main-content" id="main">
