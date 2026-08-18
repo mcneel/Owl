@@ -1313,16 +1313,26 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
     const bucket = this.model.categories.get(`${assemblyName}/${categoryName}`);
     if (!bucket) return null;
 
+    // The authored page opens with its own heading, so writing a title over it would say the
+    // category's name twice. The title only steps in when there is nothing authored to open with.
     const overview = bucket.doc ? markdown.render(bucket.doc.markdown, this.markdownContext) : '';
 
     const body = `
-<div class="page-head">
+${
+  overview
+    ? `<div class="cat-doc">${overview}</div>`
+    : `<div class="page-head">
   <h1 class="page-title">${escape(categoryName)}</h1>
-</div>
+</div>`
+}
 
 <section class="ns-section">
-${overview ? `<div class="cat-doc">${overview}</div>` : ''}
   <h2 class="ns-heading">Types in this category</h2>
+  ${
+    // The filter row sits with the list it narrows rather than in the chrome above the prose,
+    // which it has no effect on.
+    filterBar({ kinds: this.filterLettersOf(bucket.types, (e) => e.type.kind) })
+  }
   ${
     // No assembly badge: every type here is in the same one, and the full name under each card
     // already carries the namespace, which is the only part that differs.
@@ -1342,10 +1352,10 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
       canonical: this.routes.category(assemblyName, categoryName),
       breadcrumbs: [
         { label: assemblyName, url: this.routes.assembly(assemblyName), icon: 'assembly' },
-        { label: categoryName, url: this.routes.category(assemblyName, categoryName) },
+        // 'Overview' keeps the trail's endpoint from reading as a type named after its category.
+        { label: `${categoryName} Overview`, url: this.routes.category(assemblyName, categoryName) },
       ],
       body,
-      filterBar: filterBar({ kinds: this.filterLettersOf(bucket.types, (e) => e.type.kind) }),
       sidebar: this.categoryTree(assemblyName, { activeCategory: categoryName }),
       treeKey: slugify(assemblyName),
       assemblies: this.assemblyChoices(assemblyName),
@@ -2644,7 +2654,7 @@ ${this.seeAlsoHtml(type.docs)}
    * The bar pinned over the tree: a title saying what the column's groups are, and one button that
    * collapses every group at once.
    *
-   * The title names the tree's vocabulary - Topics, Namespaces, Assemblies - which is the one
+   * The title names the tree's vocabulary - Categories, Namespaces, Assemblies - which is the one
    * thing the rows below cannot say for themselves, since a list of names does not say what kind
    * of name it lists.
    *
@@ -2694,7 +2704,7 @@ ${this.seeAlsoHtml(type.docs)}
     const isActiveGroup = (group) =>
       group.category === activeCategory || containsActiveType(group);
 
-    let out = this.sidebarToolbar('Topics', groups.some(isActiveGroup));
+    let out = this.sidebarToolbar('Categories', groups.some(isActiveGroup));
 
     // The assembly's own page is the only thing in this tree with nothing above it, so without a
     // row of its own there is no way back to the prose once you have clicked into a type. Marked

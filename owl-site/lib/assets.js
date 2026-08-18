@@ -742,6 +742,8 @@ a.chip:hover { color: var(--flash); }
 /* The landing page's authored prose: the same typography, without the card around it. */
 .cat-doc.site-intro { background: none; border: none; border-radius: 0; padding: 0; margin-bottom: 0; }
 .tree-cat-doc-link { font-style: italic; }
+/* The active row is already marked; italics on top of that reads as a second, unrelated state. */
+.tree-cat-doc-link.active { font-style: normal; }
 
 /* ---- Diagrams ---- */
 /* Drawn by d2 at build time, so what lands here is an svg carrying its own palette for both
@@ -1816,6 +1818,20 @@ const JS = `
       var arrow = toggleButton.querySelector('.tree-arrow');
       if (children) children.classList.toggle('collapsed');
       if (arrow) arrow.classList.toggle('collapsed');
+    });
+  });
+
+  // A link naming the page already being read has nowhere to go, so its click stands in for the
+  // arrow beside it rather than reloading the page. Active rows with nothing to open keep the
+  // reload, which at least reads as the click landing.
+  document.querySelectorAll('.tree-link.active, .tree-ns-link.active').forEach(function (link) {
+    var label = link.closest('.tree-type-label');
+    var toggle = label && label.querySelector('.tree-toggle, .tree-ns-toggle');
+    if (!toggle) return;
+
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+      toggle.click();
     });
   });
 
