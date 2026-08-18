@@ -633,18 +633,6 @@ class Renderer {
   }
 
   /**
-   * True when a member offers no way to write it: a property with no setter, or a readonly field.
-   *
-   * What the sort order puts first; the declaration says the same thing in the member's own
-   * spelling - '{ get; }', or the readonly keyword.
-   */
-  isReadOnlyMember(member) {
-    const accessors = member.accessors;
-    if (accessors && (accessors.get || accessors.set)) return !accessors.set;
-    return member.kind === 'field' && Boolean(member.isReadOnly);
-  }
-
-  /**
    * The mark for one API's kind: a row's, a card's, or the one at the head of its own page.
    *
    * A drawing everywhere, rather than the letter a row used to wear and the word a title used to. A
@@ -1675,10 +1663,9 @@ ${this.seeAlsoHtml(type.docs)}
    * Members by kind, then name.
    *
    * @param {object} options
-   *   pageOrder   order the way the page reads rather than the way the tree does: readonly members
-   *     ahead of writable ones, and enum values by their value. The tree does neither, because it
-   *     shows neither the badge nor the value, so a break in the alphabet there has no visible
-   *     cause and just looks mis-sorted.
+   *   pageOrder   order the way the page reads rather than the way the tree does: enum values by
+   *     their value. The tree keeps the alphabet, because it does not show the value, so a break
+   *     in the alphabet there has no visible cause and just looks mis-sorted.
    *   staticFirst  a kind's statics at the head of its run. The tree does this and the page does
    *     not: the page states every member's modifiers on the card, where the alphabet is the only
    *     order that helps, while the tree is a column of bare names in which what is called on the
@@ -1711,10 +1698,6 @@ ${this.seeAlsoHtml(type.docs)}
             return valueA < valueB ? -1 : 1;
           }
         }
-
-        const readOnlyA = this.isReadOnlyMember(a) ? 0 : 1;
-        const readOnlyB = this.isReadOnlyMember(b) ? 0 : 1;
-        if (readOnlyA !== readOnlyB) return readOnlyA - readOnlyB;
       }
 
       return a.name.localeCompare(b.name) || a.signature.localeCompare(b.signature);
