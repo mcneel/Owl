@@ -235,9 +235,10 @@ sealed class ApiMember
   public bool IsExtensionMethod { get; set; }
 
   /// <summary>
-  /// Set for explicit interface implementations. Comes straight from
-  /// ExplicitInterfaceImplementations rather than being parsed back out of a
-  /// doc id.
+  /// Set for explicit interface implementations - members visible only through
+  /// the interface, never a visible VB member with an Implements clause. Comes
+  /// straight from ExplicitInterfaceImplementations rather than being parsed
+  /// back out of a doc id.
   /// </summary>
   public TypeRef? ExplicitInterface { get; set; }
 

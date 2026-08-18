@@ -648,7 +648,7 @@ sealed class ApiBuilder
     }
 
     // Straight from the symbol, so no '#'-separator parsing is needed.
-    target.ExplicitInterface = ExplicitInterfaceRef(method.ExplicitInterfaceImplementations);
+    target.ExplicitInterface = ExplicitInterfaceRef(method);
 
     target.Implements = CollectImplements(method);
     target.Overrides = DocIds.Of(method.OverriddenMethod);
@@ -675,7 +675,7 @@ sealed class ApiBuilder
 
     target.IsReadOnly = property.IsReadOnly;
 
-    target.ExplicitInterface = ExplicitInterfaceRef(property.ExplicitInterfaceImplementations);
+    target.ExplicitInterface = ExplicitInterfaceRef(property);
 
     target.Implements = CollectImplements(property);
     target.Overrides = DocIds.Of(property.OverriddenProperty);
@@ -702,7 +702,7 @@ sealed class ApiBuilder
     target.ReturnType = BuildTypeRef(evt.Type);
     target.Signature = $"{target.ReturnType.Display} {evt.Name}";
 
-    target.ExplicitInterface = ExplicitInterfaceRef(evt.ExplicitInterfaceImplementations);
+    target.ExplicitInterface = ExplicitInterfaceRef(evt);
 
     target.Implements = CollectImplements(evt);
     target.Overrides = DocIds.Of(evt.OverriddenEvent);
@@ -762,11 +762,19 @@ sealed class ApiBuilder
   /// The interface an explicit implementation's heading names: the first one
   /// the model may name, so an internal contract satisfied alongside a public
   /// one does not take the heading. Null when there is nothing to name, which
-  /// leaves the member reading as an ordinary one.
+  /// leaves the member reading as an ordinary one. VB populates
+  /// ExplicitInterfaceImplementations for every Implements clause, so a member
+  /// only counts as explicit when the interface is its sole route into the
+  /// docs - the same test that let a non-visible member through the filter.
   /// </summary>
-  TypeRef? ExplicitInterfaceRef(IEnumerable<ISymbol> implementations)
+  TypeRef? ExplicitInterfaceRef(ISymbol member)
   {
-    foreach (ISymbol impl in implementations)
+    if (IsVisibleAccessibility(member.DeclaredAccessibility))
+    {
+      return null;
+    }
+
+    foreach (ISymbol impl in ExplicitImplementations(member))
     {
       if (IsPresentableReference(impl.ContainingType))
       {
@@ -794,10 +802,12 @@ sealed class ApiBuilder
   /// <summary>
   /// Explicit interface implementations are private at the symbol level but
   /// public in effect; report them as public so the site does not hide them.
+  /// Visible members keep their own accessibility - a VB Implements clause on
+  /// a public or protected member does not make it explicit.
   /// </summary>
   static Accessibility EffectiveAccessibility(ISymbol member)
   {
-    return ExplicitImplementations(member).Length > 0
+    return !IsVisibleAccessibility(member.DeclaredAccessibility) && ExplicitImplementations(member).Length > 0
         ? Accessibility.Public
         : member.DeclaredAccessibility;
   }
