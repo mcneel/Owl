@@ -1572,7 +1572,6 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // rows, since a run of headings and rules in a header reads as several blocks rather than one.
     const context = [
       this.obsoleteHtml(type.obsolete),
-      this.relationsHtml(type),
       this.typeParamsHtml(type),
       this.delegateHtml(type, assembly),
       type.docs && type.docs.example
@@ -1590,6 +1589,10 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
         ? `<div class="remarks"><strong>Remarks:</strong> ${docnodes.render(type.docs.remarks, this.docContext)}</div>`
         : '';
 
+    // Built before the body because it lands in two places: the arrow rides the title row and the
+    // tree it opens hangs under it.
+    const derived = this.derivedTreeHtml(type);
+
     // Name, declaration, summary - the order a search result reads in, so arriving from one lands on
     // the same shape rather than a rearranged version of it. No namespace-qualified name under them:
     // the breadcrumbs above say where the type lives and are the way to the rest of it, so a second
@@ -1604,7 +1607,8 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <article>
 <div class="page-head sticky-head">
   <div class="page-head-brief">
-    <div class="page-title-row"><h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
+    <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
+    ${derived ? derived.tree : ''}
     <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly)}</div>
     ${
       summaryHtml
@@ -1865,39 +1869,107 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   /**
-   * What derives from the type, as a labelled row.
+   * What derives from the type: an arrow on the title, and the tree of descendants it opens.
    *
-   * A row rather than a group with a heading and a rule over it: it sits in the page head beside
-   * the name and the declaration, where a heading the weight of a section would break the block in
-   * two. The row says what it is on the left, the way a member card labels its parameters.
+   * Returns null when nothing documented derives, or { toggle, tree } - the arrow for the title
+   * row and the collapsed tree that goes under it.
+   *
+   * A tree behind an arrow rather than the labelled 'Derived:' row this used to be. The row spent
+   * six lines of the head on a hub type's direct subclasses and still only said the first hop:
+   * one such type here has sixteen direct subclasses hiding forty-one descendants, and the row
+   * gave the child that carries a quarter of them the same weight as a leaf. Closed, the hierarchy
+   * costs the head nothing; open, a branch wears the same arrow and opens the same way, as deep
+   * as the model goes.
+   *
+   * No 'Inheritance:' row alongside it: the chain runs into the page title, where it is read
+   * against the name it belongs to. No 'Implements:' row either - the declaration already spells
+   * out every interface, and the tap-a-name links live there. The arrow is the third relation,
+   * pointing the one way the head did not.
+   *
+   * A branch skips anything already on the path above it. Class and interface hierarchies cannot
+   * cycle, so the guard only matters for a model that lies - but a build must not hang on one.
+   * Across branches a type may appear twice on an interface's page, under the interface and under
+   * a base class that also declares it; both placements are true, so neither is suppressed.
    */
-  relationsHtml(type) {
-    const rows = [];
+  derivedTreeHtml(type) {
+    let branches = 0;
+    let listed = 0;
 
-    // No 'Inheritance:' row: the chain runs into the page title, where it is read against the name
-    // it belongs to rather than a second time further down. No 'Implements:' row either - the
-    // declaration above already spells out every interface, and the tap-a-name links live there.
+    const arrowButton = (target, name) =>
+      `<button type="button" class="derived-toggle" data-target="${attr(target)}" ` +
+      `aria-expanded="false" title="Show or hide types derived from ${attr(name)}">` +
+      this.treeArrowHtml(true) +
+      '</button>';
 
-    if (type.derivedTypes && type.derivedTypes.length > 0) {
-      const links = type.derivedTypes
-        .map((docId) => {
-          const entry = this.model.entry(docId);
-          return entry ? this.typeRefHtml({ id: docId, display: entry.name }) : null;
+    const rowsHtml = (parent, path) => {
+      const kids = (parent.derivedTypes || [])
+        .filter((docId) => !path.has(docId))
+        .map((docId) => this.model.typeByDocId(docId))
+        .filter(Boolean)
+        .map((found) => found.type)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      return kids
+        .map((kid) => {
+          listed += 1;
+          const inner = rowsHtml(kid, new Set(path).add(kid.docId));
+
+          let control = '<span class="tree-arrow-spacer"></span>';
+          let sub = '';
+          if (inner) {
+            branches += 1;
+            const id = `derived-branch-${branches}`;
+            control = arrowButton(id, kid.name);
+            sub = `<ul id="${id}" class="collapsed">${inner}</ul>`;
+          }
+
+          // The sidebar's row boxes, so the two trees read as one drawing; only the anchor
+          // differs, staying on the shared cref path and dressed as a tree link by the sheet.
+          return (
+            `<li><div class="tree-type-label">${control}` +
+            `<span class="tree-link">${this.kindIconHtml(kid.kind)}` +
+            this.typeRefHtml({ id: kid.docId, display: kid.name }) +
+            `</span></div>${sub}</li>`
+          );
         })
-        .filter(Boolean);
+        .join('');
+    };
 
-      if (links.length > 0) {
-        // Comma-separated: one type can be derived from by 75 others here, and a run of names with
-        // only spaces between them reads as one long name rather than as a list.
-        rows.push(
-          '<div class="section"><span class="section-label">Derived:</span> ' +
-            links.join(', ') +
-            '</div>'
-        );
-      }
-    }
+    const rows = rowsHtml(type, new Set([type.docId]));
+    if (!rows) return null;
 
-    return rows.join('');
+    // A way to narrow the tree, but only where there is a tree to narrow: over ten rows a name is
+    // found by typing it, under that it is found by looking, and a box on every small tree is a
+    // control to ignore. The empty note travels with the box - only a filter can empty the list.
+    const filter =
+      listed > 10
+        ? '<div class="derived-filter-row"><input type="search" class="derived-filter" ' +
+          'placeholder="Filter Derived Types" aria-label="Filter derived types" autocomplete="off">' +
+          // The funnel crossed out - the same mark undone, not a third drawing; hidden behind
+          // the funnel until there is something to clear.
+          '<button type="button" class="derived-filter-clear" aria-label="Clear filter">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+          '<path fill="currentColor" d="M19.79 5.61A.998.998 0 0 0 19 4H6.83l7.97 7.97zM2.81 ' +
+          '2.81L1.39 4.22L10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-2.17l5.78 5.78l1.41-1.41z"/>' +
+          '</svg></button>' +
+          '<svg class="derived-filter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+          '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
+          'd="M4.25,5.61C6.27,8.2 10,13 10,13L10,19C10,19.55 10.45,20 11,20L13,20C13.55,20 ' +
+          '14,19.55 14,19L14,13C14,13 17.72,8.2 19.74,5.61C19.876,5.435 19.95,5.22 19.95,4.998C' +
+          '19.95,4.451 19.499,4 18.952,4C18.951,4 18.951,4 18.95,4L5.04,4C4.21,4 3.74,4.95 ' +
+          '4.25,5.61Z"/>' +
+          '</svg></div>'
+        : '';
+    const empty = filter ? '<div class="tree-empty" hidden>Nothing matches.</div>' : '';
+
+    // The rows scroll in a box of their own, under the filter rather than around it, so their
+    // scrollbar is theirs alone and never runs over the field.
+    return {
+      toggle: arrowButton('derived-tree', type.name),
+      tree:
+        `<div class="derived-tree collapsed" id="derived-tree">${filter}` +
+        `<div class="derived-scroll"><ul>${rows}</ul>${empty}</div></div>`,
+    };
   }
 
   typeParamsHtml(type) {

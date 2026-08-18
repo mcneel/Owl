@@ -216,7 +216,15 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
    first query sits through. The ring takes the magnifier's exact footprint and ink, so the swap
    reads as the same mark set turning. Held invisible for the first beat: a cached index answers
    faster than a flash can be read, and the ring is for the wait a reader can feel. */
+/* One mark at a time in the magnifier's corner: the magnifier while the box is empty, the clear
+   mark while it holds anything, and the spinner over either while the index loads. */
+.nav-search-clear { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); display: none; appearance: none; border: none; background: none; padding: 0; width: 1.05rem; height: 1.05rem; cursor: pointer; color: var(--nav-dim); }
+.nav-search-clear:hover { color: var(--nav-fg); }
+.nav-search-clear svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+header form[role="search"].filled .nav-search-icon { display: none; }
+header form[role="search"].filled .nav-search-clear { display: block; }
 header form[role="search"].index-loading .nav-search-icon { visibility: hidden; }
+header form[role="search"].index-loading .nav-search-clear { visibility: hidden; }
 header form[role="search"].index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
 @keyframes search-spin { to { transform: rotate(360deg); } }
 @keyframes search-spin-in { to { opacity: 1; } }
@@ -472,7 +480,9 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .type-children { margin-top: 0.4rem; }
 
 /* ---- Breadcrumbs ---- */
-.breadcrumbs { font-size: 0.78rem; color: var(--text4); margin-bottom: 1rem; }
+/* Nudged left onto the same optical edge as the title row under them, whose arrow spends its
+   drawing's whitespace the same way. */
+.breadcrumbs { font-size: 0.78rem; color: var(--text4); margin-bottom: 1rem; margin-left: -0.25rem; }
 .breadcrumbs ol { list-style: none; display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0; }
 .breadcrumbs a { color: var(--text3); text-decoration: none; }
 .breadcrumbs a:hover { color: var(--flash); }
@@ -534,6 +544,73 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    rest are a name and a small word after it, which reads as the line it is. */
 .page-title:has(.kind-icon) { display: flex; align-items: center; gap: 0.5rem; }
 .page-title .kind-icon { width: 1.75rem; height: 1.75rem; }
+/* ---- Page head: the derived tree ---- */
+/* The arrow in front of the name, and the hierarchy it opens. One button shape for the title's
+   arrow and every branch inside the tree: each is the tree-arrow in a bare button, so a branch
+   opens with the same gesture that opened the tree. */
+.derived-toggle { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 0; cursor: pointer; color: var(--text3); flex-shrink: 0; }
+.derived-toggle:hover { color: var(--flash); }
+/* At the title's scale rather than the tree's: it sits against a 1.75rem drawing and 1.45rem
+   letters, where the 0.85rem arrow read as a speck. The negative margins spend the whitespace the
+   drawing carries inside its own box: the left puts the glyph's edge on the head's, the right
+   closes it up on the kind drawing without giving up the row's gap everywhere else. */
+.page-title-row > .derived-toggle { margin: 0 -0.3rem 0 -0.42rem; }
+.page-title-row > .derived-toggle .tree-arrow { width: 1.25rem; height: 1.25rem; }
+/* Stroked over its own fill: a bolder cut of the same chevron, not a second drawing, so the
+   title's arrow and the branch arrows still turn the same shape. */
+.page-title-row > .derived-toggle .tree-arrow svg { width: 1.1rem; height: 1.1rem; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.derived-tree { margin-top: 0.4rem; }
+/* Capped and scrolling in place past the cap, on the intro's reasoning: the tree lives in the
+   pinned brief, and a hierarchy of a hundred types opened out would otherwise stand a headerful
+   of names over the list the reader came to read. The box holds the rows alone - the filter sits
+   above it rather than inside it, so the rows' scrollbar stops short of the field. */
+.derived-scroll { max-height: 19.5rem; overflow: auto; scrollbar-width: thin; }
+/* Both closed shapes named here: 'collapsed' hides nothing on its own anywhere in this sheet,
+   each tree scopes its own reading of it. */
+.derived-tree.collapsed, .derived-tree ul.collapsed { display: none; }
+.derived-tree ul { list-style: none; margin: 0; padding: 0; }
+/* The rows are the sidebar's - the same label and link boxes at the same sizes - so the two trees
+   read as one drawing. Only the ground differs: the sidebar's bg2 is its column's, and inside the
+   head's card it would stripe every row. The arrows take the row's ink for the same reason. */
+.derived-tree .tree-type-label { background: none; }
+.derived-tree .derived-toggle { color: inherit; }
+/* The shared link path's anchor, dressed as a tree row's name the way the chain dresses it: the
+   row's own ink and letters, and clipped rather than wrapped - a deep row has already spent the
+   width its depth costs. */
+.derived-tree .see-ref { font-family: inherit; color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* One nesting step is one arrow column. The line hangs a branch's children off the arrow that
+   opened them, on the arrow's centre - the label's 0.75rem edge plus half the 1rem arrow - and
+   that number holds at every depth, because each list starts where its parent row did. */
+.derived-tree ul ul { position: relative; padding-left: 1rem; }
+.derived-tree ul ul::before { content: ''; position: absolute; left: 1.25rem; top: 0; bottom: 0; border-left: 1px solid var(--border2); }
+/* Above the scrolling box rather than pinned inside it - what a sticky row cannot do is get out
+   of the way of the box's own scrollbar. Positioned for the two corner marks. The field is the
+   header search's, at the tree's scale and the tree's width: borderless, its mark at the right,
+   and on the focus grey at rest - the caret comes and goes without the ground jumping under it. */
+.derived-filter-row { position: relative; padding: 0 0 0.3rem; }
+.derived-filter { display: block; width: 100%; padding: 0.38rem 2rem 0.38rem 0.6rem; font: inherit; font-size: 0.8rem; color: var(--text); background: var(--bg3); border: none; border-radius: 4px; outline: none; }
+.derived-filter::placeholder { color: var(--text4); }
+/* One corner, two marks: the funnel names the field while it is empty, and the moment there is
+   anything to clear, the same funnel crossed out clears it - one drawing in one box, so the
+   corner never shifts under the swap. */
+.derived-filter-row.filled .derived-filter-icon { display: none; }
+.derived-filter-clear { display: none; position: absolute; right: 0.55rem; top: calc(50% - 0.15rem); transform: translateY(-50%); appearance: none; border: none; background: none; cursor: pointer; padding: 0; width: 1rem; height: 1rem; color: var(--text3); }
+.derived-filter-row.filled .derived-filter-clear { display: inline-flex; align-items: center; justify-content: center; }
+.derived-filter-clear:hover { color: var(--text); }
+.derived-filter-clear svg { display: block; width: 1rem; height: 1rem; }
+/* The site-wide ring outranks a class, so it is declined at its own game: the header search
+   escapes it by id, this field by doubling up. */
+.derived-filter:focus-visible { outline: none; }
+/* The corner the mark draws in is spoken for, so the native clear button goes the way the header
+   search sends it. */
+.derived-filter::-webkit-search-cancel-button, .derived-filter::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+/* Centred on the field, not the row: the row's bottom padding pulls its middle 0.15rem low. */
+.derived-filter-icon { position: absolute; right: 0.55rem; top: calc(50% - 0.15rem); transform: translateY(-50%); width: 1rem; height: 1rem; pointer-events: none; color: var(--text4); }
+/* While a query is typed the tree answers it alone: every branch is held open with its arrow
+   turned to say so, and the script leaves standing only the rows that match or lead to one. The
+   collapsed state under this is untouched, so clearing the box hands back the tree as it was. */
+.derived-tree.filtering ul.collapsed { display: block; }
+.derived-tree.filtering .tree-arrow.collapsed { transform: none; }
 .page-subtitle { font-family: monospace; font-size: 0.76rem; color: var(--fullname); margin-top: 0.3rem; word-break: break-all; }
 .page-intro { color: var(--text2); font-size: 0.93rem; line-height: 1.6; margin-top: 0.6rem; }
 .page-head { margin-bottom: 1.6rem; }
@@ -1941,6 +2018,109 @@ const JS = `
     window.addEventListener('resize', syncIntroToggle);
   }
 
+  // ---- Page head: the derived tree ----
+  // The title's arrow and every branch arrow inside the tree share this: each opens the list its
+  // data-target names and turns itself. Opening one changes the head's height under the same cap
+  // the description answers to, so the same two corrections follow - the pinned offsets are
+  // re-measured, and the column is held where it was.
+  var derivedButtons = document.querySelectorAll('.derived-toggle');
+
+  if (derivedButtons.length > 0) {
+    var derivedScroller = document.querySelector('.main-content');
+    var derivedTree = document.getElementById('derived-tree');
+    var derivedFilter = derivedTree && derivedTree.querySelector('.derived-filter');
+
+    derivedButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        var target = document.getElementById(button.getAttribute('data-target'));
+        if (!target) return;
+
+        var top = derivedScroller ? derivedScroller.scrollTop : 0;
+        var holdScroll = function () {
+          if (derivedScroller && derivedScroller.scrollTop !== top) derivedScroller.scrollTop = top;
+        };
+
+        var open = !target.classList.toggle('collapsed');
+        var arrow = button.querySelector('.tree-arrow');
+        if (arrow) arrow.classList.toggle('collapsed', !open);
+        button.setAttribute('aria-expanded', String(open));
+
+        // The title's arrow, alone, writes itself into the url - so an open tree survives a
+        // reload and travels in a copied link. Through the same merged replaceState the filter
+        // bar writes with: opening a tree adjusts the view, it is not a place of its own. The
+        // branches stay out of it; the link says 'arrive with the tree open', not which twigs.
+        if (target === derivedTree) {
+          setParam('derived', open ? '1' : '');
+          // Opened to be searched, as often as to be read: the caret lands in the filter, but
+          // without the scroll that focus drags along - the field is already on screen, pinned
+          // at the top of the tree.
+          if (open && derivedFilter) derivedFilter.focus({ preventScroll: true });
+        }
+
+        measureSticky();
+        holdScroll();
+        requestAnimationFrame(holdScroll);
+      });
+    });
+
+    if (derivedFilter) {
+      var derivedEmpty = derivedTree.querySelector('.tree-empty');
+      var derivedRow = derivedTree.querySelector('.derived-filter-row');
+      var derivedClear = derivedTree.querySelector('.derived-filter-clear');
+
+      var applyDerivedFilter = function () {
+        var q = derivedFilter.value.trim().toLowerCase();
+        derivedTree.classList.toggle('filtering', q.length > 0);
+        // The raw value, not the query: spaces are nothing to filter by but something to clear.
+        if (derivedRow) derivedRow.classList.toggle('filled', derivedFilter.value.length > 0);
+
+        // A match keeps its whole line of descent: ancestors, so the tree still says where it
+        // sits, and descendants, because asking for a branch is asking for what grows on it.
+        // The sheet holds every branch open meanwhile and leaves the collapsed marks alone, so
+        // clearing the box hands back the tree exactly as it was.
+        var keep = function (row, above) {
+          var link = row.querySelector(':scope > .tree-type-label .tree-link');
+          var here = above || Boolean(link && link.textContent.toLowerCase().indexOf(q) >= 0);
+
+          var below = false;
+          row.querySelectorAll(':scope > ul > li').forEach(function (sub) {
+            if (keep(sub, here)) below = true;
+          });
+
+          var kept = here || below;
+          row.hidden = q.length > 0 && !kept;
+          return kept;
+        };
+
+        var any = false;
+        derivedTree.querySelectorAll('.derived-scroll > ul > li').forEach(function (row) {
+          if (keep(row, false)) any = true;
+        });
+
+        if (derivedEmpty) derivedEmpty.hidden = q.length === 0 || any;
+        measureSticky();
+      };
+
+      derivedFilter.addEventListener('input', applyDerivedFilter);
+
+      // Clearing is a step in typing, not a way out of it: the caret goes back where it was.
+      if (derivedClear) {
+        derivedClear.addEventListener('click', function () {
+          derivedFilter.value = '';
+          applyDerivedFilter();
+          derivedFilter.focus();
+        });
+      }
+    }
+
+    // The flag read back: a page arriving with ?derived opens the tree by pressing its own
+    // button, so the arrow, the measure, the caret and the url itself all follow the one path.
+    if (derivedTree && urlParams().get('derived') && derivedTree.classList.contains('collapsed')) {
+      var derivedRoot = document.querySelector('.derived-toggle[data-target="derived-tree"]');
+      if (derivedRoot) derivedRoot.click();
+    }
+  }
+
   // ---- Page head: a name wider than its box ----
   // The title scrolls sideways rather than wrapping, and a box that scrolls with no bar on it says
   // nothing about what is off the end. This asks the box itself, so the fade goes on the names that
@@ -2543,6 +2723,27 @@ const JS = `
       writeParams(params);
     }, 130);
   });
+
+  // ---- The clear mark ----
+  var navClear = document.getElementById('nav-search-clear');
+
+  if (navClear && input.form) {
+    var syncNavClear = function () {
+      input.form.classList.toggle('filled', input.value.length > 0);
+    };
+
+    input.addEventListener('input', syncNavClear);
+    // The search page's box arrives already holding ?q=, so the state is read, not assumed.
+    syncNavClear();
+
+    // Through a synthetic keystroke rather than by hand: emptying the box is the same event
+    // typing is, so the dropdown, the debounce and the search page's url all follow unasked.
+    navClear.addEventListener('click', function () {
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
+  }
 
   // ---- The header dropdown ----
   if (navResults) {

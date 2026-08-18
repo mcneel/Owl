@@ -163,6 +163,15 @@ ${icons.spriteHtml()}
     <svg class="nav-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5l-1.5 1.5l-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16A6.5 6.5 0 0 1 3 9.5A6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14S14 12 14 9.5S12 5 9.5 5"/>
     </svg>
+    <!-- The magnifier's corner while the box holds anything: pressing it empties the box through
+         the same input path a keystroke takes, so the dropdown and the search page's url follow. -->
+    <button type="button" class="nav-search-clear" id="nav-search-clear" aria-label="Clear search">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <g transform="matrix(1.0625,0,0,1.0625,4,3)">
+          <path fill="currentColor" fill-rule="evenodd" d="M8,16C12.389,16 16,12.389 16,8C16,3.611 12.389,0 8,0C3.611,0 -0,3.611 0,8C0,12.389 3.611,16 8,16M4.22,4.22C4.511,3.929 4.989,3.929 5.28,4.22L8,6.94L10.72,4.22C10.862,4.068 11.061,3.981 11.269,3.981C11.68,3.981 12.019,4.32 12.019,4.731C12.019,4.939 11.932,5.138 11.78,5.28L9.06,8L11.78,10.72C11.932,10.862 12.019,11.061 12.019,11.269C12.019,11.68 11.68,12.019 11.269,12.019C11.061,12.019 10.862,11.932 10.72,11.78L8,9.06L5.28,11.78C5.141,11.909 4.958,11.981 4.769,11.981C4.357,11.981 4.019,11.643 4.019,11.231C4.019,11.042 4.091,10.859 4.22,10.72L6.94,8L4.22,5.28C3.929,4.989 3.929,4.511 4.22,4.22"/>
+        </g>
+      </svg>
+    </button>
     <!-- Filled as you type, on every page but the search page, which shows the full list itself. -->
     <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
   </form>
