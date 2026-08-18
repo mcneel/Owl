@@ -29,6 +29,7 @@ const ICON_DIR = path.join(__dirname, '..', 'icons');
  * naming what is missing rather than a row that silently draws nothing.
  */
 const NAMES = [
+  'assembly',
   'class',
   'constant',
   'constructor',

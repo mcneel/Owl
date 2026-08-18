@@ -574,8 +574,8 @@ class Renderer {
    * Where 'home' goes.
    *
    * A landing page whose whole job is to list the assemblies has nothing to list when there is one
-   * of them, and the assembly's own page already opens the set. So on a single-assembly site every
-   * way back - the site name, the breadcrumb - goes straight there and the root is left as a
+   * of them, and the assembly's own page already opens the set. So on a single-assembly site the
+   * way back - the site name in the header - goes straight there and the root is left as a
    * redirect for anyone who arrives at it directly.
    */
   homeUrl() {
@@ -587,16 +587,6 @@ class Renderer {
   /** True when the root is a redirect rather than a page of its own. */
   get rootRedirects() {
     return this.assemblyNames.length === 1;
-  }
-
-  /**
-   * The root of every breadcrumb trail: a house rather than the word 'API'.
-   *
-   * The label stays, unrendered - the screen reader and the JSON-LD both want a name where the
-   * page shows a picture.
-   */
-  homeCrumb() {
-    return { label: 'API', url: this.homeUrl(), icon: 'home' };
   }
 
   summaryHtml(docs) {
@@ -1222,10 +1212,7 @@ ${this.namespaceListHtml(namespaces.map((ns) => ns.name))}
       title: `${assemblyName} assembly`,
       description,
       canonical: this.routes.assembly(assemblyName),
-      breadcrumbs: [
-        this.homeCrumb(),
-        { label: assemblyName, url: this.routes.assembly(assemblyName) },
-      ],
+      breadcrumbs: [{ label: assemblyName, url: this.routes.assembly(assemblyName), icon: 'assembly' }],
       body,
       sidebar: this.namespaceMode
         ? this.namespaceTree()
@@ -1305,9 +1292,13 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
       title: `${label} namespace`,
       description,
       canonical: this.routes.namespace(namespaceName),
+      // Rooted in an assembly only when there is exactly one to name: a namespace can span
+      // several, and a trail cannot open with all of them.
       breadcrumbs: [
-        this.homeCrumb(),
-        { label, url: this.routes.namespace(namespaceName) },
+        ...(assemblies.length === 1
+          ? [{ label: assemblies[0], url: this.routes.assembly(assemblies[0]), icon: 'assembly' }]
+          : []),
+        { label, url: this.routes.namespace(namespaceName), icon: 'namespace' },
       ],
       body,
       filterBar: filterBar({ kinds: this.filterLettersOf(bucket.types, (e) => e.type.kind) }),
@@ -1362,7 +1353,7 @@ ${overview ? `<div class="cat-doc">${overview}</div>` : ''}
       description,
       canonical: this.routes.category(assemblyName, categoryName),
       breadcrumbs: [
-        this.homeCrumb(),
+        { label: assemblyName, url: this.routes.assembly(assemblyName), icon: 'assembly' },
         { label: categoryName, url: this.routes.category(assemblyName, categoryName) },
       ],
       body,
@@ -1489,9 +1480,9 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       description,
       canonical: this.baseRoutes.example(type.slug, member.anchor),
       breadcrumbs: [
-        this.homeCrumb(),
+        { label: assembly, url: this.routes.assembly(assembly), icon: 'assembly' },
         ...(type.namespace
-          ? [{ label: type.namespace, url: this.routes.namespace(type.namespace) }]
+          ? [{ label: type.namespace, url: this.routes.namespace(type.namespace), icon: 'namespace' }]
           : []),
         { label: countedGenerics(type.name), url: this.routes.type(type.slug) },
         { label: 'Examples', url: this.routes.example(type.slug, member.anchor) },
@@ -1644,11 +1635,9 @@ ${this.seeAlsoHtml(type.docs)}
       truncate(this.summaryText(type.docs)) ||
       truncate(`${type.fullName} ${type.kind} in ${assembly}. ${this.siteName} reference.`);
 
-    // No assembly crumb: a namespace is prefixed with its assembly's name, so the two together
-    // read as a stutter. The sidebar's Overview row is the way back to the assembly page.
-    const breadcrumbs = [this.homeCrumb()];
+    const breadcrumbs = [{ label: assembly, url: this.routes.assembly(assembly), icon: 'assembly' }];
     if (type.namespace) {
-      breadcrumbs.push({ label: type.namespace, url: this.routes.namespace(type.namespace) });
+      breadcrumbs.push({ label: type.namespace, url: this.routes.namespace(type.namespace), icon: 'namespace' });
     }
     breadcrumbs.push({ label: countedGenerics(type.name), url: this.routes.type(type.slug) });
 
@@ -3026,10 +3015,7 @@ ${this.seeAlsoHtml(type.docs)}
       title: trimmed ? `Search: ${trimmed}` : 'Search',
       description: `Search the ${this.siteName} reference by type or member name.`,
       canonical: this.routes.search(),
-      breadcrumbs: [
-        this.homeCrumb(),
-        { label: 'Search', url: this.routes.search() },
-      ],
+      breadcrumbs: [{ label: 'Search', url: this.routes.search() }],
       body,
       // Every button is written, and the ones this query found nothing of are written hidden: the
       // results are rebuilt in the browser as the query changes, so a button left out of the page
@@ -3449,7 +3435,7 @@ ${origin ? `Sitemap: ${origin}${this.routes.sitemap()}` : ''}
       title: 'Not found',
       description: 'The requested API documentation page does not exist.',
       canonical: null,
-      breadcrumbs: [this.homeCrumb()],
+      breadcrumbs: [],
       body,
       noindex: true,
     });

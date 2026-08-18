@@ -361,11 +361,14 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .tree-ns-plain { border-bottom: none; }
 /* A square, so the rotation below turns about its centre and the arrow does not drift sideways. */
 .tree-arrow { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex-shrink: 0; transition: transform 0.15s; }
-.tree-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
+/* Drawn past its own box: the box is the layout - the arrow column every indent is measured
+   from - and the glyph is the picture, made bigger without the column moving. It stays centred,
+   so it spends the overflow evenly and the rotation still turns it in place. */
+.tree-arrow svg { display: block; width: 1.275rem; height: 1.275rem; fill: currentColor; }
 /* docify swaps a chevron-right for a chevron-down; rotating the one is the same picture. */
 .tree-arrow.collapsed { transform: rotate(-90deg); }
-/* The chevron's box holding the go-elsewhere arrow instead: never rotated, because it always
-   means the same leaving. */
+/* The go-elsewhere arrow: never rotated, because it always means the same leaving. At the member
+   rows' own scale rather than the chevron's - it ends those rows, it does not open them. */
 .goto-arrow { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex-shrink: 0; }
 .goto-arrow svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
 .tree-arrow-spacer { display: inline-block; width: 1rem; flex-shrink: 0; }
@@ -488,8 +491,10 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .breadcrumbs a:hover { color: var(--flash); }
 .breadcrumbs li::after { content: "/"; margin-left: 0.3rem; color: var(--border2); }
 .breadcrumbs li:last-child::after { content: ""; }
-.breadcrumbs .crumb-home { display: block; width: 0.95rem; height: 0.95rem; fill: currentColor; }
-.breadcrumbs li:has(.crumb-home) { display: flex; align-items: center; }
+/* The assembly and namespace crumbs wear their icons. Flexed because kind icons are drawn block,
+   and sized down from their row size to the trail's smaller type. */
+.breadcrumbs li:has(.kind-icon), .breadcrumbs li:has(.kind-icon) > a { display: inline-flex; align-items: center; }
+.breadcrumbs .kind-icon { width: 1rem; height: 1rem; margin-right: 0.3rem; }
 
 /* ---- Page heading ---- */
 .page-title { font-size: 1.45rem; font-weight: 650; color: var(--text); letter-spacing: -0.01em; word-break: break-word; }
@@ -527,12 +532,16 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    being cut mid-word with nothing to say it had been. The mark is the whole difference between a
    name that ends there and a name that carries on. */
 .type-chain { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; position: relative; top: 0.2rem; }
-/* Dimmer than the name it leads to: this is where the type came from, not what the page is about. */
-.type-chain .see-ref { font-family: inherit; color: var(--text3); }
+/* Dimmer than the name it leads to: this is where the type came from, not what the page is about.
+   Dropped a hair against the separators: those are middle-aligned, which centres them on the
+   lowercase letters' middle, and these are capitalised names whose optical centre sits above that. */
+.type-chain .see-ref { font-family: inherit; color: var(--text3); position: relative; top: 0.08rem; }
 .type-chain .see-ref:hover { color: var(--flash); text-decoration: underline; }
-/* The tree's chevron, at the tree's size, turned to point back the way the chain reads. */
-.chain-sep { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; vertical-align: -0.2rem; color: var(--text4); transform: rotate(90deg); }
-.chain-sep svg { display: block; width: 0.85rem; height: 0.85rem; fill: currentColor; }
+/* The tree's chevron, at the tree's size, turned to point back the way the chain reads. Aligned
+   by its middle so the box centres on the names whatever size it is - the box is far taller than
+   the letters, and sitting it on their baseline hoists the glyph above the line. */
+.chain-sep { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; vertical-align: middle; color: var(--text4); transform: rotate(90deg); }
+.chain-sep svg { display: block; width: 1.275rem; height: 1.275rem; fill: currentColor; }
 .page-title .page-kind { font-size: 0.6em; font-weight: 500; color: var(--text4); margin-left: 0.5rem; }
 /* The drawing at its largest, since this is the one place a page says what it is about rather than
    listing things.
@@ -550,15 +559,16 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    opens with the same gesture that opened the tree. */
 .derived-toggle { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 0; cursor: pointer; color: var(--text3); flex-shrink: 0; }
 .derived-toggle:hover { color: var(--flash); }
-/* At the title's scale rather than the tree's: it sits against a 1.75rem drawing and 1.45rem
-   letters, where the 0.85rem arrow read as a speck. The negative margins spend the whitespace the
-   drawing carries inside its own box: the left puts the glyph's edge on the head's, the right
-   closes it up on the kind drawing without giving up the row's gap everywhere else. */
-.page-title-row > .derived-toggle { margin: 0 -0.3rem 0 -0.42rem; }
-.page-title-row > .derived-toggle .tree-arrow { width: 1.25rem; height: 1.25rem; }
+/* Sized to be found, not just to match: this arrow is the only way into the derived tree, and at
+   the tree's size - or even the kind drawing's 1.75rem - it read as ornament next to 1.45rem
+   letters. The negative margins spend the whitespace the drawing carries inside its own box: the
+   left puts the glyph's edge on the head's, the right closes it up on the kind drawing without
+   giving up the row's gap everywhere else. */
+.page-title-row > .derived-toggle { margin: 0 -0.48rem 0 -0.67rem; }
+.page-title-row > .derived-toggle .tree-arrow { width: 2rem; height: 2rem; }
 /* Stroked over its own fill: a bolder cut of the same chevron, not a second drawing, so the
    title's arrow and the branch arrows still turn the same shape. */
-.page-title-row > .derived-toggle .tree-arrow svg { width: 1.1rem; height: 1.1rem; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.page-title-row > .derived-toggle .tree-arrow svg { width: 1.75rem; height: 1.75rem; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .derived-tree { margin-top: 0.4rem; }
 /* Capped and scrolling in place past the cap, on the intro's reasoning: the tree lives in the
    pinned brief, and a hierarchy of a hundred types opened out would otherwise stand a headerful

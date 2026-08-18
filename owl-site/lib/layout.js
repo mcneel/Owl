@@ -23,7 +23,7 @@ const DEFAULT_SITE_NAME = 'API Reference';
  *   logoDark     inlined SVG for the dark theme; optional, logo covers both without it
  *   description  meta description, plain text
  *   canonical    root-relative url of this page
- *   breadcrumbs  [{label, url}] innermost last
+ *   breadcrumbs  [{label, url, icon?}] innermost last; icon names a sprite icon worn before the label
  *   body         main content HTML
  *   sidebar      optional sidebar HTML (renders the tree column)
  *   sidebarAlt   the namespace tree this page swaps in when its url carries the mode flag, or ''.
@@ -35,7 +35,7 @@ const DEFAULT_SITE_NAME = 'API Reference';
  *                tree that is written out whole
  *   filterBar    optional filter bar HTML
  *   routes       Routes instance
- *   homeUrl      where the site name and the home crumb point; the root, unless it only redirects
+ *   homeUrl      where the site name points; the root, unless it only redirects
  *   siteUrl      absolute origin, when configured
  *   jsonLd       extra JSON-LD object
  *   noindex      keep this page out of search results
@@ -427,26 +427,18 @@ function versionSelector(versions) {
   );
 }
 
-/** mdi's house, the mark docify uses for the root of a trail. */
-const HOME_ICON =
-  '<svg class="crumb-home" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-  '<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>';
-
+/* No home crumb at the root of the trail: the site name in the header is the way home, and a
+   trail that repeats it spends its first step saying what the header already says. */
 function renderBreadcrumbs(breadcrumbs) {
   if (!breadcrumbs || breadcrumbs.length === 0) return '';
 
   const items = breadcrumbs
     .map((crumb, i) => {
       const last = i === breadcrumbs.length - 1;
-
-      // A crumb can be drawn instead of written. The label still travels with it, as the
-      // accessible name and as the name the JSON-LD carries.
-      const body = crumb.icon === 'home' ? HOME_ICON : escape(crumb.label);
-      const named = crumb.icon ? ` aria-label="${attr(crumb.label)}"` : '';
-
+      const label = (crumb.icon ? icons.iconHtml(crumb.icon) : '') + escape(crumb.label);
       return last
-        ? `<li aria-current="page"${named}>${body}</li>`
-        : `<li><a href="${attr(crumb.url)}"${named}>${body}</a></li>`;
+        ? `<li aria-current="page">${label}</li>`
+        : `<li><a href="${attr(crumb.url)}">${label}</a></li>`;
     })
     .join('');
 
