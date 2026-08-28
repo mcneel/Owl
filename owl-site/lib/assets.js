@@ -193,7 +193,7 @@ header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellips
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #version-current, #theme-toggle, #sidebar-toggle { height: 30px; }
+#asm-filter, #search, #version-filter, #version-current, #theme-switch, #sidebar-toggle { height: 30px; }
 
 /* ---- Sidebar toggle ----
    The theme toggle's face, before the title and against the column it shows and hides. */
@@ -266,15 +266,26 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    without the chevron or the hover, since there is nothing to open. */
 #version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
 
-/* ---- Theme toggle ---- */
-/* Given the same face as the search field, so it reads as a control rather than a loose glyph. */
-#theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 30px; padding: 0; border: none; border-radius: 4px; background: var(--nav-field); color: var(--nav-fg); cursor: pointer; flex-shrink: 0; }
-#theme-toggle:hover { background: var(--nav-focus); }
-#theme-toggle svg { display: block; width: 1.05rem; height: 1.05rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Both icons ship; CSS picks by theme, so the button is right on the first frame with no swap.
-   The id has to be repeated here: without it #theme-toggle svg outranks this and shows both. */
-:root[data-theme="dark"] #theme-toggle .icon-sun,
-:root[data-theme="light"] #theme-toggle .icon-moon { display: none; }
+/* ---- Theme switch ---- */
+/* A track on the search field's face with the lit segment raised out of it, rather than the accent
+   the two selects above wear: those are jumps that change what is being read, and this only changes
+   how it looks. The track is what groups the three into one control - without it they would read as
+   three loose glyphs in a row, which is what the header is already full of.
+
+   The radios themselves are never drawn. They are kept in the layout rather than display:none'd,
+   because a control that is not laid out cannot be focused, and the arrow keys moving between the
+   three is the whole reason they are radios. */
+.theme-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 4px; background: var(--nav-field); flex-shrink: 0; }
+.theme-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.theme-switch label { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 3px; color: var(--nav-dim); cursor: pointer; }
+.theme-switch label svg { display: block; width: 0.95rem; height: 0.95rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Dim until asked for, so the one that is on is the only one at full strength: three lit icons
+   would say the site was in three states at once. Hover brightens without filling, which keeps the
+   raised segment the only thing wearing a background. */
+.theme-switch label:hover { color: var(--nav-fg); }
+.theme-switch input:checked + label { background: var(--nav-focus); color: var(--nav-fg); }
+/* The ring belongs on the drawing, since the input it would land on is a pixel wide and invisible. */
+.theme-switch input:focus-visible + label { outline: 2px solid var(--flash); outline-offset: 2px; }
 
 /* ---- Filter bar ---- */
 /* Lives in the content column, so it takes that column's width and none of the header's padding.
@@ -1078,33 +1089,59 @@ const JS = `
 
 (function () {
   // ---- Theme ----
-  // The theme is already on the page: the head script read the session's key, or the system when
-  // that was empty. Written here in the same store, which is what keeps a toggle whole across a
-  // read of several pages without letting it decide how the site opens tomorrow.
+  // The choice is already on the page: the head script read the session's key, or fell back to
+  // system. Written here in the same store, which is what keeps a choice whole across a read of
+  // several pages without letting it decide how the site opens tomorrow.
+  //
+  // Three answers, not two, and the third is the one the site starts in: a reader whose machine
+  // turns dark in the evening wants the page to follow, and there is no way back to that from a
+  // switch that only knows the two looks. The choice and the look are kept apart - data-theme-pref
+  // is what was asked for, data-theme is what it comes out as - so nothing that paints has to know
+  // system exists.
   var KEY = 'docs-theme';
+  var PREFS = ['system', 'light', 'dark'];
   var root = document.documentElement;
+  var systemLight = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
 
-  function applyTheme(theme) {
-    root.setAttribute('data-theme', theme);
-    var button = document.getElementById('theme-toggle');
-    // The sun and the moon are both in the button and chosen by CSS, so only the label changes.
-    if (button) {
-      button.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' theme');
-    }
+  function resolve(pref) {
+    if (pref === 'light' || pref === 'dark') return pref;
+    return systemLight && systemLight.matches ? 'light' : 'dark';
   }
 
-  function currentTheme() {
-    return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  function currentPref() {
+    var pref = root.getAttribute('data-theme-pref');
+    return PREFS.indexOf(pref) === -1 ? 'system' : pref;
   }
 
-  var toggle = document.getElementById('theme-toggle');
-  if (toggle) {
-    applyTheme(currentTheme());
-    toggle.addEventListener('click', function () {
-      var next = currentTheme() === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      try { sessionStorage.setItem(KEY, next); } catch (e) {}
+  function applyTheme(pref) {
+    root.setAttribute('data-theme-pref', pref);
+    root.setAttribute('data-theme', resolve(pref));
+  }
+
+  var themeSwitch = document.getElementById('theme-switch');
+  if (themeSwitch) {
+    // The markup ships with System lit, since that is what a reader arriving fresh gets. Anyone who
+    // chose otherwise earlier in the session has it on the root already, and this is where the
+    // switch catches up with them.
+    var lit = themeSwitch.querySelector('input[value="' + currentPref() + '"]');
+    if (lit) lit.checked = true;
+
+    // One listener on the track rather than three on the segments: change bubbles, and which radio
+    // it came from is on the event.
+    themeSwitch.addEventListener('change', function (event) {
+      var value = event.target && event.target.value;
+      var pref = PREFS.indexOf(value) === -1 ? 'system' : value;
+      applyTheme(pref);
+      try { sessionStorage.setItem(KEY, pref); } catch (e) {}
     });
+  }
+
+  // A machine that changes its mind mid-read: following it is the whole of what System promises, and
+  // a page that only asked at load would break that promise the first time the sun went down.
+  if (systemLight) {
+    var follow = function () { if (currentPref() === 'system') applyTheme('system'); };
+    if (systemLight.addEventListener) systemLight.addEventListener('change', follow);
+    else if (systemLight.addListener) systemLight.addListener(follow);
   }
 
   // ---- Sidebar visibility ----

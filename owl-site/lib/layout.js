@@ -100,9 +100,10 @@ function page(options) {
     graph.length > 0 ? { '@context': 'https://schema.org', '@graph': graph } : null;
 
   return `<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<!-- The attribute is what a reader with JavaScript off gets, since the script below is what reads
-     the system's appearance. Dark, because that is the site's own look. -->
+<html lang="en" data-theme="dark" data-theme-pref="system">
+<!-- The attributes are what a reader with JavaScript off gets, since the script below is what reads
+     the session's choice and the system's appearance. System, because that is what the site opens
+     as, resolved to dark, because that is the site's own look. -->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -123,9 +124,12 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
 /* Applied before first paint, so the appearance the site opens as does not flash the other one.
    The session's store, not the origin's: a toggle holds across the links of one read and is gone by
    the next, so the site opens as the system says every time and no choice outlives the tab.
+   Two attributes rather than one: data-theme-pref is what was chosen, system included, and is what
+   the button's icon is picked by; data-theme is that choice resolved to a look, which is the only
+   thing the stylesheet and the diagrams ever ask.
    The sidebar's visibility rides in the same store for the same reason - put back this early, a
    hidden column stays hidden across a navigation instead of flashing in and out. */
-(function(){try{var d=document.documentElement;var t=sessionStorage.getItem('docs-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');d.setAttribute('data-theme',t);if(sessionStorage.getItem('docs-sidebar')==='hidden')d.setAttribute('data-sidebar','hidden');}catch(e){}})();
+(function(){try{var d=document.documentElement;var p=sessionStorage.getItem('docs-theme');if(p!=='light'&&p!=='dark')p='system';d.setAttribute('data-theme-pref',p);d.setAttribute('data-theme',p!=='system'?p:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));if(sessionStorage.getItem('docs-sidebar')==='hidden')d.setAttribute('data-sidebar','hidden');}catch(e){}})();
 </script>
 </head>
 <body${bodyClass ? ` class="${attr(bodyClass)}"` : ''}>
@@ -177,15 +181,7 @@ ${icons.spriteHtml()}
   </form>
   ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
   ${versionSelector(versions)}
-  <button id="theme-toggle" type="button" aria-label="Switch to light theme">
-    <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>
-    </svg>
-    <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="12" r="4"/>
-      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/>
-    </svg>
-  </button>
+  ${themeSwitch()}
 </header>
 
 <div class="layout">
@@ -349,6 +345,58 @@ function tabsHtml(tabs, extra, offered = null) {
  * The search page overrides urlFor so the picker re-runs the query in the chosen assembly rather
  * than navigating away from the results.
  */
+/**
+ * The theme drawings, in the order the switch lays them out.
+ *
+ * The sun and the moon are the two looks a page can have; the screen between them is the system
+ * deciding, a machine rather than a reader. That is also why it sits in the middle: it is the state
+ * the site opens in and the one either end returns to, so the two looks read as a step out from it
+ * in each direction rather than as a list system happens to head.
+ */
+const THEME_CHOICES = [
+  [
+    'light',
+    'Light',
+    '<circle cx="12" cy="12" r="4"/>' +
+      '<path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/>',
+  ],
+  ['system', 'System', '<rect x="2.5" y="4" width="19" height="12.5" rx="1.5"/><path d="M8.5 20.5h7M12 16.5v4"/>'],
+  ['dark', 'Dark', '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>'],
+];
+
+/**
+ * The header's theme switch: three segments, one lit.
+ *
+ * All three on screen at once, because a switch that cycles can only ever show one of them - which
+ * state it is in has to be read back out of an icon, and the third answer is invisible until a
+ * reader has pressed twice to find out where the first two went. Here the choice is the picture:
+ * what the site is set to is the segment that is lit, and what else it could be is either side of
+ * it.
+ *
+ * Radios rather than buttons so the arrow keys, the single tab stop and the one-of-three meaning
+ * are the browser's to provide rather than ours to reimplement. The inputs carry the names a screen
+ * reader reads and the labels carry the drawing; the labels are what is actually painted, which is
+ * why the checked state is styled through them.
+ *
+ * System is checked here, being what the site opens as. The markup is written once for everyone and
+ * the choice lives in the session, so app.js is what lights a returning reader's segment instead -
+ * and this stays the honest state with JavaScript off, where the switch does nothing and the site
+ * is whatever the system says.
+ */
+function themeSwitch() {
+  const segments = THEME_CHOICES.map(
+    ([value, label, drawing]) =>
+      `<input type="radio" name="theme" id="theme-${value}" value="${value}" aria-label="${label} theme"${
+        value === 'system' ? ' checked' : ''
+      }>` +
+      `<label for="theme-${value}" title="${label}">` +
+      `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${drawing}</svg>` +
+      `</label>`
+  );
+
+  return `<div class="theme-switch" id="theme-switch" role="group" aria-label="Theme">${segments.join('')}</div>`;
+}
+
 function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
   // A picker with one assembly in it offers a choice between that assembly and everything, which
   // is the same set. The site title already goes home, so nothing here is otherwise unreachable.
