@@ -83,7 +83,7 @@ sealed class ApiType
   /// </summary>
   public string FullName { get; set; } = "";
 
-  /// <summary>class, struct, interface, enum, delegate or record.</summary>
+  /// <summary>class, struct, interface, enum, delegate, record, record struct or module.</summary>
   public string Kind { get; set; } = "";
 
   /// <summary>Declaring type's doc id when this is a nested type.</summary>

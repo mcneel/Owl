@@ -62,6 +62,7 @@ const KIND_MAP = {
   enum: ['E', 'Enum'],
   delegate: ['T', 'Delegate'],
   record: ['T', 'Record'],
+  'record struct': ['S', 'Record struct'],
   // Visual Basic's Module: a class that is all shared members and cannot be instantiated. Named as
   // the language names it, because that is what its page is titled and what a reader went looking
   // for - but it groups and draws with the classes, being one in everything but the keyword.
@@ -103,6 +104,7 @@ const KIND_ICONS = {
   enum: 'enum',
   delegate: 'method',
   record: 'class',
+  'record struct': 'struct',
   module: 'class',
 
   method: 'method',
@@ -136,6 +138,7 @@ const KIND_ICONS = {
 const FILTER_LETTERS = {
   enum: 'T',
   struct: 'T',
+  'record struct': 'T',
   enumvalue: 'T',
   constructor: 'T',
   destructor: 'T',
