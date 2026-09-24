@@ -1719,7 +1719,7 @@ ${this.seeAlsoHtml(type.docs)}
 
     if (type.isStatic) parts.push('static');
     if (type.isAbstract && type.kind !== 'interface') parts.push('abstract');
-    if (type.isSealed && type.kind === 'class') parts.push('sealed');
+    if (type.isSealed && (type.kind === 'class' || type.kind === 'record')) parts.push('sealed');
     if (type.isReadOnly) parts.push('readonly');
     if (type.isRefLikeType) parts.push('ref');
 
