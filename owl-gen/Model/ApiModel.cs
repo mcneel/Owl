@@ -115,7 +115,7 @@ sealed class ApiType
   /// <summary>Generic parameters, in declaration order.</summary>
   public List<ApiTypeParam>? TypeParameters { get; set; }
 
-  /// <summary>Immediate base type, omitted when it is System.Object.</summary>
+  /// <summary>Immediate base type, omitted when it is System.Object and for structs and enums.</summary>
   public TypeRef? BaseType { get; set; }
 
   /// <summary>
