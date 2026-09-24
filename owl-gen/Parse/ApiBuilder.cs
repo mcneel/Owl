@@ -432,7 +432,9 @@ sealed class ApiBuilder
     {
       // An internal base has no page and never will, so the nearest presentable ancestor
       // stands in for it wherever the model names a base.
-      INamedTypeSymbol? baseType = NearestPresentableBase(type);
+      INamedTypeSymbol? baseType = type.TypeKind is TypeKind.Struct or TypeKind.Enum
+          ? null
+          : NearestPresentableBase(type);
       apiType.BaseType = baseType is null ? null : BuildTypeRef(baseType);
 
       apiType.InheritanceChain = BuildInheritanceChain(type);
