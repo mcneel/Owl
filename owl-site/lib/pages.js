@@ -1723,7 +1723,7 @@ ${this.seeAlsoHtml(type.docs)}
     if (type.isReadOnly) parts.push('readonly');
     if (type.isRefLikeType) parts.push('ref');
 
-    parts.push(type.kind === 'record' ? 'record' : type.kind);
+    parts.push(type.kind);
     parts.push(type.name);
 
     let declaration = parts.filter(Boolean).join(' ');

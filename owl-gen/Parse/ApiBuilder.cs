@@ -545,7 +545,7 @@ sealed class ApiBuilder
   {
     if (type.IsRecord)
     {
-      return "record";
+      return type.TypeKind is TypeKind.Struct ? "record struct" : "record";
     }
 
     return type.TypeKind switch
