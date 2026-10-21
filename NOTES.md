@@ -199,9 +199,9 @@ is a few dozen rows.
 
 ## Shipping
 
-owl ships as a .NET tool and nothing else. `.github/workflows/build.yml` packs
-one on every push to `main` and keeps it as a workflow artifact; other
-repositories install from that.
+owl ships as a .NET tool and nothing else. `.github/workflows/test.yml` packs a
+prerelease on every push to `main` and keeps it as a workflow artifact, and
+`.github/workflows/publish.yml`, run by hand, pushes a release to nuget.org.
 
 ```
 dotnet pack owl/Owl.csproj -c Release -p:VersionSuffix=ci.<run> -o nupkg

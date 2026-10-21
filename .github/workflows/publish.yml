@@ -1,0 +1,37 @@
+name: publish
+
+# Run by hand on main: tests, then packs the version in owl/Owl.csproj and pushes it to nuget.org.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    needs: [test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # LFS, or the package icon is packed as a pointer file rather than the image.
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Pack
+        run: dotnet pack owl/Owl.csproj -c Release -o nupkg
+
+      # --skip-duplicate makes a re-run harmless; bump VersionPrefix to publish a new version.
+      - name: Push to nuget.org
+        run: dotnet nuget push 'nupkg/*.nupkg' --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}

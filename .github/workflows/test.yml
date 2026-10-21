@@ -1,0 +1,60 @@
+name: test
+
+# Runs on every push and PR to main. A push to main also keeps a 0.1.0-ci.<run> prerelease package
+# as a download. publish.yml calls this to test before it publishes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # Required to pass before a PR can merge into main (set in the branch rules on GitHub).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      # Node first: the command-line tests export and serve the site.
+      - name: Test the model and the owl command
+        run: dotnet test owl.tests -c Release
+
+      - name: Test the website
+        run: node --test owl.tests/site/
+
+  package:
+    needs: [test]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      # LFS, or the package icon is packed as a pointer file rather than the image.
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Pack
+        run: dotnet pack owl/Owl.csproj -c Release -o nupkg -p:VersionSuffix=ci.${{ github.run_number }}
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: owl-nupkg
+          path: nupkg/*.nupkg
+          retention-days: 90
+          if-no-files-found: error
