@@ -54,6 +54,9 @@ function topicName(memberId) {
  * link is what a crawler follows, the refresh is what a reader with no javascript follows, and
  * replace() rather than assign() keeps the old url out of the history so Back leaves the site
  * instead of bouncing.
+ *
+ * The script is in the body, not the head: leaving from the head can report the page loaded with
+ * no body yet, and Rhino's script editor styles document.body the moment a page loads, crashing.
  */
 function stub(url) {
   return `<!doctype html>
@@ -63,9 +66,10 @@ function stub(url) {
 <title>Moved</title>
 <link rel="canonical" href="${attr(url)}">
 <meta http-equiv="refresh" content="0; url=${attr(url)}">
-<script>location.replace(${JSON.stringify(url)})</script>
 </head>
-<body><p>This page has moved to <a href="${attr(url)}">${escape(url)}</a>.</p></body>
+<body><p>This page has moved to <a href="${attr(url)}">${escape(url)}</a>.</p>
+<script>location.replace(${JSON.stringify(url)})</script>
+</body>
 </html>
 `;
 }
