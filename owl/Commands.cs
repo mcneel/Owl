@@ -17,7 +17,7 @@ sealed class Command
   const string DEFAULT_SITE_DIR = ".owl/site";
   const string DEFAULT_DOCS_DIR = "docs/api";
 
-  /// <summary>The command being run: gen, serve or build.</summary>
+  /// <summary>The command being run: gen, serve, build or verify.</summary>
   public string Name { get; private set; } = "";
 
   /// <summary>Projects to document. Empty when <see cref="ModelDir"/> was given instead.</summary>
@@ -152,6 +152,17 @@ sealed class Command
       }
     }
 
+    // verify checks the projects themselves, so a reused model has nothing to offer it.
+    if (name == "verify")
+    {
+      if (command.Projects.Count == 0)
+      {
+        throw new OwlError("owl verify: pass one or more .csproj or .vbproj paths.");
+      }
+
+      command.GenArgs.Add("--verify");
+    }
+
     if (command.Projects.Count == 0 && command.ModelDir is null)
     {
       throw new OwlError(
@@ -212,7 +223,7 @@ sealed class Command
 
     return Name switch
     {
-      "gen" => 0,
+      "gen" or "verify" => 0,
       "serve" => Tools.Site("serve.js", Model().Concat(["--port", Port]).Concat(SiteArgs)),
       "build" => Tools.Site("build.js", Model().Concat(["--out", OutDir]).Concat(SiteArgs)),
       _ => throw new OwlError($"Unknown command '{Name}'."),

@@ -32,7 +32,7 @@ if (args[0] is "--version")
 
 string name = args[0];
 
-if (name is not ("gen" or "serve" or "build"))
+if (name is not ("gen" or "serve" or "build" or "verify"))
 {
   Console.Error.WriteLine($"owl: unknown command '{name}'. Try --help.");
   return 2;
@@ -58,6 +58,7 @@ static void PrintUsage()
       owl gen   <project...>   Write the documentation model
       owl serve <project...>   Write it, then serve it locally
       owl build <project...>   Write it, then export a static site
+      owl verify <project...>  Write it, then report undocumented API and broken crefs
 
     A project is a .csproj or a .vbproj. Pass several to document them as one set, so crefs between
     them become links and derived types are found across the whole set.
@@ -110,7 +111,7 @@ static void PrintUsage()
 
     Examples:
       owl serve src/MyLib/MyLib.csproj
-      owl gen src/MyLib/MyLib.csproj --name "MyLib API" --verify
+      owl verify src/MyLib/MyLib.csproj
       owl gen src/A/A.csproj src/B/B.vbproj
       owl build src/MyLib/MyLib.csproj --out ./public --site-url https://docs.example.com
       owl serve --json .owl/json
