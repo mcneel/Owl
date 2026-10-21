@@ -176,7 +176,7 @@ sealed class DocBlock
   public string? Since { get; set; }
 
   /// <summary>
-  /// owl's &lt;deprecated&gt; tag: why this symbol is no longer recommended.
+  /// owl's &lt;deprecated&gt; tag: the API version this symbol was deprecated in.
   /// </summary>
   public string? Deprecated { get; set; }
 
