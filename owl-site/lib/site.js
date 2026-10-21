@@ -7,6 +7,7 @@ const { Routes, slugify } = require('./routes');
 const { Renderer } = require('./pages');
 const { Diagrams, probe } = require('./diagrams');
 const { Sandcastle, stub } = require('./sandcastle');
+const { Docify, withQuery } = require('./docify');
 const { Links } = require('./links');
 const { CSS, JS } = require('./assets');
 const { inlineSvg } = require('./html');
@@ -33,6 +34,7 @@ const { inlineSvg } = require('./html');
  *             there is no picker and every API is shown whatever its <since> says
  *   skipUndocumented  leave out anything with no <summary>
  *   sandcastle  answer the Sandcastle urls this documentation set used to be published at
+ *   docify    answer the docify urls this documentation set used to be published at
  *   d2        the d2 binary that draws ```d2 fences, 'd2' from PATH by default
  */
 class Site {
@@ -78,6 +80,7 @@ class Site {
     // Off unless asked for: most sites were never published anywhere else, and one that was would
     // rather say so than have owl guess from the shape of a request that missed.
     this.sandcastleUrls = Boolean(options.sandcastle);
+    this.docifyUrls = Boolean(options.docify);
 
     this.d2 = options.d2 || 'd2';
 
@@ -111,6 +114,9 @@ class Site {
     // regenerate that drops a type drops the old url that pointed at it in the same pass.
     this.sandcastle = this.sandcastleUrls
       ? new Sandcastle(this.model, this.routes, (message) => this.model.warnings.push(message))
+      : null;
+    this.docify = this.docifyUrls
+      ? new Docify(this.model, this.routes, (message) => this.model.warnings.push(message))
       : null;
 
     // Rebuilt with the model, so a diagram that failed to draw is reported again on the reload that
@@ -257,6 +263,12 @@ class Site {
       case 'sandcastle': {
         const url = this.sandcastle ? this.sandcastle.lookup(route.name) : null;
         return url ? this.redirect(url) : this.notFound(pathname);
+      }
+
+      case 'docify': {
+        // The query goes along: ?plain=true is what the editor asking for this url wants honoured.
+        const url = this.docify ? this.docify.lookup(route.path) : null;
+        return url ? this.redirect(withQuery(url, query)) : this.notFound(pathname);
       }
 
       case 'category': {

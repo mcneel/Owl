@@ -102,6 +102,7 @@ static void PrintUsage()
       --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
       --skip-undocumented   Leave anything with no <summary> out of the site
       --sandcastle          Also answer the Sandcastle urls this set was published at
+      --docify              Also answer the docify urls this set was published at
       --quiet               Only print the summary, not per-page progress (build)
 
     serve and build generate before they render, so both take the model options too.

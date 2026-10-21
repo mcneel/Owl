@@ -41,6 +41,7 @@ function parseArgs(argv) {
     d2: '',
     skipUndocumented: false,
     sandcastle: false,
+    docify: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -93,6 +94,9 @@ function parseArgs(argv) {
         break;
       case '--sandcastle':
         options.sandcastle = true;
+        break;
+      case '--docify':
+        options.docify = true;
         break;
       default:
         throw new Error(`Unknown argument '${arg}'. Try 'owl --help'.`);

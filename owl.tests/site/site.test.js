@@ -453,6 +453,80 @@ describe('?plain and ?dark', () => {
   });
 });
 
+describe('--docify', () => {
+  const vm = require('node:vm');
+  const { stub } = require(path.join(site, 'lib', 'docify'));
+  const { get } = make({ docify: true });
+  const plain = new URLSearchParams('plain=true&dark=true');
+
+  /** Where a docify path is sent, asked the way the script editor asks. */
+  const moved = (url, query = plain) => {
+    const result = make({ docify: true }).site.resolve(url, query, false);
+    assert.equal(result.status, 301, `${url} returned ${result.status}`);
+    return result.location;
+  };
+
+  test('a type goes to its page, keeping the query', () => {
+    assert.equal(moved('/samples.memorystore/'), '/type/samples.memorystore/?plain=true&dark=true');
+  });
+
+  test('a member goes to its card on the type page', () => {
+    assert.equal(moved('/samples.memorystore/read'), '/type/samples.memorystore/?plain=true&dark=true#read-system.string');
+    assert.equal(moved('/samples.shapes.circle.spot/distance'), '/type/samples.shapes.circle.spot/?plain=true&dark=true#distance');
+  });
+
+  test('a constructor is named after its type', () => {
+    assert.equal(moved('/samples.members.gadget/gadget'), '/type/samples.members.gadget/?plain=true&dark=true#ctor');
+  });
+
+  test('overloads share a name, answered by the first', () => {
+    assert.match(moved('/samples.members.gadget/configure'), /#configure-/);
+  });
+
+  test('generic types and explicit interface members', () => {
+    assert.equal(moved('/samples.owned`1/clear'), '/type/samples.owned-1/?plain=true&dark=true#clear');
+    assert.match(moved('/samples.members.gadget/system.idisposable.dispose'), /#system-idisposable-dispose$/);
+  });
+
+  test('case does not matter', () => {
+    assert.equal(moved('/Samples.MemoryStore/Read'), moved('/samples.memorystore/read'));
+  });
+
+  test('without a query, none is added', () => {
+    assert.equal(moved('/samples.memorystore/', null), '/type/samples.memorystore/');
+  });
+
+  test('under --base', () => {
+    const result = make({ docify: true, base: '/api/samples' }).site.resolve('/api/samples/samples.memorystore/', plain, false);
+    assert.equal(result.location, '/api/samples/type/samples.memorystore/?plain=true&dark=true');
+  });
+
+  test('unknown names and owl\'s own pages', () => {
+    assert.equal(get('/samples.nothing/').status, 404);
+    assert.equal(get('/samples.memorystore/nothing').status, 404);
+    assert.equal(get('/type/samples.memorystore/').status, 200);
+  });
+
+  test('without --docify, docify paths are not found', () => {
+    assert.equal(make().get('/samples.memorystore/').status, 404);
+  });
+
+  test('every documented type and member has a path to export', () => {
+    const urls = new Map([...make({ docify: true }).site.docify.stubs()]);
+    assert.equal(urls.get('/samples.memorystore/'), '/type/samples.memorystore/');
+    assert.equal(urls.get('/samples.members.gadget/configure/'), '/type/samples.members.gadget/#configure-system.int32-system.int32-system.int32-system.int32-system.string');
+  });
+
+  test('an exported stub carries the query it was asked with', () => {
+    const page = stub('/type/samples.memorystore/#read-system.string');
+    const script = page.match(/<script>([\s\S]*?)<\/script>/)[1];
+    let replaced = null;
+    const location = { href: 'https://example.com/samples.memorystore/read/?plain=true&dark=true', search: '?plain=true&dark=true', replace: (u) => { replaced = u; } };
+    vm.runInNewContext(script, { URL, location });
+    assert.equal(replaced, 'https://example.com/type/samples.memorystore/?plain=true&dark=true#read-system.string');
+  });
+});
+
 describe('slugs', () => {
   test('are lower case and keep dots', () => {
     assert.equal(slugify('Samples.MemoryStore'), 'samples.memorystore');

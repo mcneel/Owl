@@ -169,6 +169,67 @@ public sealed class CommandLineTests(SampleModel model)
     Assert.False(File.Exists(Path.Combine(dir, "html", "M_Samples_Members_Gadget__ctor_2.htm")));
   }
 
+  [Theory]
+  [InlineData("samples.memorystore", "/api/samples/type/samples.memorystore/")]
+  [InlineData("samples.memorystore/read", "/api/samples/type/samples.memorystore/#read-system.string")]
+  [InlineData("samples.members.gadget/gadget", "/api/samples/type/samples.members.gadget/#ctor")]
+  public void BuildWritesDocifyRedirects(string path, string target)
+  {
+    string dir = TempDir();
+    var (code, output) = Run("build", "--json", model.Directory, "--out", dir, "--quiet", "--base", "/api/samples", "--docify");
+    Assert.True(code == 0, output);
+
+    string stub = Path.Combine(dir, path, "index.html");
+    Assert.True(File.Exists(stub), $"{path}/ was not written");
+    Assert.Contains(target, File.ReadAllText(stub));
+  }
+
+  [Fact]
+  public void BuildWithoutDocifyWritesNoDocifyRedirects()
+  {
+    string dir = TempDir();
+    var (code, output) = Run("build", "--json", model.Directory, "--out", dir, "--quiet");
+    Assert.True(code == 0, output);
+    Assert.False(Directory.Exists(Path.Combine(dir, "samples.memorystore")));
+  }
+
+  [Fact]
+  public async Task ServeAnswersDocifyUrlsWithTheQuery()
+  {
+    int port = FreePort();
+    using Process process = Start("serve", "--json", model.Directory, "--port", port.ToString(), "--docify");
+    try
+    {
+      using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+      HttpResponseMessage? response = null;
+      for (int attempt = 0; attempt < 60 && response is null; attempt++)
+      {
+        try
+        {
+          response = await http.GetAsync($"http://localhost:{port}/samples.memorystore/read?plain=true&dark=true");
+        }
+        catch (HttpRequestException)
+        {
+          await Task.Delay(500);
+        }
+      }
+
+      Assert.NotNull(response);
+      Assert.Equal(HttpStatusCode.MovedPermanently, response.StatusCode);
+      Assert.Equal("/type/samples.memorystore/?plain=true&dark=true#read-system.string", response.Headers.Location?.OriginalString);
+    }
+    finally
+    {
+      process.Kill(entireProcessTree: true);
+    }
+  }
+
+  [Fact]
+  public void HelpListsDocify()
+  {
+    Assert.Contains("--docify", Run("--help").Output);
+  }
+
   [Fact]
   public void BuildWithoutSandcastleWritesNoRedirects()
   {
