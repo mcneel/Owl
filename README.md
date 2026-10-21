@@ -1,4 +1,4 @@
-# 🦉 Owl
+# <img src="art/icon.png" alt="" width="40" align="top"> Owl
 
 Turn your .NET library into a documentation website.
 
