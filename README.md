@@ -1,328 +1,149 @@
 # 🦉 Owl
 
-General purpose API documentation generator and website builder for .NET.
+Turn your .NET library into a documentation website.
 
-Point owl at your projects and get a documentation website: a page per type with its members as
-anchored sections, browsable by assembly and category, with search.
+Owl reads your C# or Visual Basic project and builds a searchable site with a page for every type.
 
-## Why
+## Install
 
-Owl uses semantic analysis so the documentation it writes knows:
-
-- **base types, interfaces and full inheritance chains**, resolved rather than named
-- **derived types**, computed across every project you document together
-- **real accessibility**, so internal and private API stays out of your published site
-- **explicit *and* implicit interface implementations**, taken from the symbol
-- **source file and line** for every type and member, linkable to your repository
-- **`<inheritdoc/>` resolved** against base types and interfaces, including ones from outside your
-  own code
-- **doc comments kept structured**, so a `<see cref="..."/>` carries what it points at and renders as
-  a working link instead of styled text
-- **`<category>` xml tag**, so classes and interfaces can be logically grouped (e.g. `/// <category>Storage</category>`)
-- **`<since>` xml tag**, so a type or a member marks which API version it was added in (e.g. `/// <since>8.0</since>`), and readers can filter the site down to the version they are on
-- **Main Markdown**, so the site and each assembly have a hand-written entry page
-- **Category Markdowns**, so each category has a hand-written overview page
-
-## C# and Visual Basic
-
-Both languages are read the same way, through the compiler, and land in one model — so a C# project
-and a Visual Basic one documented together cross-reference each other as though they were one.
-
-Signatures are written in C# whichever language declared them: `string Name` rather than
-`Property Name As String`, `List<T>` rather than `List(Of T)`. A site that mixed the two would ask
-its readers to switch dialects between pages, and most of them are writing C# against whatever the
-assembly happens to be written in. What Visual Basic has and C# does not keeps its own name — a
-`Module` is titled and badged as a Module, not dressed up as a static class.
-
-Three things about a VB project are worth knowing, because all three are silent when they go wrong:
-
-- **`RootNamespace` is honored.** It is a compiler option in VB, not an IDE default, so it wraps
-  every declaration in the assembly.
-- **Project-level `Imports` are honored**, including the ones the SDK adds. They appear in no source
-  file, so without them almost nothing in a normal VB assembly binds.
-- **A `Public Event Changed(...)` is documented along with the `ChangedEventHandler` delegate it
-  mints.** No source line declares that delegate, but it is the type any handler must have, and the
-  name a C# caller writes.
-
-F# is not supported: there is no Roslyn compilation to build for it.
-
-## Installing
-
-owl is published from `main` as a .NET tool package — one ~3.5 MB `.nupkg` that serves Linux,
-macOS and Windows alike. It is framework-dependent, which costs nothing here: `owl gen` shells out
-to `dotnet msbuild`, so any machine able to run owl already has the SDK such a package needs.
-
-The latest build of `main`, from the workflow artifact:
+You need [.NET SDK 8.0+](https://dotnet.microsoft.com/download) and [Node 18+](https://nodejs.org).
 
 ```bash
-RUN=$(gh run list -R mcneel/Owl -w build -b main -s success -L1 --json databaseId -q '.[0].databaseId')
-gh run download "$RUN" -R mcneel/Owl -n owl-nupkg --dir pkg
-
-dotnet tool install McNeel.Owl --source pkg --tool-path ./bin --prerelease
-./bin/owl --version
+dotnet tool install --global McNeel.Owl
 ```
 
-`--source` rather than `--add-source`, because a tool package carries its dependencies: the
-install resolves entirely from that folder and never reaches nuget.org. `--prerelease` is required
-because every build is versioned `0.1.0-ci.<run>` — the base comes from `owl/Owl.csproj` and CI
-appends the run number. Drop `--tool-path` to install it on PATH as an ordinary global tool.
-
-Artifacts are kept for 90 days, so pin by keeping the `.nupkg` rather than by expecting an old
-run to still be downloadable.
-
-Working on owl itself, there is nothing to install — run it straight from the tree:
+## Preview Documentation
 
 ```bash
-dotnet run --project owl -- serve --json .owl/json
+owl serve MyLib.csproj
 ```
 
-From inside GitHub Actions, reading a private repo needs a token of its own — a fine-grained PAT
-with `actions: read` on this repository. A repository's own
-`GITHUB_TOKEN` cannot reach another repository.
+Open http://localhost:8080. Edit your docs and refresh to see the changes.
 
-## Commands
+## Publish Documentation
 
 ```bash
-owl gen   <project...>   # write the documentation model
-owl serve <project...>   # write it, then serve it locally
-owl build <project...>   # write it, then export a static site
+owl build MyLib.csproj --out ./public
 ```
 
-A project is a `.csproj` or a `.vbproj`. Pass several to document them as one set. This matters: a `<see cref="..."/>` pointing at
-another project in the set becomes a link, derived types are found across the whole set, and anything
-outside it is left as plain text rather than a dead link.
+Upload the `public` folder to any web host.
+
+If the site lives under a path, such as `https://example.com/api/mylib`, say so:
 
 ```bash
-owl gen src/MyLib/MyLib.csproj src/MyLib.Extras/MyLib.Extras.vbproj --name "MyLib API"
+owl build MyLib.csproj --out ./public --base /api/mylib --site-url https://example.com
 ```
 
-`serve` and `build` regenerate the model first. Point them at an existing one to skip that:
+## Document Several Projects Together
 
 ```bash
-owl serve --json .owl/json
-owl build --json .owl/json --out ./public
+owl serve MyLib.csproj MyLib.Extras.csproj --name "MyLib"
 ```
 
-### Options
+Links between the projects just work.
 
-```
-owl <command> ...
-  -h, --help            Show this help
-  --version             Print owl's version
+## Documentation Categories
 
-owl gen <project...>
-  -o, --out <dir>       Where to write the model (default .owl/json)
-  --name <text>         Site name, recorded in the model
-  --tfm <tfm>           Which framework to document, for a project that multi-targets
-                        (default net8.0); a project that targets one is documented as it is
-  -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
-  --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
-  --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
-                        directory and the repo root
-  --skip-msbuild        Reuse previously captured project inputs
-  --no-restore          Skip the restore pass before capturing inputs
-  --no-build-refs       Reuse referenced projects as they were last built, rather than building
-                        them; much faster where they are already there
-  --verify              Report undocumented public API and unresolved crefs
-  -v, --verbose         Full diagnostics
-
-owl serve <project...>
-  -o, --out <dir>       Where to write the model (default .owl/json)
-  --port <n>            Port to listen on (default 8080)
-
-owl build <project...>
-  -o, --out <dir>       Where to write the site (default .owl/site)
-  --quiet               Only print the summary, not per-page progress
-
-owl serve and owl build, both
-  --json <dir>          Reuse an existing model instead of generating one
-  --docs <dir>          Your hand-written pages (default docs/api, when it exists)
-  --name <text>         Site name, overriding the one recorded in the model
-  --logo <file>         Header icon, overriding <docs>/logo.svg
-  --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
-  --base <path>         Path prefix the site will be served under
-  --site-url <url>      Origin for canonical urls and the sitemap
-  --source-refs <path>  Root for "declared in" references; without it there are none
-  --api-versions <list> Versions the header's picker offers, newest first, comma separated;
-                        without it there is no picker and <since> filters nothing
-  --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
-                        sitting there as text. Repeatable; <asm> may end in '*'
-  --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
-  --skip-undocumented   Leave anything with no <summary> out of the site
-  --sandcastle          Also answer the Sandcastle urls this set was published at
-```
-
-`serve` and `build` generate first, so they take everything `gen` does. Give them `--json <dir>`
-instead of projects to reuse a model.
-
-`--name` is recorded in the model, so you set it once at generation time rather than repeating it
-every time you serve or export. Passing it to `serve` or `build` overrides it for that run.
-
-`--api-versions` puts a version picker in the header, and is what makes the `<since>` tag do
-anything: choosing a version hides everything a `<since>` puts after it, so an untagged API belongs
-to every version. Pass them newest first — the first is what the site opens on:
-
-```bash
-owl build MyLib.csproj --api-versions 9,8,7    # picker reads v9, v8, v7
-owl build MyLib.csproj --api-versions V9,V8    # your own spelling, left as written
-owl build MyLib.csproj --api-versions 9        # a label rather than a menu, still filtering
-```
-
-A number is written with a `v` in front of it, since a bare `9` in a header reads as a count of
-something. An entry that starts with a letter is your spelling and is left alone. Either way the
-entry itself is what a `<since>` is compared against, and only the major part is read, so
-`<since>8.9</since>` and `<since>8.0</since>` both belong to `8`.
-
-Name one version and the header states it instead of offering a menu — there is nothing to choose,
-but the page is still filtered, which is how you publish the v8 surface of a library that has since
-moved on. Without the option there is no picker at all and every API is shown whatever its
-`<since>` says, which is the right shape for a library on its first release.
-
-A set documents the assemblies it was generated from, so every type it merely *references* — the
-library it is built on — is a name with nowhere to go. `--link` says where those live:
-
-```bash
-owl build MyPlugin.vbproj MyPlugin.IO.csproj --base /api/plugin \
-  --link MyLib=/api/mylib --link "MyLib.Extensions*=/api/mylib-ext"
-```
-
-Parameters, return types, base classes and `<see cref>`s into a named assembly then link into that
-site. It is keyed by assembly rather than by namespace because a namespace is not owned by one, and
-the url is computed from owl's own slug rule, so the other site does not have to be at hand — or
-even built yet — for this one to link into it. Framework types keep going to Microsoft Learn.
-
-Every member's source file and line is recorded too, but nothing is shown until `--source-refs`
-gives a root to hang those paths from — on its own the recorded path is relative to the tree the
-projects were built from and means nothing. An `http`/`https` root turns each into a link with a
-`#L<line>` anchor; anything else, such as a local checkout, renders as plain text.
-
-Projects that target several frameworks are documented one framework per run. `--tfm net48` for the
-desktop build, `--tfm net8.0` for the modern one.
-
-`--verify` is worth running in CI. Most projects suppress CS1591, so an undocumented public member
-never shows up in a normal build; `--verify` is where it surfaces, along with any
-`<see cref="..."/>` that does not resolve to a real symbol.
-
-## The site
-
-| URL | Page |
-|---|---|
-| `/` | landing page and the list of assemblies |
-| `/assembly/<assembly>/` | one assembly, with its categories and namespaces |
-| `/namespace/<namespace>/` | the types in a namespace |
-| `/category/<assembly>/<category>/` | a category overview and its types |
-| `/type/<type>/` | one type, its members as `#anchor` sections |
-| `/example/<type>/<member>/` | one member's examples, tabbed by language |
-| `/namespace/type/<type>/` | the same type page in namespace mode |
-| `/search/` | search |
-
-Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
-JSON-LD, and every link is a real `href`. The site works with JavaScript disabled; JavaScript adds
-the theme toggle, the kind filter, the collapsible navigation tree, the resizable sidebar, the
-assembly selector, the version picker where there is one, and client-side search.
-
-The tree is sent once rather than with every page: a page carries the group it is standing in, and
-the rest arrive from an asset the browser then has cached for the read. See
-[NOTES](NOTES.md#the-tree-is-sent-once-not-with-every-page).
-
-Syntax highlighting, diagrams and math all happen when the site is generated and nothing is loaded
-from a CDN, so an exported site works with no network at all. Static output is written as
-`<path>/index.html`, which serves from any plain file host with no rewrite rules, alongside
-`sitemap.xml` and `robots.txt`.
-
-While `owl serve` is running it watches the model and your hand-written pages and picks up changes on
-the next request.
-
-## Writing the docs
-
-Ordinary C# documentation comments, plus two tags of owl's own. They are not standard C# doc tags, so
-the compiler passes them through untouched:
+Group types into categories with a `<category>` tag:
 
 ```csharp
-/// <summary>Reads and writes code.</summary>
+/// <summary>Saves files.</summary>
 /// <category>Storage</category>
-/// <since>2.1</since>
-public interface IStorage { }
+public class FileStore { }
 ```
 
-`<category>` groups types on the site, which is how you get a reading order that isn't just
-alphabetical namespaces. `<since>` records the version an API appeared in, and shows as a `Since
-v2.1` chip on that type's or member's card. It also feeds the header's version picker, once
-[`--api-versions`](#options) says which versions the site offers: choosing an older one then hides
-everything tagged after it.
-
-### Hand-written pages
-
-Some pages are prose, not generated API. They live under your docs directory (`docs/api` by default)
-as plain Markdown with no front-matter:
+Then put Markdown files in a `docs/api` folder next to where you run owl:
 
 ```
-docs/api/MAIN.md                        the site's landing page
-docs/api/<AssemblyName>/MAIN.md         an assembly's landing page
-docs/api/<AssemblyName>/<Category>.md   a category overview
+docs/api/MAIN.md                  home page
+docs/api/logo.svg                 header icon
+docs/api/MyLib/MAIN.md            MyLib's page
+docs/api/MyLib/Storage.md         the Storage category's page
 ```
 
-Folder names match your assembly names, and a category file's name matches its `<category>` value,
-both compared case-insensitively. `MAIN.md` inside an assembly folder is that assembly's page, never
-a category called "MAIN". The category path includes the assembly because category names are only
-unique within one — `Options` and `Utilities` tend to show up in several.
+The sidebar lists your categories, and owl shows a placeholder for any page you haven't written yet.
 
-The first paragraph of an assembly's `MAIN.md` doubles as its blurb on the landing page and as that
-page's meta description.
+Pages somewhere else? Use `--docs path/to/pages`.
 
-Any page you don't write falls back to a stub telling you where to add it, so a fresh checkout works
-before you have written a word.
-
-Write none at all — no `--docs`, and no `docs/api` directory to default to — and the site becomes an
-API dump instead: no category pages, no stubs asking for prose, and a sidebar that is one group per
-namespace holding its types, the same on every page. That is the right shape for a library with no
-`<category>` tags, which would otherwise open on a single group holding everything it has.
-
-A site that does have hand-written pages offers both ways of reading. The sidebar is the assembly's
-categories, and following the namespace in a type's breadcrumbs switches to the namespace tree,
-where it stays until you click your way back out. The two are two sets of urls — `/type/x/` and
-`/namespace/type/x/` — so a link goes to the reader as the page you were looking at, with no
-JavaScript and nothing remembered between visits.
-
-Supported Markdown: headings with anchors, bold, italic, strikethrough, inline code, fenced code
-blocks with highlighting, links, images, ordered and unordered lists including nesting, blockquotes,
-tables and horizontal rules, plus diagrams and math.
-
-### Diagrams and math
-
-A ` ```d2 ` fence is drawn by [d2](https://d2lang.com) and inlined as SVG, and `$...$` / `$$...$$`
-are typeset as MathML:
+Pages can include diagrams. Install [d2](https://d2lang.com) first:
 
 ````markdown
 ```d2
-direction: right
-Code -> Compile -> Execute -> Result
+Code -> Compile -> Run
 ```
-
-The sum of the first $n$ squares is $\sum_{i=0}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}$.
 ````
 
-Both happen while the site is generated, so a diagram is markup a crawler can read rather than a
-picture, an equation is text that scales with the paragraph, and neither ships a library to the
-reader. A diagram follows the site's theme toggle, light or dark, from a single drawing.
+Pages can also include math:
 
-Math needs nothing installed. Diagrams need the `d2` binary (`brew install d2`) and are optional
-without it: a diagram fence renders as a code block and the build says so in one line. Fences in
-other languages are unaffected either way, and math is read only in these pages, not in doc
-comments, where a `$` is too ordinary a character to reinterpret.
+```markdown
+The area of a circle is $\pi r^2$.
+```
 
-## Requirements
+## Documentation Version
 
-| | Needed by | Without it |
+```csharp
+/// <summary>Saves files.</summary>
+/// <since>2.1</since>
+public class FileStore { }
+```
+
+```bash
+owl build MyLib.csproj --api-versions 3,2,1
+```
+
+Readers pick a version from the header and see only what existed in it.
+
+## Link to Your Source Code
+
+```bash
+owl build MyLib.csproj --source-refs https://github.com/me/mylib/blob/main
+```
+
+Every type and member links to the line it is declared on.
+
+## Link to Another Library's Docs
+
+If your library uses types from another library that is also documented with owl:
+
+```bash
+owl build MyPlugin.csproj --link MyLib=/api/mylib
+```
+
+Those types now link to the other site. .NET types link to Microsoft Learn automatically.
+
+## Check Documentation in CI
+
+```bash
+owl verify MyLib.csproj
+```
+
+Lists undocumented API, and fails on broken `<see cref="..."/>` links.
+
+## More Options
+
+| Command | Option | What It Does |
 |---|---|---|
-| .NET SDK 8.0+ | `owl gen`, and `serve`/`build` when they generate | owl stops before starting |
-| Node 18+ | `owl serve`, `owl build` | owl stops before generating |
-| [d2](https://d2lang.com) | ` ```d2 ` fences only | the fence renders as a code block, and the run says so |
+| all | `--name <text>` | Site name |
+| all | `--tfm <tfm>` | Framework to document, e.g. `net48` |
+| all | `-c <name>` | Build configuration, e.g. `Release` |
+| serve | `--port <n>` | Port to use (default 8080) |
+| build | `--out <dir>` | Where to write the site |
+| serve, build | `--docs <dir>` | Folder of your own pages |
+| serve, build | `--logo <file>` | Header icon |
+| serve, build | `--skip-undocumented` | Hide anything without a summary |
 
-The SDK is not only there to run owl: owl needs to be able to build your projects, since that is
-where the extra detail comes from. It runs your build's own configuration, so conditional
-compilation, multi-targeting and package references are honoured as your build defines them.
+Run `owl --help` to see all options.
 
-Both hard requirements are checked before a command does any work, so a missing one is a sentence
-naming what to install rather than a failure minutes into a build. `d2` is checked when the first
-diagram is met, which is why a project that draws nothing never needs it.
+## Development
+
+- `owl/` is the command-line tool
+- `owl-gen/` reads projects and writes the docs data
+- `owl-site/` turns that data into the website
+
+Run it from source:
+
+```bash
+dotnet run --project owl -- serve MyLib.csproj
+```
+
+Design decisions are explained in [NOTES](NOTES.md).
