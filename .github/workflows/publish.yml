@@ -19,6 +19,11 @@ jobs:
     needs: [test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Trusted publishing: GitHub vouches for this run and nuget.org trades that for a short-lived key,
+    # so no API key is stored. The policy on nuget.org names this repository and publish.yml.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       # LFS, or the package icon is packed as a pointer file rather than the image.
       - uses: actions/checkout@v7
@@ -32,6 +37,13 @@ jobs:
       - name: Pack
         run: dotnet pack owl/Owl.csproj -c Release -o nupkg
 
+      # user is the nuget.org account that owns the trusted publishing policy, not an email.
+      - name: Log in to nuget.org
+        id: nuget
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       # --skip-duplicate makes a re-run harmless; bump VersionPrefix to publish a new version.
       - name: Push to nuget.org
-        run: dotnet nuget push 'nupkg/*.nupkg' --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push 'nupkg/*.nupkg' --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${{ steps.nuget.outputs.NUGET_API_KEY }}
