@@ -356,6 +356,103 @@ describe('assets', () => {
   });
 });
 
+describe('?plain and ?dark', () => {
+  const vm = require('node:vm');
+  const { html, type } = make();
+
+  // The scripts in <head>, which run before the page paints.
+  const scripts = [...html(type('MemoryStore')).split('</head>')[0].matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+
+  /** Runs the head scripts at an address, with the system theme given, and returns what they did. */
+  function load(search, { systemLight = false } = {}) {
+    const attributes = new Map();
+    const stored = [];
+    let onClick = null;
+    const origin = 'https://example.com';
+    const context = {
+      URL,
+      URLSearchParams,
+      location: { search, href: `${origin}/type/samples.memorystore/${search}`, origin },
+      sessionStorage: { getItem: () => null, setItem: (k, v) => stored.push([k, v]) },
+      matchMedia: () => ({ matches: systemLight }),
+      document: {
+        documentElement: {
+          setAttribute: (k, v) => attributes.set(k, v),
+          getAttribute: (k) => attributes.get(k),
+        },
+        addEventListener: (name, handler) => { if (name === 'click') onClick = handler; },
+      },
+    };
+    for (const script of scripts) vm.runInNewContext(script, context);
+
+    /** Clicks a link and returns where it now goes. */
+    const click = (href, target = '') => {
+      const a = { href: new URL(href, context.location.href).href, target };
+      if (onClick) onClick({ target: { closest: () => a } });
+      return a.href;
+    };
+
+    return { attributes, stored, click };
+  }
+
+  test('a normal visit is unchanged', () => {
+    const { attributes, click } = load('', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'light');
+    assert.equal(click('/type/samples.istore/'), 'https://example.com/type/samples.istore/');
+  });
+
+  test('plain hides the chrome and is light, whatever the system says', () => {
+    const { attributes } = load('?plain=true');
+    assert.equal(attributes.has('data-plain'), true);
+    assert.equal(attributes.get('data-theme'), 'light');
+  });
+
+  test('plain and dark is dark', () => {
+    const { attributes } = load('?plain=true&dark=true', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), true);
+    assert.equal(attributes.get('data-theme'), 'dark');
+    assert.equal(attributes.get('data-theme-pref'), 'dark');
+  });
+
+  test('dark alone only sets the theme', () => {
+    const { attributes } = load('?dark=true', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'dark');
+  });
+
+  test('false turns either off', () => {
+    const { attributes } = load('?plain=false', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'light');
+    assert.equal(load('?plain=true&dark=false').attributes.get('data-theme'), 'light');
+  });
+
+  test('nothing is remembered for the next visit', () => {
+    assert.deepEqual(load('?plain=true&dark=true').stored, []);
+  });
+
+  test('same-site links keep plain and dark', () => {
+    const { click } = load('?plain=true&dark=true');
+    assert.equal(click('/type/samples.istore/'), 'https://example.com/type/samples.istore/?plain=true&dark=true');
+    assert.equal(click('/type/samples.istore/#read'), 'https://example.com/type/samples.istore/?plain=true&dark=true#read');
+    assert.equal(click('/search/?q=store'), 'https://example.com/search/?q=store&plain=true&dark=true');
+  });
+
+  test('other sites and new tabs are left alone', () => {
+    const { click } = load('?plain=true');
+    assert.equal(click('https://learn.microsoft.com/dotnet/api/system.idisposable'), 'https://learn.microsoft.com/dotnet/api/system.idisposable');
+    assert.equal(click('/type/samples.istore/', '_blank'), 'https://example.com/type/samples.istore/');
+  });
+
+  test('the stylesheet hides the header, sidebar and breadcrumbs', () => {
+    const css = make().site.asset('app.css').body;
+    for (const part of ['header', '.sidebar', '.resize-handle', '.breadcrumbs']) {
+      assert.match(css, new RegExp(`:root\\[data-plain\\] ${part.replace('.', '\\.')}[,\\s{]`), `${part} is not hidden`);
+    }
+  });
+});
+
 describe('slugs', () => {
   test('are lower case and keep dots', () => {
     assert.equal(slugify('Samples.MemoryStore'), 'samples.memorystore');
