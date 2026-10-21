@@ -39,7 +39,8 @@ function memberName(memberId, typeName) {
  * The page a docify url is answered with when the site is exported rather than served.
  *
  * As the Sandcastle stub, but the query the old url was asked with is carried across, because it
- * is what asks for the plain page: a static host cannot add it to a redirect of its own.
+ * is what asks for the plain page: a static host cannot add it to a redirect of its own. The script
+ * is in the body for the same reason the Sandcastle one is.
  */
 function stub(url) {
   return `<!doctype html>
@@ -49,9 +50,10 @@ function stub(url) {
 <title>Moved</title>
 <link rel="canonical" href="${attr(url)}">
 <meta http-equiv="refresh" content="0; url=${attr(url)}">
-<script>var u=new URL(${JSON.stringify(url)},location.href);u.search=location.search;location.replace(u.href)</script>
 </head>
-<body><p>This page has moved to <a href="${attr(url)}">${escape(url)}</a>.</p></body>
+<body><p>This page has moved to <a href="${attr(url)}">${escape(url)}</a>.</p>
+<script>var u=new URL(${JSON.stringify(url)},location.href);u.search=location.search;location.replace(u.href)</script>
+</body>
 </html>
 `;
 }

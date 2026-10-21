@@ -525,6 +525,17 @@ describe('--docify', () => {
     vm.runInNewContext(script, { URL, location });
     assert.equal(replaced, 'https://example.com/type/samples.memorystore/?plain=true&dark=true#read-system.string');
   });
+
+  // Rhino's script editor styles document.body as each page loads, and leaving from the head can
+  // report a page loaded before it has one.
+  test('redirect pages leave from the body, not the head', () => {
+    const { stub: sandcastleStub } = require(path.join(site, 'lib', 'sandcastle'));
+    for (const page of [stub('/type/samples.memorystore/'), sandcastleStub('/type/samples.memorystore/')]) {
+      const [head, body] = page.split('<body>');
+      assert.doesNotMatch(head, /<script/);
+      assert.match(body, /<script>[\s\S]*location\.replace[\s\S]*<\/script>\s*<\/body>/);
+    }
+  });
 });
 
 describe('slugs', () => {
