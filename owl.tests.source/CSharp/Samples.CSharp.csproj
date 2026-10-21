@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Not built by the tests directly: it is what owl documents, so it only has to restore. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Samples</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS0067</NoWarn>
+    <!-- Lets the tests check that owl honours the project's own defines. -->
+    <DefineConstants>$(DefineConstants);OWL_SAMPLE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Read by <code source="..."/>, never compiled. -->
+    <Compile Remove="Examples/**" />
+  </ItemGroup>
+
+</Project>

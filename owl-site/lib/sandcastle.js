@@ -87,7 +87,7 @@ class Sandcastle {
      * /api/MyLib/ as /api/mylib/, and carrying the real spelling because the export writes a file
      * per name and a file host answers the spelling it was given.
      *
-     * @type {Map<string, {name: string, url: string}>}
+     * @type {Map<string, {name: string, url: string, overloads?: number}>}
      */
     this.targets = new Map();
 
@@ -113,6 +113,9 @@ class Sandcastle {
     }
 
     if (samePage(held.url, url)) {
+      // Counted so the export can write the _1, _2... names Sandcastle gave the later overloads.
+      held.overloads = (held.overloads || 1) + 1;
+
       // The overload list page, which only exists once a member turns out to have overloads.
       const overload = overloadName(held.name);
       if (!this.targets.has(overload.toLowerCase())) {
@@ -177,8 +180,17 @@ class Sandcastle {
 
   /** Every sandcastle url the export has to write, as [url, target] pairs. */
   *stubs() {
-    for (const { name, url } of this.targets.values()) {
+    for (const { name, url, overloads } of this.targets.values()) {
       yield [this.routes.sandcastle(name), url];
+
+      // A static host cannot drop the counter the way lookup does, so each counted name gets a file
+      // of its own, answered as lookup answers it. A real topic of that name keeps its own.
+      for (let i = 1; i < (overloads || 1); i++) {
+        const counted = `${name}_${i}`;
+        if (!this.targets.has(counted.toLowerCase())) {
+          yield [this.routes.sandcastle(counted), url];
+        }
+      }
     }
   }
 

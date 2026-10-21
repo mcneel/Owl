@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Not built by the tests directly: it is what owl documents, so it only has to restore. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Samples.VB</RootNamespace>
+    <OptionStrict>On</OptionStrict>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);42309</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A project-level import: Helpers.vb uses StringBuilder without naming System.Text. -->
+    <Import Include="System.Text" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CSharp/Samples.CSharp.csproj" />
+  </ItemGroup>
+
+</Project>
