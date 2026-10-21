@@ -64,6 +64,7 @@
     <RepositoryUrl>https://github.com/mcneel/Owl</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageIcon>icon.png</PackageIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
 
@@ -80,6 +81,10 @@
     compiles, so anything able to run owl at all already has one, and carrying a runtime as well
     would hand it a second copy of what it has.
   -->
+  <ItemGroup>
+    <None Include="../art/icon.png" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
   <PropertyGroup>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>owl</ToolCommandName>
