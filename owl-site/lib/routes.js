@@ -177,6 +177,11 @@ class Routes {
     return `${this.base}/${SANDCASTLE_DIR}/${name}.htm`;
   }
 
+  /** Where the redirect for one docify path lives. */
+  docify(path) {
+    return `${this.base}/${path}/`;
+  }
+
   sitemap() {
     return `${this.base}/sitemap.xml`;
   }
@@ -243,6 +248,9 @@ class Routes {
     // Sandcastle's own urls, matched last so that nothing owl serves can be shadowed by one.
     const topic = matchSandcastle(parts);
     if (topic) return { kind: 'sandcastle', name: topic };
+
+    // Docify's <type>/ and <type>/<member>, last of all for the same reason.
+    if (parts.length === 1 || parts.length === 2) return { kind: 'docify', path: parts.join('/') };
 
     return null;
   }

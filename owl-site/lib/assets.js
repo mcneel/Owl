@@ -338,6 +338,12 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    goes with the column it resizes. */
 :root[data-sidebar="hidden"] .sidebar,
 :root[data-sidebar="hidden"] .resize-handle { display: none; }
+/* ?plain=true: the page alone, for a host that embeds it and brings its own navigation. */
+:root[data-plain] header,
+:root[data-plain] .skip-link,
+:root[data-plain] .sidebar,
+:root[data-plain] .resize-handle,
+:root[data-plain] .breadcrumbs { display: none; }
 /* Pinned, like the rows under it: it acts on the whole tree, so it is no use only while the top of
    the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
    written on rather than left to the contents, because those rows pin against it - see --tree-bar.

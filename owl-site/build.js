@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const { Site } = require('./lib/site');
 const { stub: sandcastleStub } = require('./lib/sandcastle');
+const { stub: docifyStub } = require('./lib/docify');
 
 /**
  * Exports the docs as a static site.
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     d2: '',
     skipUndocumented: false,
     sandcastle: false,
+    docify: false,
     quiet: false,
   };
 
@@ -82,6 +84,9 @@ function parseArgs(argv) {
         break;
       case '--sandcastle':
         options.sandcastle = true;
+        break;
+      case '--docify':
+        options.docify = true;
         break;
       case '--quiet':
         options.quiet = true;
@@ -207,6 +212,20 @@ if (site.sandcastle) {
   }
 
   if (!options.quiet) console.log(`  ${redirects} sandcastle redirects`);
+  pages += redirects;
+}
+
+// Docify's urls, the same way. Each stub carries the query it was asked with across, since that is
+// how the script editor asks for the plain page.
+if (site.docify) {
+  let redirects = 0;
+
+  for (const [url, target] of site.docify.stubs()) {
+    write(url, docifyStub(target));
+    redirects++;
+  }
+
+  if (!options.quiet) console.log(`  ${redirects} docify redirects`);
   pages += redirects;
 }
 

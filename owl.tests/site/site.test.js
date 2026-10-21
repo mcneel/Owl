@@ -356,6 +356,177 @@ describe('assets', () => {
   });
 });
 
+describe('?plain and ?dark', () => {
+  const vm = require('node:vm');
+  const { html, type } = make();
+
+  // The scripts in <head>, which run before the page paints.
+  const scripts = [...html(type('MemoryStore')).split('</head>')[0].matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+
+  /** Runs the head scripts at an address, with the system theme given, and returns what they did. */
+  function load(search, { systemLight = false } = {}) {
+    const attributes = new Map();
+    const stored = [];
+    let onClick = null;
+    const origin = 'https://example.com';
+    const context = {
+      URL,
+      URLSearchParams,
+      location: { search, href: `${origin}/type/samples.memorystore/${search}`, origin },
+      sessionStorage: { getItem: () => null, setItem: (k, v) => stored.push([k, v]) },
+      matchMedia: () => ({ matches: systemLight }),
+      document: {
+        documentElement: {
+          setAttribute: (k, v) => attributes.set(k, v),
+          getAttribute: (k) => attributes.get(k),
+        },
+        addEventListener: (name, handler) => { if (name === 'click') onClick = handler; },
+      },
+    };
+    for (const script of scripts) vm.runInNewContext(script, context);
+
+    /** Clicks a link and returns where it now goes. */
+    const click = (href, target = '') => {
+      const a = { href: new URL(href, context.location.href).href, target };
+      if (onClick) onClick({ target: { closest: () => a } });
+      return a.href;
+    };
+
+    return { attributes, stored, click };
+  }
+
+  test('a normal visit is unchanged', () => {
+    const { attributes, click } = load('', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'light');
+    assert.equal(click('/type/samples.istore/'), 'https://example.com/type/samples.istore/');
+  });
+
+  test('plain hides the chrome and is light, whatever the system says', () => {
+    const { attributes } = load('?plain=true');
+    assert.equal(attributes.has('data-plain'), true);
+    assert.equal(attributes.get('data-theme'), 'light');
+  });
+
+  test('plain and dark is dark', () => {
+    const { attributes } = load('?plain=true&dark=true', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), true);
+    assert.equal(attributes.get('data-theme'), 'dark');
+    assert.equal(attributes.get('data-theme-pref'), 'dark');
+  });
+
+  test('dark alone only sets the theme', () => {
+    const { attributes } = load('?dark=true', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'dark');
+  });
+
+  test('false turns either off', () => {
+    const { attributes } = load('?plain=false', { systemLight: true });
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(attributes.get('data-theme'), 'light');
+    assert.equal(load('?plain=true&dark=false').attributes.get('data-theme'), 'light');
+  });
+
+  test('nothing is remembered for the next visit', () => {
+    assert.deepEqual(load('?plain=true&dark=true').stored, []);
+  });
+
+  test('same-site links keep plain and dark', () => {
+    const { click } = load('?plain=true&dark=true');
+    assert.equal(click('/type/samples.istore/'), 'https://example.com/type/samples.istore/?plain=true&dark=true');
+    assert.equal(click('/type/samples.istore/#read'), 'https://example.com/type/samples.istore/?plain=true&dark=true#read');
+    assert.equal(click('/search/?q=store'), 'https://example.com/search/?q=store&plain=true&dark=true');
+  });
+
+  test('other sites and new tabs are left alone', () => {
+    const { click } = load('?plain=true');
+    assert.equal(click('https://learn.microsoft.com/dotnet/api/system.idisposable'), 'https://learn.microsoft.com/dotnet/api/system.idisposable');
+    assert.equal(click('/type/samples.istore/', '_blank'), 'https://example.com/type/samples.istore/');
+  });
+
+  test('the stylesheet hides the header, sidebar and breadcrumbs', () => {
+    const css = make().site.asset('app.css').body;
+    for (const part of ['header', '.sidebar', '.resize-handle', '.breadcrumbs']) {
+      assert.match(css, new RegExp(`:root\\[data-plain\\] ${part.replace('.', '\\.')}[,\\s{]`), `${part} is not hidden`);
+    }
+  });
+});
+
+describe('--docify', () => {
+  const vm = require('node:vm');
+  const { stub } = require(path.join(site, 'lib', 'docify'));
+  const { get } = make({ docify: true });
+  const plain = new URLSearchParams('plain=true&dark=true');
+
+  /** Where a docify path is sent, asked the way the script editor asks. */
+  const moved = (url, query = plain) => {
+    const result = make({ docify: true }).site.resolve(url, query, false);
+    assert.equal(result.status, 301, `${url} returned ${result.status}`);
+    return result.location;
+  };
+
+  test('a type goes to its page, keeping the query', () => {
+    assert.equal(moved('/samples.memorystore/'), '/type/samples.memorystore/?plain=true&dark=true');
+  });
+
+  test('a member goes to its card on the type page', () => {
+    assert.equal(moved('/samples.memorystore/read'), '/type/samples.memorystore/?plain=true&dark=true#read-system.string');
+    assert.equal(moved('/samples.shapes.circle.spot/distance'), '/type/samples.shapes.circle.spot/?plain=true&dark=true#distance');
+  });
+
+  test('a constructor is named after its type', () => {
+    assert.equal(moved('/samples.members.gadget/gadget'), '/type/samples.members.gadget/?plain=true&dark=true#ctor');
+  });
+
+  test('overloads share a name, answered by the first', () => {
+    assert.match(moved('/samples.members.gadget/configure'), /#configure-/);
+  });
+
+  test('generic types and explicit interface members', () => {
+    assert.equal(moved('/samples.owned`1/clear'), '/type/samples.owned-1/?plain=true&dark=true#clear');
+    assert.match(moved('/samples.members.gadget/system.idisposable.dispose'), /#system-idisposable-dispose$/);
+  });
+
+  test('case does not matter', () => {
+    assert.equal(moved('/Samples.MemoryStore/Read'), moved('/samples.memorystore/read'));
+  });
+
+  test('without a query, none is added', () => {
+    assert.equal(moved('/samples.memorystore/', null), '/type/samples.memorystore/');
+  });
+
+  test('under --base', () => {
+    const result = make({ docify: true, base: '/api/samples' }).site.resolve('/api/samples/samples.memorystore/', plain, false);
+    assert.equal(result.location, '/api/samples/type/samples.memorystore/?plain=true&dark=true');
+  });
+
+  test('unknown names and owl\'s own pages', () => {
+    assert.equal(get('/samples.nothing/').status, 404);
+    assert.equal(get('/samples.memorystore/nothing').status, 404);
+    assert.equal(get('/type/samples.memorystore/').status, 200);
+  });
+
+  test('without --docify, docify paths are not found', () => {
+    assert.equal(make().get('/samples.memorystore/').status, 404);
+  });
+
+  test('every documented type and member has a path to export', () => {
+    const urls = new Map([...make({ docify: true }).site.docify.stubs()]);
+    assert.equal(urls.get('/samples.memorystore/'), '/type/samples.memorystore/');
+    assert.equal(urls.get('/samples.members.gadget/configure/'), '/type/samples.members.gadget/#configure-system.int32-system.int32-system.int32-system.int32-system.string');
+  });
+
+  test('an exported stub carries the query it was asked with', () => {
+    const page = stub('/type/samples.memorystore/#read-system.string');
+    const script = page.match(/<script>([\s\S]*?)<\/script>/)[1];
+    let replaced = null;
+    const location = { href: 'https://example.com/samples.memorystore/read/?plain=true&dark=true', search: '?plain=true&dark=true', replace: (u) => { replaced = u; } };
+    vm.runInNewContext(script, { URL, location });
+    assert.equal(replaced, 'https://example.com/type/samples.memorystore/?plain=true&dark=true#read-system.string');
+  });
+});
+
 describe('slugs', () => {
   test('are lower case and keep dots', () => {
     assert.equal(slugify('Samples.MemoryStore'), 'samples.memorystore');

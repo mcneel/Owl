@@ -111,6 +111,15 @@ owl build MyPlugin.csproj --link MyLib=/api/mylib
 
 Those types now link to the other site. .NET types link to Microsoft Learn automatically.
 
+## Keep Old Links Working
+
+Moving from Sandcastle or docify? Old page addresses can redirect to the new pages:
+
+```bash
+owl build MyLib.csproj --sandcastle    # html/T_MyLib_Storage.htm
+owl build MyLib.csproj --docify        # mylib.storage/ and mylib.storage/read
+```
+
 ## Check Documentation in CI
 
 ```bash

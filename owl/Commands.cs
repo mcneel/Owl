@@ -120,6 +120,7 @@ sealed class Command
         // Also the site's, but switches rather than settings: they take no value.
         case "--skip-undocumented":
         case "--sandcastle":
+        case "--docify":
           command.SiteArgs.Add(arg);
           break;
 
