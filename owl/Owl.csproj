@@ -56,7 +56,7 @@
          explicit Version wins outright and would make -p:VersionSuffix do nothing, while a prefix
          composes with one. CI packs with -p:VersionSuffix=ci.<run>, giving 0.1.0-ci.42; packing
          with neither gives a plain 0.1.0. -->
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
 
     <PackageId>McNeel.Owl</PackageId>
     <Authors>McNeel</Authors>
@@ -65,6 +65,9 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageIcon>icon.png</PackageIcon>
+    <!-- The repo's own README, so nuget.org shows what GitHub does. Its links and icon are full
+         urls for that reason: nuget.org cannot follow a path into the repository. -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
 
@@ -83,6 +86,7 @@
   -->
   <ItemGroup>
     <None Include="../art/icon.png" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../README.md" Pack="true" PackagePath="" Visible="false" />
   </ItemGroup>
 
   <PropertyGroup>

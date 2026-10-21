@@ -1,4 +1,4 @@
-# <img src="art/icon.png" alt="" width="40" align="top"> Owl
+# <img src="https://media.githubusercontent.com/media/mcneel/Owl/main/art/icon.png" alt="" width="40" align="top"> Owl
 
 Turn your .NET library into a documentation website.
 
@@ -155,4 +155,4 @@ Run it from source:
 dotnet run --project owl -- serve MyLib.csproj
 ```
 
-Design decisions are explained in [NOTES](NOTES.md).
+Design decisions are explained in [NOTES](https://github.com/mcneel/Owl/blob/main/NOTES.md).
