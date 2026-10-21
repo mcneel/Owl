@@ -182,8 +182,8 @@ A set documents the assemblies it was generated from, so every type it merely *r
 library it is built on — is a name with nowhere to go. `--link` says where those live:
 
 ```bash
-owl build Grasshopper.vbproj GH_IO.csproj --base /api/gh1 \
-  --link RhinoCommon=/api/rhinocommon --link "Rhino.Runtime.Code*=/api/rhinocode"
+owl build MyPlugin.vbproj MyPlugin.IO.csproj --base /api/plugin \
+  --link MyLib=/api/mylib --link "MyLib.Extensions*=/api/mylib-ext"
 ```
 
 Parameters, return types, base classes and `<see cref>`s into a named assembly then link into that

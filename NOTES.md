@@ -11,8 +11,8 @@ references, and something has to produce those lists. A `.csproj` does not
 contain them. Source files come from the SDK's implicit glob minus its
 exclusions, references come from NuGet's transitive graph and the framework
 reference pack, and preprocessor constants come from the TFM plus whatever
-property sheets the project imports. One project in the RhinoCode set resolves
-to 6 source files, 180 references and 23 defines, and names none of them.
+property sheets the project imports. One real-world project resolves to 6
+source files, 180 references and 23 defines, and names none of them.
 
 So `owl-gen` shells out once per project to `dotnet msbuild` with a target of
 its own, `WriteOwlInputs` (in `owl-gen/owl.targets`), and asks for the values in
@@ -25,7 +25,7 @@ its own, `WriteOwlInputs` (in `owl-gen/owl.targets`), and asks for the values in
 identity includes its public key, and identity is what an `InternalsVisibleTo`
 in a dependency is matched against, so an unsigned compilation of a signed
 assembly loses access to every internal a friend legitimately reaches into.
-Grasshopper produced thirteen inaccessibility errors from exactly this before
+One real assembly produced thirteen inaccessibility errors from exactly this before
 the key was captured, in code that builds without complaint.
 
 `language` is `$(Language)`, and it is what decides which compiler the rest is
@@ -145,13 +145,13 @@ out from its parts.
 ## Linking to the set next door
 
 A documentation set covers the assemblies it was generated from, and every type it merely
-references belongs to somebody else. On its own that is most of a signature: Grasshopper's
-parameters are RhinoCommon's geometry, and all of it rendered as dead text beside links to
+references belongs to somebody else. On its own that is most of a signature: a plugin SDK's
+parameters are its host library's types, and all of it rendered as dead text beside links to
 everything the set did document.
 
 `--link` maps an assembly to the site that documents it, and it is an assembly rather than a
-namespace on purpose. A namespace is not owned by one assembly — `Rhino.UI` types are documented in
-the RhinoCommon set, and Rhino.UI.dll declares more of its own that are documented nowhere — so a
+namespace on purpose. A namespace is not owned by one assembly — `MyLib.UI` types can be documented
+in the MyLib set while MyLib.UI.dll declares more of its own that are documented nowhere — so a
 namespace map would send both to the same page and be wrong about half of them. That is why the
 model now records the assembly on every external reference, which cost 1% of its size.
 
@@ -163,17 +163,17 @@ mapped to a site that does not document a particular type links to a 404. Feedin
 in would fix that, at the price of making the sets build in sequence.
 
 External *members* stop at their declaring type's page. Their anchors are derivable too, but only
-almost: owl appends a counter where two members normalize alike — six of RhinoCommon's 19,147 — and
+almost: owl appends a counter where two members normalize alike — six in 19,147 on one large library — and
 a computed anchor would land those on the right page beside the wrong card.
 
 ## The tree is sent once, not with every page
 
 The sidebar tree is the same list of types on every page that carries it — what
 changes is which group is open and which row is marked — so writing it into each
-page wrote the whole API into each page. On RhinoCommon that was 1491 types
-serialized 1881 times: 900 MB of a 944 MB export, 480 KB of a 582 KB type page
-whose actual content was 86 KB. Heroku refused the push, which is how it was
-found; the reader was paying for it on every navigation long before that.
+page wrote the whole API into each page. On one large library that was 1491
+types serialized 1881 times: 900 MB of a 944 MB export, 480 KB of a 582 KB type
+page whose actual content was 86 KB. The host refused the push, which is how it
+was found; the reader was paying for it on every navigation long before that.
 
 So a page is written with the group it is standing in and no other. The rest are
 empty containers naming what belongs in them, and `assets/tree-<tree>.json`
