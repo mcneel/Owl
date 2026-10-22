@@ -120,6 +120,10 @@ owl build MyLib.csproj --sandcastle    # html/T_MyLib_Storage.htm
 owl build MyLib.csproj --docify        # mylib.storage/ and mylib.storage/read
 ```
 
+Each old address gets a page that forwards the reader. If your host can send redirects itself, answer from
+`redirects.json` in the output instead. It maps each old address, lower case and without a trailing slash, to its
+new one. Keep the request's query on the new address.
+
 ## Check Documentation in CI
 
 ```bash
