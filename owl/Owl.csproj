@@ -56,7 +56,7 @@
          explicit Version wins outright and would make -p:VersionSuffix do nothing, while a prefix
          composes with one. CI packs with -p:VersionSuffix=ci.<run>, giving 0.1.0-ci.42; packing
          with neither gives a plain 0.1.0. -->
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <VersionPrefix>0.3.0</VersionPrefix>
 
     <PackageId>McNeel.Owl</PackageId>
     <Authors>McNeel</Authors>
