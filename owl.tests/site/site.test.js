@@ -536,6 +536,16 @@ describe('--docify', () => {
       assert.match(body, /<script>[\s\S]*location\.replace[\s\S]*<\/script>\s*<\/body>/);
     }
   });
+
+  // A server that redirects from this list never hands the script editor a stub to load.
+  test('the export lists every redirect for a server to answer', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-redirects-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples',
+      '--docify', '--sandcastle', '--quiet'], { stdio: 'pipe' });
+    const moved = JSON.parse(fs.readFileSync(path.join(out, 'redirects.json'), 'utf8'));
+    assert.equal(moved['/api/samples/samples.memorystore'], '/api/samples/type/samples.memorystore/');
+    assert.equal(moved['/api/samples/html/t_samples_memorystore.htm'], '/api/samples/type/samples.memorystore/');
+  });
 });
 
 describe('slugs', () => {

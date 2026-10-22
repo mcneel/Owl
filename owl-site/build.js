@@ -15,6 +15,10 @@ const { stub: docifyStub } = require('./lib/docify');
  * rewrite rules, alongside sitemap.xml and robots.txt. Nothing is fetched from a network at
  * runtime, so the export also works from a local folder.
  *
+ * With --sandcastle or --docify, redirects.json maps each old url, lower case and with no trailing
+ * slash, to the url it moved to. A server that can redirect should answer from it, with the
+ * request's query carried across, rather than serve the stub pages.
+ *
  * Usage:
  *   node build.js --json .owl/json --out dist [--base /prefix] [--site-url https://host]
  *   node build.js --json .owl/json --out dist [--api-versions 9,8]
@@ -203,11 +207,21 @@ if (!urls.includes(site.routes.home())) {
 // The urls this documentation set used to be published at, when it was published by Sandcastle. A
 // file host cannot be asked to answer one url with another, so each becomes a page that redirects
 // itself; they are not in the sitemap, because the page they point at is.
+// A server answering from this list sends a real redirect, which a page embedding the docs follows
+// without ever loading a stub.
+const moved = {};
+
+/** The key a moved url is listed under, so a server can match a request without knowing its spelling. */
+function movedKey(url) {
+  return url.toLowerCase().replace(/\/+$/, '');
+}
+
 if (site.sandcastle) {
   let redirects = 0;
 
   for (const [url, target] of site.sandcastle.stubs()) {
     write(url, sandcastleStub(target));
+    moved[movedKey(url)] = target;
     redirects++;
   }
 
@@ -222,11 +236,16 @@ if (site.docify) {
 
   for (const [url, target] of site.docify.stubs()) {
     write(url, docifyStub(target));
+    moved[movedKey(url)] = target;
     redirects++;
   }
 
   if (!options.quiet) console.log(`  ${redirects} docify redirects`);
   pages += redirects;
+}
+
+if (site.sandcastle || site.docify) {
+  write(`${site.base}/redirects.json`, JSON.stringify(moved));
 }
 
 const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
