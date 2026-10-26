@@ -1,8 +1,10 @@
 name: publish
 
-# Run by hand on main: tests, then packs the version in owl/Owl.csproj and pushes it to nuget.org.
+# Pushing a tag like v1.2.3 on a main commit tests it, packs it as 1.2.3, pushes it to nuget.org, and
+# makes a GitHub release on the tag listing the PRs merged since the previous one.
 on:
-  workflow_dispatch:
+  push:
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -17,25 +19,30 @@ jobs:
 
   publish:
     needs: [test]
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Trusted publishing: GitHub vouches for this run and nuget.org trades that for a short-lived key,
     # so no API key is stored. The policy on nuget.org names this repository and publish.yml.
+    # contents: write is for creating the release.
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       # LFS, or the package icon is packed as a pointer file rather than the image.
       - uses: actions/checkout@v7
         with:
           lfs: true
+          fetch-depth: 0
+
+      # Only what has been reviewed into main is released.
+      - name: Check the tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
 
       - name: Pack
-        run: dotnet pack owl/Owl.csproj -c Release -o nupkg
+        run: dotnet pack owl/Owl.csproj -c Release -o nupkg -p:Version=${GITHUB_REF_NAME#v}
 
       # user is the nuget.org account that owns the trusted publishing policy, not an email.
       - name: Log in to nuget.org
@@ -44,6 +51,12 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      # --skip-duplicate makes a re-run harmless; bump VersionPrefix to publish a new version.
+      # --skip-duplicate makes a re-run harmless; a new version needs a new tag.
       - name: Push to nuget.org
         run: dotnet nuget push 'nupkg/*.nupkg' --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${{ steps.nuget.outputs.NUGET_API_KEY }}
+
+      # Skipped when the release exists, so a re-run is harmless here too.
+      - name: Make the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
