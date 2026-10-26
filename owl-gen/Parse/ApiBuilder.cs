@@ -422,7 +422,7 @@ sealed class ApiBuilder
         apiType.Parameters = BuildParameters(invoke.Parameters, docs);
         string parameters = string.Join(
             ", ",
-            invoke.Parameters.Select(p => CSharpDisplay.Of(p, DisplayFormats.MemberNameAndParameters)));
+            invoke.Parameters.Select(ParameterDisplay));
 
         apiType.Signature =
             $"{apiType.ReturnType.Display} {CSharpDisplay.Of(type, DisplayFormats.TypeShortName)}({parameters})";
@@ -624,7 +624,7 @@ sealed class ApiBuilder
     target.Parameters = BuildParameters(method.Parameters, docs);
     target.TypeParameters = BuildTypeParameters(method.TypeParameters, docs);
 
-    string nameAndParameters = CSharpDisplay.Of(method, DisplayFormats.MemberNameAndParameters);
+    string nameAndParameters = NameAndParameters(method, method.Parameters);
 
     if (method.MethodKind is MethodKind.Constructor)
     {
@@ -661,7 +661,7 @@ sealed class ApiBuilder
     target.ReturnType = BuildTypeRef(property.Type);
     target.Parameters = property.Parameters.Length == 0 ? null : BuildParameters(property.Parameters, docs);
 
-    string nameAndParameters = CSharpDisplay.Of(property, DisplayFormats.MemberNameAndParameters);
+    string nameAndParameters = NameAndParameters(property, property.Parameters);
     target.Signature = $"{target.ReturnType.Display} {nameAndParameters}";
 
     target.Accessors = new AccessorInfo
@@ -691,7 +691,10 @@ sealed class ApiBuilder
 
     if (field.HasConstantValue)
     {
-      target.ConstantValue = FormatConstant(field.ConstantValue);
+      // An enum's own members keep their numbers: the page lists them as a value column.
+      target.ConstantValue = field.ContainingType.TypeKind == TypeKind.Enum
+          ? FormatConstant(field.ConstantValue)
+          : FormatValue(field.Type, field.ConstantValue);
     }
 
     target.Signature = field.ContainingType.TypeKind == TypeKind.Enum
@@ -932,7 +935,7 @@ sealed class ApiBuilder
         IsParams = parameter.IsParams,
         IsOptional = parameter.HasExplicitDefaultValue,
         DefaultValue = parameter.HasExplicitDefaultValue
-              ? FormatConstant(parameter.ExplicitDefaultValue)
+              ? FormatValue(parameter.Type, parameter.ExplicitDefaultValue)
               : null,
         Doc = paramDoc,
       });
@@ -1004,7 +1007,7 @@ sealed class ApiBuilder
     return result;
   }
 
-  static List<ApiAttribute>? BuildAttributes(ISymbol symbol)
+  List<ApiAttribute>? BuildAttributes(ISymbol symbol)
   {
     var result = new List<ApiAttribute>();
 
@@ -1017,21 +1020,30 @@ sealed class ApiBuilder
       }
 
       string fullName = CSharpDisplay.Of(attributeClass, DisplayFormats.TypeFullName);
-      if (s_hiddenAttributes.Contains(fullName))
+      // Obsolete has its own field, which the site shows as a note rather than a line.
+      if (s_hiddenAttributes.Contains(fullName) || fullName == "System.ObsoleteAttribute")
       {
         continue;
       }
 
       var arguments = new List<string>();
+      var named = new List<ITypeSymbol>();
       foreach (TypedConstant argument in attribute.ConstructorArguments)
       {
         arguments.Add(FormatTypedConstant(argument));
+        CollectNamedTypes(argument, named);
       }
 
-      foreach (KeyValuePair<string, TypedConstant> named in attribute.NamedArguments)
+      foreach (KeyValuePair<string, TypedConstant> pair in attribute.NamedArguments)
       {
-        arguments.Add($"{named.Key} = {FormatTypedConstant(named.Value)}");
+        arguments.Add($"{pair.Key} = {FormatTypedConstant(pair.Value)}");
+        CollectNamedTypes(pair.Value, named);
       }
+
+      List<TypeRef> types = named
+          .Distinct<ITypeSymbol>(SymbolEqualityComparer.Default)
+          .Select(BuildTypeRef)
+          .ToList();
 
       string display = attributeClass.Name;
       if (display.EndsWith("Attribute", StringComparison.Ordinal) && display.Length > "Attribute".Length)
@@ -1039,15 +1051,45 @@ sealed class ApiBuilder
         display = display[..^"Attribute".Length];
       }
 
+      // Same external and assembly as a type reference, so a framework attribute still links out.
+      TypeRef reference = BuildTypeRef(attributeClass);
       result.Add(new ApiAttribute
       {
-        DocId = DocIds.Of(attributeClass),
+        DocId = reference.DocId,
         Display = display,
         Arguments = arguments.Count == 0 ? null : arguments,
+        External = reference.External,
+        Assembly = reference.Assembly,
+        Types = types.Count == 0 ? null : types,
       });
     }
 
     return result.Count == 0 ? null : result;
+  }
+
+  /// <summary>The types an argument writes by name: an enum's, or the one given to typeof.</summary>
+  static void CollectNamedTypes(TypedConstant constant, List<ITypeSymbol> into)
+  {
+    if (constant.IsNull)
+    {
+      return;
+    }
+
+    switch (constant.Kind)
+    {
+      case TypedConstantKind.Array:
+        foreach (TypedConstant value in constant.Values)
+        {
+          CollectNamedTypes(value, into);
+        }
+        break;
+      case TypedConstantKind.Enum when constant.Type is not null:
+        into.Add(constant.Type);
+        break;
+      case TypedConstantKind.Type when constant.Value is ITypeSymbol type:
+        into.Add(type);
+        break;
+    }
   }
 
   static ObsoleteInfo? BuildObsolete(ISymbol symbol)
@@ -1385,6 +1427,109 @@ sealed class ApiBuilder
     _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "",
   };
 
+  /// <summary>
+  /// An enum value as source writes it: 'AttributeTargets.Class | AttributeTargets.Interface'
+  /// rather than the 1028 the compiler stores.
+  /// </summary>
+  static string FormatEnum(ITypeSymbol type, object? value)
+  {
+    static ulong Bits(object? v) => v is ulong u ? u : unchecked((ulong)Convert.ToInt64(v));
+
+    List<(string Name, ulong Bits)> members = type.GetMembers()
+        .OfType<IFieldSymbol>()
+        .Where(field => field.HasConstantValue)
+        .Select(field => (field.Name, Bits(field.ConstantValue)))
+        .ToList();
+
+    ulong bits = Bits(value);
+    foreach ((string name, ulong memberBits) in members)
+    {
+      if (memberBits == bits)
+      {
+        return $"{type.Name}.{name}";
+      }
+    }
+
+    // Largest first, the way Enum.ToString splits flags, so a named combination wins over its parts.
+    var parts = new List<(string Name, ulong Bits)>();
+    ulong remaining = bits;
+    foreach ((string name, ulong memberBits) in members.OrderByDescending(member => member.Bits))
+    {
+      if (memberBits != 0 && (remaining & memberBits) == memberBits)
+      {
+        parts.Add((name, memberBits));
+        remaining &= ~memberBits;
+      }
+    }
+
+    if (remaining == 0 && parts.Count > 0)
+    {
+      return string.Join(" | ", parts.OrderBy(part => part.Bits).Select(part => $"{type.Name}.{part.Name}"));
+    }
+
+    // No members add up to it, so the number is all there is to say.
+    return $"({type.Name}){FormatConstant(value)}";
+  }
+
+  /// <summary>
+  /// A member's name and parameter list, 'Keep(Mode mode = Mode.Disk)' or 'this[int index]'.
+  /// </summary>
+  static string NameAndParameters(ISymbol member, ImmutableArray<IParameterSymbol> parameters)
+  {
+    string whole = CSharpDisplay.Of(member, DisplayFormats.MemberNameAndParameters);
+    if (!parameters.Any(HasEnumDefault))
+    {
+      return whole;
+    }
+
+    // Only the list is rebuilt: Roslyn writes an enum default as a bare 'Disk', which reads as nothing.
+    char close = whole[^1];
+    int open = whole.IndexOf(close == ']' ? '[' : '(');
+    string list = string.Join(", ", parameters.Select(ParameterDisplay));
+    if (member is IMethodSymbol { IsExtensionMethod: true })
+    {
+      // Roslyn writes 'this' only when it writes the whole method.
+      list = "this " + list;
+    }
+
+    return whole[..(open + 1)] + list + close;
+  }
+
+  static bool HasEnumDefault(IParameterSymbol parameter) =>
+      parameter.HasExplicitDefaultValue && parameter.ExplicitDefaultValue is not null && EnumOf(parameter.Type) is not null;
+
+  /// <summary>One parameter as declared, 'Mode mode = Mode.Disk'.</summary>
+  static string ParameterDisplay(IParameterSymbol parameter)
+  {
+    if (!HasEnumDefault(parameter))
+    {
+      return CSharpDisplay.Of(parameter, DisplayFormats.MemberNameAndParameters);
+    }
+
+    string declared = CSharpDisplay.Of(parameter, DisplayFormats.ParameterWithoutDefault);
+    return $"{declared} = {FormatEnum(EnumOf(parameter.Type)!, parameter.ExplicitDefaultValue)}";
+  }
+
+  /// <summary>A constant of the given type, an enum one by member name.</summary>
+  static string FormatValue(ITypeSymbol type, object? value)
+  {
+    ITypeSymbol? enumType = EnumOf(type);
+    return value is not null && enumType is not null
+        ? FormatEnum(enumType, value)
+        : FormatConstant(value);
+  }
+
+  /// <summary>The enum a value of this type is written as, or null; Mode? holds a Mode.</summary>
+  static ITypeSymbol? EnumOf(ITypeSymbol type)
+  {
+    if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+    {
+      type = nullable.TypeArguments[0];
+    }
+
+    return type.TypeKind == TypeKind.Enum ? type : null;
+  }
+
   static string FormatTypedConstant(TypedConstant constant)
   {
     if (constant.IsNull)
@@ -1406,7 +1551,7 @@ sealed class ApiBuilder
 
     if (constant.Kind == TypedConstantKind.Enum && constant.Type is not null)
     {
-      return $"{constant.Type.Name}.{constant.Value}";
+      return FormatEnum(constant.Type, constant.Value);
     }
 
     return FormatConstant(constant.Value);

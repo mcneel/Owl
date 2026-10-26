@@ -114,4 +114,10 @@ static class DisplayFormats
       genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
       miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes
                           | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+  /// <summary>
+  /// A parameter's modifiers, type and name, leaving the default value to be written by the caller.
+  /// </summary>
+  public static readonly SymbolDisplayFormat ParameterWithoutDefault =
+      MemberNameAndParameters.RemoveParameterOptions(SymbolDisplayParameterOptions.IncludeDefaultValue);
 }

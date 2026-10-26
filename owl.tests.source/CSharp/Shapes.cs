@@ -45,4 +45,9 @@ public static class ShapeExtensions
   /// <summary>Twice the area.</summary>
   /// <param name="shape">The shape to measure.</param>
   public static double DoubleArea(this Shape shape) => shape.Area * 2;
+
+  /// <summary>Keeps the shape.</summary>
+  /// <param name="shape">The shape to keep.</param>
+  /// <param name="mode">Where to keep it.</param>
+  public static void Keep(this Shape shape, Mode mode = Mode.Memory) { }
 }
