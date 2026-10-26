@@ -116,8 +116,10 @@ sealed class ApiBuilder
       TargetFramework = _inputs.TargetFramework,
     };
 
-    var types = new List<INamedTypeSymbol>();
-    CollectTypes(_compilation.Assembly.GlobalNamespace, types);
+    // Every type is read, so hidden ones such as an internal NamespaceDoc can still lend their docs.
+    var all = new List<INamedTypeSymbol>();
+    CollectTypes(_compilation.Assembly.GlobalNamespace, all);
+    List<INamedTypeSymbol> types = all.Where(IsDocumentableType).ToList();
 
     // Documentation is parsed for every symbol before any inheritdoc is resolved, so that
     // an <inheritdoc/> pointing at another type in this same assembly finds real content
@@ -138,7 +140,7 @@ sealed class ApiBuilder
     }
 
     assembly.Types.Sort((a, b) => string.CompareOrdinal(a.FullName, b.FullName));
-    assembly.Namespaces = BuildNamespaces(assembly.Types);
+    assembly.Namespaces = BuildNamespaces(assembly.Types, all);
 
     return assembly;
   }
@@ -192,11 +194,6 @@ sealed class ApiBuilder
 
   void CollectTypeTree(INamedTypeSymbol type, List<INamedTypeSymbol> output)
   {
-    if (!IsDocumentableType(type))
-    {
-      return;
-    }
-
     output.Add(type);
 
     foreach (INamedTypeSymbol nested in type.GetTypeMembers())
@@ -1359,7 +1356,7 @@ sealed class ApiBuilder
   /// from a <c>NamespaceDoc</c> class or a documented namespace declaration
   /// when present.
   /// </summary>
-  List<ApiNamespace> BuildNamespaces(List<ApiType> types)
+  List<ApiNamespace> BuildNamespaces(List<ApiType> types, List<INamedTypeSymbol> all)
   {
     var namespaceDocs = new Dictionary<string, DocBlock>(StringComparer.Ordinal);
 
@@ -1375,17 +1372,25 @@ sealed class ApiBuilder
       }
     }
 
-    // The NamespaceDoc convention: a type of that name carries its namespace's docs.
-    foreach (ApiType type in types)
+    // The NamespaceDoc convention: a type of that name carries its namespace's docs, and is
+    // usually internal so that it stays out of the reference itself.
+    foreach (INamedTypeSymbol type in all)
     {
-      if (type.Name != "NamespaceDoc" || type.Docs.IsEmpty)
+      if (type.Name != "NamespaceDoc" || type.ContainingType is not null)
       {
         continue;
       }
 
-      if (!namespaceDocs.ContainsKey(type.Namespace))
+      string ns = type.ContainingNamespace.IsGlobalNamespace ? "" : CSharpDisplay.Of(type.ContainingNamespace);
+      if (namespaceDocs.ContainsKey(ns))
       {
-        namespaceDocs[type.Namespace] = type.Docs;
+        continue;
+      }
+
+      DocBlock docs = _docs.TryGetValue(type, out DocBlock? parsed) ? parsed : ParseDocs(type);
+      if (!docs.IsEmpty)
+      {
+        namespaceDocs[ns] = docs;
       }
     }
 

@@ -243,6 +243,10 @@ describe('without hand-written pages', () => {
     assert.match(page, /Samples\.VB/);
   });
 
+  test('the namespace list shows namespace summaries', () => {
+    assert.match(text(site.routes.home()), /Shapes and what can be done with them\./);
+  });
+
   test('namespaces have pages listing their types', () => {
     const page = text(site.routes.namespace('Samples.Shapes'));
     assert.match(page, /Circle/);
