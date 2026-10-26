@@ -124,6 +124,14 @@ sealed class Command
           command.SiteArgs.Add(arg);
           break;
 
+        // Only build writes a site to serve, so serve accepts it and ignores it, as it does --quiet.
+        case "--server":
+          if (name == "build")
+          {
+            command.SiteArgs.Add(arg);
+          }
+          break;
+
         // Only build.js has per-page progress to quieten, and serve.js rejects what it does not
         // know, so this is forwarded for the one command it means something to. gen and serve
         // accept and ignore it, the way they do --port.
