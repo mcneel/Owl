@@ -263,6 +263,8 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 #asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
 #asm-filter { max-width: 18rem; }
 #asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
+/* Any version but the newest wears the warning's orange, so a reader never forgets they chose an older one. */
+#version-filter.older { background-color: var(--note-obsolete); }
 /* The popup is an OS menu, so its options need colours that do not assume the dark bar. */
 #asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
 /* A site offering one version says so here instead. The same face as the select it stands in for,
@@ -2022,9 +2024,12 @@ const JS = `
     } catch (e) {}
 
     activeVersion = versionSelect.value;
+    // Versions are listed newest first, so anything past the first is an older one.
+    versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
 
     versionSelect.addEventListener('change', function () {
       activeVersion = versionSelect.value;
+      versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
       try { localStorage.setItem(VERSION_KEY, activeVersion); } catch (e) {}
       applyFilter();
       applyTreeFilters();
