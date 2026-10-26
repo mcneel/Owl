@@ -21,6 +21,9 @@ const { BADGE_PAINTS, NOTE_PAINTS } = require('./theme');
 /** The query flag that marks the namespace-mode reading of a page, as the client appends it. */
 const NS_QUERY = `?${NS_FLAG}`;
 
+/** Screens too narrow for the tree beside the page; the stylesheet and the script both read it. */
+const NARROW = '(max-width: 800px)';
+
 /**
  * What MathML needs to draw correctly, from the converter that writes it.
  *
@@ -352,7 +355,7 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .sidebar-toolbar { position: sticky; top: 0; z-index: 3; height: var(--tree-bar); background: var(--bg2); padding: 0.3rem 0.6rem; display: flex; gap: 0.4rem; align-items: center; }
 /* Written the way the group headings under it are: it is one rung further out on the same ladder,
    naming what kind of name the column lists. */
-.sidebar-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* At the right end of the bar, and bare until pointed at: the bar is quiet chrome, and a drawn
    face on its one control would be the loudest thing in the column. The border surfacing under
    the pointer is what says it is a button; transparent rather than absent, so nothing shifts. */
@@ -369,7 +372,7 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 .tree-ns { border-bottom: 1px solid var(--border); }
 /* Sits above the groups rather than inside one, so it gets the group row's padding back. */
 .tree-overview .tree-type-label { padding: 0.5rem 0.75rem; }
-.tree-ns-label { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; user-select: none; background: var(--bg2); border: none; width: 100%; text-align: left; font-family: inherit; }
+.tree-ns-label { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; user-select: none; background: var(--bg2); border: none; width: 100%; text-align: left; font-family: inherit; }
 .tree-ns-label:hover { background: var(--bg3); color: var(--text); }
 /* A namespace row, which is a step in the nesting rather than a heading over it: written like the
    type rows under it and marked with the namespace drawing, so the tree reads as one tree. The rule
@@ -482,19 +485,20 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 /* No padding at the top. It sits inside the scrollport, so a sticky child stops below it and
    leaves a gap under the navbar with content scrolling through. The space moves to the first
    child instead, where it scrolls away like everything else. */
-.main-content { flex: 1; overflow-y: auto; padding: 0 1.5rem 1.5rem; }
+/* --gutter is the column's side padding, which the blocks bled out to its edges give back. */
+.main-content { --gutter: 1.5rem; flex: 1; overflow-y: auto; padding: 0 var(--gutter) 1.5rem; }
 .main-content > :first-child { margin-top: 1.5rem; }
 /* The breadcrumbs and the filter bar, pinned while the page scrolls under them.
 
    Spacing is padding rather than margin throughout: a margin on a sticky box is a transparent
    strip that content shows through on its way past, and the negative side margins are what let the
    background reach the edges of a column that is otherwise padded. */
-.main-content > .main-sticky { position: sticky; top: 0; z-index: 6; background: var(--bg); margin: 0 -1.5rem; padding: 1.5rem 1.5rem 0.7rem; }
+.main-content > .main-sticky { position: sticky; top: 0; z-index: 6; background: var(--bg); margin: 0 calc(-1 * var(--gutter)); padding: 1.5rem var(--gutter) 0.7rem; }
 .main-sticky > :last-child { margin-bottom: 0; }
 .main-content::-webkit-scrollbar { width: 6px; }
 .main-content::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 .ns-section { margin-bottom: 2.5rem; }
-.ns-heading { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+.ns-heading { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text3); margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
 .type-section { margin-bottom: 1.25rem; }
 /* No rule down the left and no indent to hold one: the heading already groups these. */
 .type-children { margin-top: 0.4rem; }
@@ -646,7 +650,7 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 /* Sticks under the breadcrumbs and filter rather than at the top of the column, and below them in
    the stack so it slides beneath rather than over. The offset is measured, not written here: the
    block above is as tall as its filter bar wraps to. */
-.page-head.sticky-head { position: sticky; top: var(--sticky-top, 0px); z-index: 5; background: var(--bg); margin: 0 -1.5rem 1.2rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border2); display: flex; flex-direction: column; max-height: 55vh; }
+.page-head.sticky-head { position: sticky; top: var(--sticky-top, 0px); z-index: 5; background: var(--bg); margin: 0 calc(-1 * var(--gutter)) 1.2rem; padding: 0.75rem var(--gutter); border-bottom: 1px solid var(--border2); display: flex; flex-direction: column; max-height: 55vh; }
 /* Everything above the members rides here - what the type relates to, what it is parameterised on,
    what it says about itself - so it holds still while they scroll under it. Capped, because a type
    with six paragraphs of remarks would otherwise pin a headerful of prose over the viewport and
@@ -664,7 +668,7 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    Outside the scrolling part, both because the identity is what the head is for and because a
    block reaching past its container's edges is a horizontal scrollbar the moment that container
    is the thing that scrolls. */
-.page-head-brief { flex-shrink: 0; background: var(--card-bg); border-bottom: 1px solid var(--card-split); margin: -0.75rem -1.5rem 0; padding: 0.35rem 1.5rem 0.75rem; }
+.page-head-brief { flex-shrink: 0; background: var(--card-bg); border-bottom: 1px solid var(--card-split); margin: -0.75rem calc(-1 * var(--gutter)) 0; padding: 0.35rem var(--gutter) 0.75rem; }
 /* The one part of the brief with no length of its own: a summary written as three paragraphs would
    carry the tabs, and with them the members, off the bottom of the screen - and the brief cannot
    shrink, because the name and the declaration are what the head is for. Five lines, then it
@@ -782,7 +786,7 @@ ${TEMML_CSS}
 /* ---- Member cards ---- */
 /* No hover state: the card is not a target, only the name and the anchor inside it are.
    Clipped, so the half below can reach the border on three sides and still take the corners. */
-.member { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.6rem; overflow: hidden; transition: box-shadow 0.15s; scroll-margin-top: var(--anchor-offset, 1rem); }
+.member { --pad-y: 0.9rem; --pad-x: 1.1rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: var(--pad-y) var(--pad-x); margin-bottom: 0.6rem; overflow: hidden; transition: box-shadow 0.15s; scroll-margin-top: var(--anchor-offset, 1rem); }
 .member:target { box-shadow: 0 0 0 3px var(--flash); }
 /* Two grounds inside the one border: what identifies the member on the card, and everything that
    details it a shade off it under a rule. A reader running down a list reads the name, the
@@ -792,7 +796,7 @@ ${TEMML_CSS}
 
    The negative margins are the card's padding given back, so the ground reaches the border rather
    than floating inside it as a second panel. */
-.member-detail { background: var(--card-detail); border-top: 1px solid var(--card-split); margin: 0.85rem -1.1rem -0.9rem; padding: 0.7rem 1.1rem 0.85rem; }
+.member-detail { background: var(--card-detail); border-top: 1px solid var(--card-split); margin: 0.85rem calc(-1 * var(--pad-x)) calc(-1 * var(--pad-y)); padding: 0.7rem var(--pad-x) 0.85rem; }
 .member-detail > :first-child { margin-top: 0; }
 /* Bordered in the badge's own colour, so the card and the badge on it read as one mark. */
 .member.explicit-impl { border-color: var(--badge-explicit); }
@@ -886,6 +890,8 @@ ${TEMML_CSS}
 .summary { color: var(--text2); line-height: 1.6; font-size: 0.88rem; }
 .remarks { color: var(--text3); font-size: 0.83rem; margin-top: 0.4rem; }
 .section { margin-top: 0.55rem; font-size: 0.83rem; color: var(--text2); }
+/* A URL or a long identifier in prose breaks rather than running off the card. */
+.member-name, .summary, .remarks, .section, .page-intro, .cat-doc, .note { overflow-wrap: anywhere; }
 .section-label { font-weight: 700; color: var(--text3); }
 /* No rule under each row: a parameter list runs to three or four short lines, and ruling them turns
    a small table into a grid to be read across rather than a set of names to be scanned down. */
@@ -941,7 +947,7 @@ code { font-family: monospace; }
 
 /* ---- Notes, tables, lists in doc content ---- */
 .note { border-left: 3px solid var(--flash); background: var(--bg3); padding: 0.5rem 0.8rem; margin: 0.6rem 0; font-size: 0.85rem; }
-.note-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--flash); margin-bottom: 0.15rem; }
+.note-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--flash); margin-bottom: 0.15rem; }
 /* The one note that is a warning rather than an aside, and the one mark the page gives the fact.
    Removed is obsolete with the compiler's answer changed from a warning to an error, not a
    different fact, so it reads the same. Its ground is the warning's own orange thinned to a wash
@@ -1003,7 +1009,7 @@ a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter:
 
 /* ---- Enum values and operators ----
    Two tables of members that a card would have padded out rather than filled. */
-.enum-table th, .op-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.enum-table th, .op-table th { color: var(--text3); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
 .enum-table td, .op-table td { padding: 0.45rem 0.5rem; vertical-align: top; }
 /* In the body font, like every other member name on the page: the monospace it wore said 'code' a
    second time, when the row it heads is already a value and a number. */
@@ -1077,10 +1083,50 @@ dd { margin-left: 1rem; color: var(--text3); }
 mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
 .search-status { color: var(--text3); font-size: 0.84rem; margin-top: 0.8rem; }
 
-@media (max-width: 800px) {
-  .sidebar { display: none; }
-  .resize-handle { display: none; }
-  #search { width: 150px; }
+/* ---- Phones ---- */
+@media ${NARROW} {
+  /* The tree has no room beside the page, so its button lays it over the page instead. */
+  .layout { position: relative; }
+  .sidebar, .resize-handle { display: none; }
+  :root[data-sidebar-open] .sidebar { display: block; position: absolute; top: 0; bottom: 0; left: 0; z-index: 25; max-width: 85vw; box-shadow: 0 0 28px rgba(0, 0, 0, 0.35); }
+
+  /* Search folds to its magnifier and opens across the header when tapped, giving the title back
+     its room. It stays open while its results are up, so a tap on one does not move it away. */
+  header { position: relative; }
+  #search { width: 30px; padding: 0; color: transparent; }
+  #search::placeholder { color: transparent; }
+  .nav-search-icon, header form[role="search"].index-loading::after { right: calc((30px - 1.05rem) / 2); }
+  header form[role="search"].filled .nav-search-icon { display: block; }
+  header form[role="search"].filled .nav-search-clear { display: none; }
+  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) { position: absolute; top: 0; bottom: 0; left: 0.9rem; right: 0.9rem; z-index: 1; background: var(--nav-bg); }
+  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search { width: 100%; padding: 0 2rem 0 0.7rem; color: var(--nav-fg); }
+  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search::placeholder { color: var(--nav-dim); }
+  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon,
+  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))).index-loading::after { right: 0.55rem; }
+  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon { display: none; }
+  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-clear { display: block; }
+  .nav-results { max-width: none; width: 100%; }
+
+  /* Width is what a phone is short of, so the padding gives it back to the text. */
+  .main-content { --gutter: 0.75rem; }
+  .member { --pad-y: 0.75rem; --pad-x: 0.8rem; }
+  .cat-doc { padding: 0.9rem; }
+  .summary ul, .summary ol, .remarks ul, .remarks ol, .section ul, .section ol, .cat-doc ul, .cat-doc ol { margin-left: 1rem; }
+  dd { margin-left: 0.6rem; }
+  .cat-doc blockquote { padding-left: 0.6rem; }
+
+  /* Height is cheaper than width here, so the head's blocks get room to read as separate. */
+  .breadcrumbs { margin-bottom: 1.25rem; }
+  .main-content:has(.page-head-brief) > .main-sticky { padding-bottom: 0.6rem; }
+  .page-intro, .page-head.sticky-head .declaration { margin-top: 0.9rem; }
+  .intro-more { margin-top: 0.7rem; }
+  .page-head.sticky-head .filter-bar { margin-top: 1rem; }
+
+  /* Beside the member it took nearly half the card; under it, one line. */
+  .inherited-head { flex-direction: column; }
+  .inherited-from { max-width: none; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.3rem; padding: 0; margin-top: 0.5rem; }
+  .inherited-from > span { text-align: left; }
+  .inherited-from-type { margin-top: 0; }
 }
 `;
 
@@ -1157,20 +1203,56 @@ const JS = `
   var SIDEBAR_KEY = 'docs-sidebar';
   var sidebarToggleBtn = document.getElementById('sidebar-toggle');
   if (sidebarToggleBtn) {
-    var sidebarShown = function () { return root.getAttribute('data-sidebar') !== 'hidden'; };
+    // On a phone the tree is an overlay instead, opened per page and never remembered: carried to
+    // the next page it would cover the very page its link was tapped to open.
+    var narrow = window.matchMedia ? matchMedia('${NARROW}') : null;
+    var isNarrow = function () { return Boolean(narrow && narrow.matches); };
+    var sidebarShown = function () {
+      return isNarrow() ? root.hasAttribute('data-sidebar-open') : root.getAttribute('data-sidebar') !== 'hidden';
+    };
+    var syncToggle = function () { sidebarToggleBtn.setAttribute('aria-expanded', String(sidebarShown())); };
+    var closeOverlay = function () {
+      root.removeAttribute('data-sidebar-open');
+      syncToggle();
+    };
 
     // The markup says expanded, which is true everywhere except where the head script hid it.
-    sidebarToggleBtn.setAttribute('aria-expanded', String(sidebarShown()));
+    syncToggle();
 
     sidebarToggleBtn.addEventListener('click', function () {
+      if (isNarrow()) {
+        if (sidebarShown()) {
+          closeOverlay();
+        } else {
+          root.setAttribute('data-sidebar-open', '');
+          syncToggle();
+        }
+        return;
+      }
+
       if (sidebarShown()) root.setAttribute('data-sidebar', 'hidden');
       else root.removeAttribute('data-sidebar');
 
-      sidebarToggleBtn.setAttribute('aria-expanded', String(sidebarShown()));
+      syncToggle();
       try {
         sessionStorage.setItem(SIDEBAR_KEY, sidebarShown() ? '' : 'hidden');
       } catch (e) {}
     });
+
+    // A tap on the page behind closes it, and so does following a link in it: a link to a member
+    // on this same page does not reload, and the member would land under the tree.
+    var sidebarEl = document.getElementById('sidebar');
+    document.addEventListener('click', function (event) {
+      if (!isNarrow() || !root.hasAttribute('data-sidebar-open')) return;
+      if (sidebarToggleBtn.contains(event.target)) return;
+      if (sidebarEl && sidebarEl.contains(event.target) && !event.target.closest('a')) return;
+      closeOverlay();
+    });
+
+    if (narrow) {
+      if (narrow.addEventListener) narrow.addEventListener('change', closeOverlay);
+      else if (narrow.addListener) narrow.addListener(closeOverlay);
+    }
   }
 
   // ---- Version filter ----
