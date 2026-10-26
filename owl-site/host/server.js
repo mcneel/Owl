@@ -104,8 +104,8 @@ function memberPreview(html, anchor) {
   return null;
 }
 
-/** The type page's head, rewritten to preview as the member: title, og:title and both descriptions. */
-function previewAs(html, preview) {
+/** The type page's head, rewritten to preview as member: title, og:title, og:url and both descriptions. */
+function previewAs(html, preview, member) {
   const headEnd = html.indexOf('</head>');
   if (headEnd === -1) return html;
 
@@ -117,7 +117,9 @@ function previewAs(html, preview) {
     })
     .replace(/(<meta property="og:title" content=")[^"]*/, `$1${preview.title}`)
     .replace(/(<meta name="description" content=")[^"]*/, `$1${preview.description}`)
-    .replace(/(<meta property="og:description" content=")[^"]*/, `$1${preview.description}`);
+    .replace(/(<meta property="og:description" content=")[^"]*/, `$1${preview.description}`)
+    // The canonical link stays the type's, so search indexes the one page; og:url is what a share names.
+    .replace(/(<meta property="og:url" content=")([^"?]*)[^"]*/, `$1$2?member=${encodeURIComponent(member)}`);
 
   return head + html.slice(headEnd);
 }
@@ -193,7 +195,7 @@ const server = http.createServer((req, res) => {
   if (member && type.startsWith('text/html')) {
     const html = fs.readFileSync(file, 'utf8');
     const preview = memberPreview(html, member);
-    return send(res, 200, headers, preview ? previewAs(html, preview) : html, head);
+    return send(res, 200, headers, preview ? previewAs(html, preview, member) : html, head);
   }
 
   send(res, 200, headers, fs.readFileSync(file), head);

@@ -1,7 +1,7 @@
 'use strict';
 
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
-const { slugify, NAMESPACE_MODE } = require('./routes');
+const { slugify, NAMESPACE_MODE, MEMBER_PARAM } = require('./routes');
 const { highlight } = require('./highlight');
 const { page, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
@@ -1732,6 +1732,10 @@ ${this.seeAlsoHtml(type.docs)}
       // The plain url, in both modes and for every member it is shared for: the flagged url is the same type read the other way, so only
       // the one is worth indexing.
       canonical: this.baseRoutes.type(type.slug),
+      // A share names the member, so a previewer that follows og:url still lands on its preview.
+      shareUrl: preview
+        ? `${this.baseRoutes.type(type.slug)}?${MEMBER_PARAM}=${encodeURIComponent(member.anchor)}`
+        : '',
       breadcrumbs,
       body,
       sidebar: this.browsingNamespaces

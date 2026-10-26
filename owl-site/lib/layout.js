@@ -59,6 +59,7 @@ function page(options) {
     logoDark = '',
     description = '',
     canonical,
+    shareUrl = '',
     breadcrumbs = [],
     body,
     sidebar = null,
@@ -83,6 +84,7 @@ function page(options) {
   const absolute = (url) =>
     siteUrl && url && url.startsWith('/') ? siteUrl.replace(/\/$/, '') + url : url;
   const canonicalUrl = absolute(canonical);
+  const ogUrl = absolute(shareUrl) || canonicalUrl;
 
   const graph = [];
 
@@ -119,7 +121,7 @@ ${canonicalUrl ? `<link rel="canonical" href="${attr(canonicalUrl)}">` : ''}
 <meta property="og:site_name" content="${attr(siteName)}">
 <meta property="og:title" content="${attr(title || siteName)}">
 ${description ? `<meta property="og:description" content="${attr(description)}">` : ''}
-${canonicalUrl ? `<meta property="og:url" content="${attr(canonicalUrl)}">` : ''}
+${ogUrl ? `<meta property="og:url" content="${attr(ogUrl)}">` : ''}
 <meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="${attr(routes.asset('app.css'))}">
 <link rel="sitemap" type="application/xml" href="${attr(routes.sitemap())}">

@@ -699,6 +699,7 @@ describe('member previews', () => {
     assert.match(page, /<meta property="og:title" content="MemoryStore\.Read method">/);
     assert.match(page, /<meta property="og:description" content="Reads the value stored under key\.">/);
     assert.match(page, /<link rel="canonical" href="\/type\/samples\.memorystore\/">/);
+    assert.match(page, /<meta property="og:url" content="\/type\/samples\.memorystore\/\?member=read-system\.string">/);
   });
 
   test('overloads preview with their parameters', () => {
@@ -755,6 +756,8 @@ describe('exported server', () => {
     assert.match(page, /<meta property="og:title" content="MemoryStore\.Read method">/);
     assert.match(page, /<meta name="description" content="Reads the value stored under key\.">/);
     assert.match(page, /<meta property="og:description" content="Reads the value stored under key\.">/);
+    assert.match(page, /<meta property="og:url" content="\/api\/samples\/type\/samples\.memorystore\/\?member=read-system\.string">/);
+    assert.match(page, /<link rel="canonical" href="\/api\/samples\/type\/samples\.memorystore\/">/);
   });
 
   test('previews enum values and operators from their rows', async () => {
