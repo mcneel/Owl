@@ -28,6 +28,14 @@ const NAMESPACE_MODE = 'namespace';
 const NS_FLAG = 'ns';
 
 /**
+ * The query parameter naming the member a shared type url is about.
+ *
+ * A link previewer never sees the fragment, so this is what lets a host answer one type page with
+ * the preview of the member it was shared for.
+ */
+const MEMBER_PARAM = 'member';
+
+/**
  * The directory Sandcastle put its topics in, and where owl writes the redirects that replace them.
  *
  * Fixed rather than configurable: it is the folder SHFB's website output has always used, so it is
@@ -132,6 +140,15 @@ class Routes {
   }
 
   /**
+   * The url a member is shared by: its type page, with the member named where a link previewer
+   * can see it as well as in the fragment the page scrolls to.
+   */
+  sharedMember(typeSlug, anchor) {
+    const flag = this.mode ? `${NS_FLAG}&` : '';
+    return `${this.base}/type/${typeSlug}/?${flag}${MEMBER_PARAM}=${anchor}#${anchor}`;
+  }
+
+  /**
    * A member's examples, which get a page of their own rather than a place on the type page.
    *
    * Examples pulled from files run to hundreds of lines each, and several languages of the same
@@ -188,11 +205,12 @@ class Routes {
 
   /**
    * Resolves an index entry (as emitted in index.json) to a url.
-   * Members carry an anchor; types do not.
+   * Members carry an anchor; types do not. Shared, a member resolves to its sharedMember url.
    */
-  forEntry(entry) {
+  forEntry(entry, shared = false) {
     if (!entry) return null;
-    return entry.anchor ? this.member(entry.slug, entry.anchor) : this.type(entry.slug);
+    if (!entry.anchor) return this.type(entry.slug);
+    return shared ? this.sharedMember(entry.slug, entry.anchor) : this.member(entry.slug, entry.anchor);
   }
 
   /** Maps a request path to a route descriptor, or null when nothing matches. */
@@ -275,4 +293,4 @@ function matchSandcastle(parts) {
   return '';
 }
 
-module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, NS_FLAG, SANDCASTLE_DIR };
+module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, NS_FLAG, MEMBER_PARAM, SANDCASTLE_DIR };

@@ -15,7 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { ID_PREFIX: ICON_PREFIX } = require('./icons');
-const { NS_FLAG } = require('./routes');
+const { NS_FLAG, MEMBER_PARAM } = require('./routes');
 const { BADGE_PAINTS, NOTE_PAINTS } = require('./theme');
 
 /** The query flag that marks the namespace-mode reading of a page, as the client appends it. */
@@ -2231,6 +2231,25 @@ const JS = `
 
   markCurrentMember();
   window.addEventListener('hashchange', markCurrentMember);
+
+  // ---- The member being shared ----
+  // A link previewer never sees the fragment, so the member being read is named in the query too:
+  // an address copied from the bar then previews as that member rather than as its type. Inherited
+  // cards are left out, since the member is documented, and previewed, on another type's page.
+  function shareCurrentMember() {
+    var id = decodeURIComponent((location.hash || '').slice(1));
+    var target = id ? document.getElementById(id) : null;
+    var shared =
+      target && target.matches('.member:not(.inherited), .enum-table tr, .op-table tr') ? id : null;
+    if (urlParams().get('${MEMBER_PARAM}') !== shared) setParam('${MEMBER_PARAM}', shared);
+  }
+
+  // A shared url that lost its fragment on the way still lands on the member it names.
+  var sharedMember = urlParams().get('${MEMBER_PARAM}');
+  if (sharedMember && !location.hash) location.replace('#' + sharedMember);
+
+  shareCurrentMember();
+  window.addEventListener('hashchange', shareCurrentMember);
 
   // Where the tree sits has to survive a click on it. Scrolling is what moves it, so scrolling is
   // what has to be recorded - saving only on expand left the stored position stale by the time it

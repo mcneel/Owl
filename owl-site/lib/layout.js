@@ -15,6 +15,11 @@ const { FILTER_KINDS, memberFilterTabs } = require('./theme');
 /** Used when the model carries no site name and none was passed on the command line. */
 const DEFAULT_SITE_NAME = 'API Reference';
 
+/** A page's whole title: its own, then the site's. A page with none is titled by the site alone. */
+function fullTitle(title, siteName) {
+  return title ? `${title} | ${siteName}` : siteName;
+}
+
 /**
  * @param {object} options
  *   title        page title, without the site suffix
@@ -75,7 +80,6 @@ function page(options) {
   } = options;
 
   const stickyTop = renderBreadcrumbs(breadcrumbs) + (filterBar || '');
-  const fullTitle = title ? `${title} | ${siteName}` : siteName;
   const absolute = (url) =>
     siteUrl && url && url.startsWith('/') ? siteUrl.replace(/\/$/, '') + url : url;
   const canonicalUrl = absolute(canonical);
@@ -107,7 +111,7 @@ function page(options) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(fullTitle)}</title>
+<title>${escape(fullTitle(title, siteName))}</title>
 ${description ? `<meta name="description" content="${attr(description)}">` : ''}
 ${canonicalUrl ? `<link rel="canonical" href="${attr(canonicalUrl)}">` : ''}
 <meta name="robots" content="${noindex ? 'noindex,follow' : 'index,follow'}">
@@ -501,6 +505,7 @@ function renderBreadcrumbs(breadcrumbs) {
 
 module.exports = {
   page,
+  fullTitle,
   filterBar,
   memberFilterBar,
   assemblySelector,

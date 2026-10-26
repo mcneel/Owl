@@ -3,7 +3,7 @@
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
 const { slugify, NAMESPACE_MODE } = require('./routes');
 const { highlight } = require('./highlight');
-const { page, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
+const { page, fullTitle, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
 const icons = require('./icons');
 const { Links } = require('./links');
@@ -1503,11 +1503,17 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     });
   }
 
-  type(slug) {
+  /**
+   * A type's page. With a member's anchor, the same page previews as that member: what a link
+   * previewer reads names the member it was shared for. An anchor the type does not declare is
+   * ignored.
+   */
+  type(slug, anchor = '') {
     const found = this.model.typeBySlug(slug);
     if (!found) return null;
 
     const { type, assembly } = found;
+    const member = anchor ? type.members.find((m) => m.anchor === anchor) || null : null;
 
     // Which type's page this is, for as long as it is being rendered: crefs into it are written
     // by member name alone. Set on the shared context rather than threaded through the fifteen
@@ -1518,14 +1524,14 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
     // types can answer to one bare name, and the assembly is what breaks the tie.
     this.docContext.selfAssembly = assembly;
     try {
-      return this.typeBody(type, assembly);
+      return this.typeBody(type, assembly, member);
     } finally {
       this.docContext.selfType = null;
       this.docContext.selfAssembly = null;
     }
   }
 
-  typeBody(type, assembly) {
+  typeBody(type, assembly, member = null) {
     const summaryHtml = this.summaryHtml(type.docs);
     const members = this.sortedMembers(type, { pageOrder: true });
     const inherited = this.inheritedMembers(type);
@@ -1629,9 +1635,11 @@ ${this.seeAlsoHtml(type.docs)}
 </article>
 `;
 
-    const description =
-      truncate(this.summaryText(type.docs)) ||
-      truncate(`${type.fullName} ${type.kind} in ${assembly}. ${this.siteName} reference.`);
+    const preview = member ? this.memberPreview(type, assembly, member) : null;
+    const description = preview
+      ? preview.description
+      : truncate(this.summaryText(type.docs)) ||
+        truncate(`${type.fullName} ${type.kind} in ${assembly}. ${this.siteName} reference.`);
 
     const breadcrumbs = [{ label: assembly, url: this.routes.assembly(assembly), icon: 'assembly' }];
     if (type.namespace) {
@@ -1642,11 +1650,13 @@ ${this.seeAlsoHtml(type.docs)}
     return this.shell({
       // Namespace-qualified so titles stay unique: Step exists in both Languages.IronPython2
       // and Languages.PythonNet.
-      title: type.namespace
-        ? `${type.name} ${type.kind} (${type.namespace})`
-        : `${type.name} ${type.kind}`,
+      title: preview
+        ? preview.title
+        : type.namespace
+          ? `${type.name} ${type.kind} (${type.namespace})`
+          : `${type.name} ${type.kind}`,
       description,
-      // The plain url, in both modes: the flagged url is the same type read the other way, so only
+      // The plain url, in both modes and for every member it is shared for: the flagged url is the same type read the other way, so only
       // the one is worth indexing.
       canonical: this.baseRoutes.type(type.slug),
       breadcrumbs,
@@ -1662,11 +1672,65 @@ ${this.seeAlsoHtml(type.docs)}
       currentAssembly: assembly,
       jsonLd: {
         '@type': 'TechArticle',
-        headline: `${type.fullName} ${type.kind}`,
+        headline: preview ? preview.title : `${type.fullName} ${type.kind}`,
         description,
         articleSection: type.category || type.namespace || undefined,
       },
     });
+  }
+
+  /**
+   * What a type page shared for one of its members previews as: { title, description }, the title
+   * without the site suffix. Overloads carry their parameter types, so each previews as itself.
+   */
+  memberPreview(type, assembly, member) {
+    const name =
+      member.kind === 'constructor' ? type.name : `${type.name}.${memberDisplayName(member)}`;
+    const overloaded =
+      CALLABLE_KINDS.has(member.kind) &&
+      type.members.some((m) => m !== member && m.name === member.name);
+    const params = overloaded
+      ? ` (${(member.parameters || []).map((p) => p.type.display).join(', ')})`
+      : '';
+    const title = `${name} ${member.kind}${params}`;
+
+    const description =
+      truncate(this.summaryText(member.docs)) ||
+      truncate(`${title} in ${assembly}. ${this.siteName} reference.`);
+
+    return { title, description };
+  }
+
+  /**
+   * The previews of every member a type page can be shared for, as the export lists them for a host
+   * to answer shared urls from: { typeUrl: { anchor: { title, ogTitle, description } } }, where
+   * title is the page's whole title and ogTitle the one without the site suffix.
+   */
+  memberPreviews() {
+    const out = {};
+
+    for (const [assembly, document] of this.model.assemblies) {
+      for (const type of document.types) {
+        if (type.members.length === 0) continue;
+
+        // Summaries read as they do on the type's own page, crefs into it included. See type().
+        this.docContext.selfType = type.docId;
+        this.docContext.selfAssembly = assembly;
+        try {
+          const previews = {};
+          for (const member of type.members) {
+            const { title, description } = this.memberPreview(type, assembly, member);
+            previews[member.anchor] = { title: fullTitle(title, this.siteName), ogTitle: title, description };
+          }
+          out[this.baseRoutes.type(type.slug)] = previews;
+        } finally {
+          this.docContext.selfType = null;
+          this.docContext.selfAssembly = null;
+        }
+      }
+    }
+
+    return out;
   }
 
   /**

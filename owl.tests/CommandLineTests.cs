@@ -171,8 +171,8 @@ public sealed class CommandLineTests(SampleModel model)
 
   [Theory]
   [InlineData("samples.memorystore", "/api/samples/type/samples.memorystore/")]
-  [InlineData("samples.memorystore/read", "/api/samples/type/samples.memorystore/#read-system.string")]
-  [InlineData("samples.members.gadget/gadget", "/api/samples/type/samples.members.gadget/#ctor")]
+  [InlineData("samples.memorystore/read", "/api/samples/type/samples.memorystore/?member=read-system.string#read-system.string")]
+  [InlineData("samples.members.gadget/gadget", "/api/samples/type/samples.members.gadget/?member=ctor#ctor")]
   public void BuildWritesDocifyRedirects(string path, string target)
   {
     string dir = TempDir();
@@ -216,7 +216,9 @@ public sealed class CommandLineTests(SampleModel model)
 
       Assert.NotNull(response);
       Assert.Equal(HttpStatusCode.MovedPermanently, response.StatusCode);
-      Assert.Equal("/type/samples.memorystore/?plain=true&dark=true#read-system.string", response.Headers.Location?.OriginalString);
+      Assert.Equal(
+        "/type/samples.memorystore/?member=read-system.string&plain=true&dark=true#read-system.string",
+        response.Headers.Location?.OriginalString);
     }
     finally
     {

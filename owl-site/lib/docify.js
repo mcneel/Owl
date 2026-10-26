@@ -52,18 +52,20 @@ function stub(url) {
 <meta http-equiv="refresh" content="0; url=${attr(url)}">
 </head>
 <body><p>This page has moved to <a href="${attr(url)}">${escape(url)}</a>.</p>
-<script>var u=new URL(${JSON.stringify(url)},location.href);u.search=location.search;location.replace(u.href)</script>
+<script>var u=new URL(${JSON.stringify(url)},location.href);if(location.search)u.search=(u.search?u.search+'&':'?')+location.search.slice(1);location.replace(u.href)</script>
 </body>
 </html>
 `;
 }
 
-/** A url with a request's query put on it, ahead of any fragment. */
+/** A url with a request's query put on it, after any query of its own and ahead of any fragment. */
 function withQuery(url, query) {
   const search = query ? String(query) : '';
   if (!search) return url;
   const hash = url.indexOf('#');
-  return hash === -1 ? `${url}?${search}` : `${url.slice(0, hash)}?${search}${url.slice(hash)}`;
+  const head = hash === -1 ? url : url.slice(0, hash);
+  const joined = `${head}${head.includes('?') ? '&' : '?'}${search}`;
+  return hash === -1 ? joined : joined + url.slice(hash);
 }
 
 class Docify {
@@ -102,7 +104,7 @@ class Docify {
       if (!path) continue;
 
       const key = `${path}/${memberName(docId, typeName.slice(typeName.lastIndexOf('.') + 1))}`;
-      if (!this.targets.has(key)) this.targets.set(key, routes.forEntry(entry));
+      if (!this.targets.has(key)) this.targets.set(key, routes.forEntry(entry, true));
     }
   }
 
