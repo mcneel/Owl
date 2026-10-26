@@ -137,10 +137,15 @@ new one. Add the request's query to the new address's own.
 ## Member Link Previews
 
 A member's address reads `type/mylib.storage/?member=read#read`, so a pasted link can preview as that member
-rather than its type. A plain file host previews it as the type. To preview the member, have your host answer a
-type page carrying `?member=` with the matching entry from `previews.json` in the output: put its `title` in the
-page's `<title>`, its `ogTitle` in `og:title`, and its `description` in `description` and `og:description`.
-Entries are keyed by type address, lower case and without a trailing slash, then by member.
+rather than its type. A plain file host previews it as the type. To preview the member, build with `--server`:
+
+```bash
+owl build MyLib.csproj --base /api/mylib --server -o app
+```
+
+The site goes in `app/site`, with a node server beside it. Push `app` to any node host, Heroku included, and it
+starts with `npm start` on the port the host gives it. It also redirects the old addresses of `--sandcastle` and
+`--docify`.
 
 ## Check Documentation in CI
 

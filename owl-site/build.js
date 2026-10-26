@@ -19,12 +19,13 @@ const { stub: docifyStub } = require('./lib/docify');
  * slash, to the url it moved to. A server that can redirect should answer from it, with the
  * request's query carried across, rather than serve the stub pages.
  *
- * previews.json maps each type url, keyed the same way, to the previews of its members by anchor. A
- * server that can rewrite a page should answer a type url carrying ?member= with that member's.
+ * With --server, the pages go in <out>/site, and <out> gets a server.js and package.json that serve
+ * them: push <out> to a node host and it runs with npm start.
  *
  * Usage:
  *   node build.js --json .owl/json --out dist [--base /prefix] [--site-url https://host]
  *   node build.js --json .owl/json --out dist [--api-versions 9,8]
+ *   node build.js --json .owl/json --out app --base /prefix --server
  */
 
 function parseArgs(argv) {
@@ -46,6 +47,7 @@ function parseArgs(argv) {
     sandcastle: false,
     docify: false,
     quiet: false,
+    server: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -98,6 +100,9 @@ function parseArgs(argv) {
       case '--quiet':
         options.quiet = true;
         break;
+      case '--server':
+        options.server = true;
+        break;
       default:
         throw new Error(`Unknown argument '${argv[i]}'. Try 'owl --help'.`);
     }
@@ -140,6 +145,9 @@ if (options.skipUndocumented && !options.quiet) {
   console.log(`skipping ${types} undocumented type(s) and ${members} undocumented member(s)`);
 }
 
+// The server sits beside the pages rather than among them, so it is never served as one.
+const siteDir = options.server ? path.join(options.out, 'site') : options.out;
+
 /** Maps a site url to the file that should hold it. */
 function outputPathFor(url) {
   let relative = url;
@@ -152,10 +160,10 @@ function outputPathFor(url) {
 
   // Directory-style urls become <dir>/index.html; anything with an extension stays as-is.
   if (relative === '' || relative.endsWith('/')) {
-    return path.join(options.out, relative, 'index.html');
+    return path.join(siteDir, relative, 'index.html');
   }
 
-  return path.join(options.out, relative);
+  return path.join(siteDir, relative);
 }
 
 function write(url, body) {
@@ -251,15 +259,6 @@ if (site.sandcastle || site.docify) {
   write(`${site.base}/redirects.json`, JSON.stringify(moved));
 }
 
-// A shared member url is its type page with ?member= on it, and a file host answers that with the
-// type's preview. A server that can rewrite a page's head should answer it from this list instead,
-// so the link previews as the member it was shared for.
-const previews = {};
-for (const [url, members] of Object.entries(site.renderer.memberPreviews())) {
-  previews[movedKey(url)] = members;
-}
-write(`${site.base}/previews.json`, JSON.stringify(previews));
-
 const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 
 for (const asset of ['app.css', 'app.js', 'search.json', ...trees]) {
@@ -270,6 +269,21 @@ for (const asset of ['app.css', 'app.js', 'search.json', ...trees]) {
 
 write(site.routes.sitemap(), site.renderer.sitemap(new Date().toISOString().slice(0, 10)));
 write('/robots.txt', site.renderer.robots());
+
+if (options.server) {
+  const server = fs.readFileSync(path.join(__dirname, 'host', 'server.js'), 'utf8');
+  const based = server.replace("'__OWL_BASE__'", JSON.stringify(site.routes.base));
+  fs.writeFileSync(path.join(options.out, 'server.js'), based);
+
+  const manifest = {
+    name: 'owl-site-server',
+    private: true,
+    description: `Serves the ${site.renderer.siteName} website`,
+    scripts: { start: 'node server.js' },
+    engines: { node: '>=18' },
+  };
+  fs.writeFileSync(path.join(options.out, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+}
 
 reportWarnings();
 

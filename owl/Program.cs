@@ -104,6 +104,8 @@ static void PrintUsage()
       --sandcastle          Also answer the Sandcastle urls this set was published at
       --docify              Also answer the docify urls this set was published at
       --quiet               Only print the summary, not per-page progress (build)
+      --server              Put the site in <out>/site, with a node server beside it that also
+                            answers old urls and member link previews (build)
 
     serve and build generate before they render, so both take the model options too.
 

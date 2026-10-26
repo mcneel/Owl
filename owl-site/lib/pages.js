@@ -3,7 +3,7 @@
 const { escape, attr, truncate, markMatch, markMarkup } = require('./html');
 const { slugify, NAMESPACE_MODE } = require('./routes');
 const { highlight } = require('./highlight');
-const { page, fullTitle, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
+const { page, filterBar, memberFilterBar, versionLabel, DEFAULT_SITE_NAME } = require('./layout');
 const docnodes = require('./docnodes');
 const icons = require('./icons');
 const { Links } = require('./links');
@@ -1738,38 +1738,6 @@ ${this.seeAlsoHtml(type.docs)}
       truncate(`${title} in ${assembly}. ${this.siteName} reference.`);
 
     return { title, description };
-  }
-
-  /**
-   * The previews of every member a type page can be shared for, as the export lists them for a host
-   * to answer shared urls from: { typeUrl: { anchor: { title, ogTitle, description } } }, where
-   * title is the page's whole title and ogTitle the one without the site suffix.
-   */
-  memberPreviews() {
-    const out = {};
-
-    for (const [assembly, document] of this.model.assemblies) {
-      for (const type of document.types) {
-        if (type.members.length === 0) continue;
-
-        // Summaries read as they do on the type's own page, crefs into it included. See type().
-        this.docContext.selfType = type.docId;
-        this.docContext.selfAssembly = assembly;
-        try {
-          const previews = {};
-          for (const member of type.members) {
-            const { title, description } = this.memberPreview(type, assembly, member);
-            previews[member.anchor] = { title: fullTitle(title, this.siteName), ogTitle: title, description };
-          }
-          out[this.baseRoutes.type(type.slug)] = previews;
-        } finally {
-          this.docContext.selfType = null;
-          this.docContext.selfAssembly = null;
-        }
-      }
-    }
-
-    return out;
   }
 
   /**

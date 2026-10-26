@@ -5,9 +5,9 @@
 //   node --test owl.tests/site/                        generates the samples' model first
 //   OWL_TEST_MODEL=<dir> node --test owl.tests/site/   reuses a model already generated
 
-const { test, before, describe } = require('node:test');
+const { test, before, after, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -637,17 +637,63 @@ describe('member previews', () => {
   test('a member the type does not declare previews as the type', () => {
     assert.equal(head('/type/samples.memorystore/', 'member=nothing'), made.html('/type/samples.memorystore/').split('</head>')[0]);
   });
+});
 
-  test('the export lists every member preview for a server to answer', () => {
-    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-previews-'));
-    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples', '--quiet'],
-      { stdio: 'pipe' });
-    const previews = JSON.parse(fs.readFileSync(path.join(out, 'previews.json'), 'utf8'));
-    const read = previews['/api/samples/type/samples.memorystore']['read-system.string'];
-    assert.equal(read.ogTitle, 'MemoryStore.Read method');
-    assert.match(read.title, /^MemoryStore\.Read method \| /);
-    assert.equal(read.description, 'Reads the value stored under key.');
+// The exported server answers what a plain file host cannot: old urls and member previews.
+describe('exported server', () => {
+  let server;
+  let root;
+
+  before(async () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-server-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples',
+      '--docify', '--server', '--quiet'], { stdio: 'pipe' });
+
+    server = spawn('node', [path.join(out, 'server.js')], { env: { ...process.env, PORT: '0' } });
+    const port = await new Promise((resolve) => {
+      server.stdout.on('data', (chunk) => {
+        const found = /listening on (\d+)/.exec(String(chunk));
+        if (found) resolve(found[1]);
+      });
+    });
+    root = `http://localhost:${port}`;
   });
+
+  after(() => server.kill());
+
+  /** The head of the page the server answers url with. */
+  const head = async (url) => (await (await fetch(root + url)).text()).split('</head>')[0];
+
+  test('sits beside the pages rather than among them', async () => {
+    assert.equal((await fetch(`${root}/api/samples/server.js`)).status, 404);
+    assert.equal((await fetch(`${root}/api/samples/type/samples.memorystore/`)).status, 200);
+  });
+
+  test('previews a shared member card as that member', async () => {
+    const page = await head('/api/samples/type/samples.memorystore/?member=read-system.string');
+    assert.match(page, /<title>MemoryStore\.Read method \| /);
+    assert.match(page, /<meta property="og:title" content="MemoryStore\.Read method">/);
+    assert.match(page, /<meta name="description" content="Reads the value stored under key\.">/);
+    assert.match(page, /<meta property="og:description" content="Reads the value stored under key\.">/);
+  });
+
+  test('previews enum values and operators from their rows', async () => {
+    assert.match(await head('/api/samples/type/samples.mode/?member=memory'), /<title>Mode\.Memory value \| /);
+    assert.match(await head('/api/samples/type/samples.point/?member=op-addition-samples.point-samples.point'),
+      /<meta property="og:description" content="Adds two points\.">/);
+  });
+
+  test('previews a member the type does not declare as the type', async () => {
+    assert.equal(await head('/api/samples/type/samples.memorystore/?member=nothing'),
+      await head('/api/samples/type/samples.memorystore/'));
+  });
+
+  test('redirects old urls with their query', async () => {
+    const res = await fetch(`${root}/api/samples/samples.memorystore?plain=true`, { redirect: 'manual' });
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.get('location'), '/api/samples/type/samples.memorystore/?plain=true');
+  });
+
 });
 
 describe('slugs', () => {
