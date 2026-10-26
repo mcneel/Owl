@@ -117,6 +117,9 @@ describe('type pages', () => {
   test('member signatures are written out in full', () => {
     const page = text(type('Members.Gadget'));
     assert.match(page, /public const int MaxSize = 10/);
+    assert.match(page, /public const Mode DefaultMode = Mode\.Disk/);
+    assert.match(page, /public void Keep\(Mode mode = Mode\.Disk, Mode\? fallback = Mode\.Memory\)/);
+    assert.match(page, /mode\s*Mode = Mode\.Disk/);
     assert.match(page, /public readonly int Id/);
     assert.match(page, /public string Label \{ get; \}/);
     assert.match(page, /public void Configure\(ref int a, out int b, in int c, int d = 5, params string\[\] rest\)/);

@@ -18,6 +18,14 @@ public class Gadget : IConverter<string, int>, IDisposable
   /// <summary>The largest size.</summary>
   public const int MaxSize = 10;
 
+  /// <summary>Where gadgets are kept unless told otherwise.</summary>
+  public const Mode DefaultMode = Mode.Disk;
+
+  /// <summary>Keeps the gadget.</summary>
+  /// <param name="mode">Where to keep it.</param>
+  /// <param name="fallback">Where to keep it when that fails.</param>
+  public void Keep(Mode mode = Mode.Disk, Mode? fallback = Mode.Memory) { }
+
   /// <summary>Set once, at construction.</summary>
   public readonly int Id;
 

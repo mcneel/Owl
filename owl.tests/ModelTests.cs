@@ -181,6 +181,8 @@ public sealed class ModelTests(SampleModel model)
   [InlineData("T:Samples.Members.Gadget", "M:Samples.Members.Gadget.Configure(System.Int32@,System.Int32@,System.Int32@,System.Int32,System.String[])", "void Configure(ref int a, out int b, in int c, int d = 5, params string[] rest)")]
   [InlineData("T:Samples.Members.Gadget", "M:Samples.Members.Gadget.Pick``1(``0,``0)", "T Pick<T>(T first, T second)")]
   [InlineData("T:Samples.Shapes.ShapeExtensions", "M:Samples.Shapes.ShapeExtensions.DoubleArea(Samples.Shapes.Shape)", "double DoubleArea(this Shape shape)")]
+  [InlineData("T:Samples.Shapes.ShapeExtensions", "M:Samples.Shapes.ShapeExtensions.Keep(Samples.Shapes.Shape,Samples.Mode)", "void Keep(this Shape shape, Mode mode = Mode.Memory)")]
+  [InlineData("T:Samples.Members.Gadget", "M:Samples.Members.Gadget.Keep(Samples.Mode,System.Nullable{Samples.Mode})", "void Keep(Mode mode = Mode.Disk, Mode? fallback = Mode.Memory)")]
   [InlineData("T:Samples.VB.StoreHelpers", "M:Samples.VB.StoreHelpers.ReadFrom(Samples.IStore,System.String)", "string ReadFrom(IStore store, string key)")]
   [InlineData("T:Samples.VB.VbStore", "E:Samples.VB.VbStore.Changed", "VbStore.ChangedEventHandler Changed")]
   public void SignaturesAreCSharp(string typeId, string memberId, string signature)
@@ -287,6 +289,20 @@ public sealed class ModelTests(SampleModel model)
   }
 
   [Fact]
+  public void EnumConstantsAreWrittenByName()
+  {
+    Assert.Equal("Mode.Disk", model.Member("T:Samples.Members.Gadget", "F:Samples.Members.Gadget.DefaultMode").Str("constantValue"));
+
+    JsonElement[] keep = model.Member("T:Samples.Members.Gadget", "M:Samples.Members.Gadget.Keep(Samples.Mode,System.Nullable{Samples.Mode})")
+        .Arr("parameters").ToArray();
+    Assert.Equal("Mode.Disk", keep[0].Str("defaultValue"));
+    Assert.Equal("Mode.Memory", keep[1].Str("defaultValue"));
+
+    // An enum's own members keep the number its value column shows.
+    Assert.Equal("1", model.Member("T:Samples.Mode", "F:Samples.Mode.Disk").Str("constantValue"));
+  }
+
+  [Fact]
   public void AttributeArgumentsNameTheirTypes()
   {
     // Named so the site can link it, which nothing else in the samples would.
@@ -294,6 +310,15 @@ public sealed class ModelTests(SampleModel model)
     JsonElement targets = usage.Arr("types").Single();
     Assert.Equal("T:System.AttributeTargets", targets.Str("id"));
     Assert.True(targets.Bool("external"));
+  }
+
+  [Fact]
+  public void EnumArgumentsAreWrittenByName()
+  {
+    JsonElement usage = model.Type("T:Samples.StoredByAttribute").Arr("attributes").Single();
+    Assert.Equal(
+        ["AttributeTargets.Class | AttributeTargets.Struct", "AllowMultiple = false"],
+        usage.Strs("arguments"));
   }
 
   [Fact]

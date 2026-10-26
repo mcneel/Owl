@@ -63,7 +63,7 @@ public enum Mode
 public record Name(string First, string Last);
 
 /// <summary>Names the store a type is kept in.</summary>
-[System.AttributeUsage(System.AttributeTargets.Class)]
+[System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct, AllowMultiple = false)]
 public sealed class StoredByAttribute : System.Attribute
 {
   /// <summary>Names the store.</summary>
