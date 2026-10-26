@@ -529,12 +529,12 @@ describe('--docify', () => {
   });
 
   test('a member goes to its card on the type page', () => {
-    assert.equal(moved('/samples.memorystore/read'), '/type/samples.memorystore/?plain=true&dark=true#read-system.string');
-    assert.equal(moved('/samples.shapes.circle.spot/distance'), '/type/samples.shapes.circle.spot/?plain=true&dark=true#distance');
+    assert.equal(moved('/samples.memorystore/read'), '/type/samples.memorystore/?member=read-system.string&plain=true&dark=true#read-system.string');
+    assert.equal(moved('/samples.shapes.circle.spot/distance'), '/type/samples.shapes.circle.spot/?member=distance&plain=true&dark=true#distance');
   });
 
   test('a constructor is named after its type', () => {
-    assert.equal(moved('/samples.members.gadget/gadget'), '/type/samples.members.gadget/?plain=true&dark=true#ctor');
+    assert.equal(moved('/samples.members.gadget/gadget'), '/type/samples.members.gadget/?member=ctor&plain=true&dark=true#ctor');
   });
 
   test('overloads share a name, answered by the first', () => {
@@ -542,7 +542,7 @@ describe('--docify', () => {
   });
 
   test('generic types and explicit interface members', () => {
-    assert.equal(moved('/samples.owned`1/clear'), '/type/samples.owned-1/?plain=true&dark=true#clear');
+    assert.equal(moved('/samples.owned`1/clear'), '/type/samples.owned-1/?member=clear&plain=true&dark=true#clear');
     assert.match(moved('/samples.members.gadget/system.idisposable.dispose'), /#system-idisposable-dispose$/);
   });
 
@@ -572,16 +572,16 @@ describe('--docify', () => {
   test('every documented type and member has a path to export', () => {
     const urls = new Map([...make({ docify: true }).site.docify.stubs()]);
     assert.equal(urls.get('/samples.memorystore/'), '/type/samples.memorystore/');
-    assert.equal(urls.get('/samples.members.gadget/configure/'), '/type/samples.members.gadget/#configure-system.int32-system.int32-system.int32-system.int32-system.string');
+    assert.equal(urls.get('/samples.members.gadget/configure/'), '/type/samples.members.gadget/?member=configure-system.int32-system.int32-system.int32-system.int32-system.string#configure-system.int32-system.int32-system.int32-system.int32-system.string');
   });
 
   test('an exported stub carries the query it was asked with', () => {
-    const page = stub('/type/samples.memorystore/#read-system.string');
+    const page = stub('/type/samples.memorystore/?member=read-system.string#read-system.string');
     const script = page.match(/<script>([\s\S]*?)<\/script>/)[1];
     let replaced = null;
     const location = { href: 'https://example.com/samples.memorystore/read/?plain=true&dark=true', search: '?plain=true&dark=true', replace: (u) => { replaced = u; } };
     vm.runInNewContext(script, { URL, location });
-    assert.equal(replaced, 'https://example.com/type/samples.memorystore/?plain=true&dark=true#read-system.string');
+    assert.equal(replaced, 'https://example.com/type/samples.memorystore/?member=read-system.string&plain=true&dark=true#read-system.string');
   });
 
   // Rhino's script editor styles document.body as each page loads, and leaving from the head can
@@ -603,6 +603,50 @@ describe('--docify', () => {
     const moved = JSON.parse(fs.readFileSync(path.join(out, 'redirects.json'), 'utf8'));
     assert.equal(moved['/api/samples/samples.memorystore'], '/api/samples/type/samples.memorystore/');
     assert.equal(moved['/api/samples/html/t_samples_memorystore.htm'], '/api/samples/type/samples.memorystore/');
+  });
+});
+
+// A link previewer never sees the fragment, so a member's shared url names it in the query too.
+describe('member previews', () => {
+  const made = make();
+
+  /** The head of a type page asked for with a query. */
+  const head = (url, query) => {
+    const result = made.site.resolve(url, new URLSearchParams(query), false);
+    assert.equal(result.status, 200, `${url}?${query} returned ${result.status}`);
+    return result.body.split('</head>')[0];
+  };
+
+  test('a member is shared by its type page, named in the query and the fragment', () => {
+    assert.equal(made.site.routes.sharedMember('samples.memorystore', 'read-system.string'),
+      '/type/samples.memorystore/?member=read-system.string#read-system.string');
+  });
+
+  test('a type page shared for a member previews as that member', () => {
+    const page = head('/type/samples.memorystore/', 'member=read-system.string');
+    assert.match(page, /<title>MemoryStore\.Read method \| /);
+    assert.match(page, /<meta property="og:title" content="MemoryStore\.Read method">/);
+    assert.match(page, /<meta property="og:description" content="Reads the value stored under key\.">/);
+    assert.match(page, /<link rel="canonical" href="\/type\/samples\.memorystore\/">/);
+  });
+
+  test('overloads preview with their parameters', () => {
+    assert.match(head('/type/samples.members.gadget/', 'member=ctor-system.int32'), /<title>Gadget constructor \(int\) \| /);
+  });
+
+  test('a member the type does not declare previews as the type', () => {
+    assert.equal(head('/type/samples.memorystore/', 'member=nothing'), made.html('/type/samples.memorystore/').split('</head>')[0]);
+  });
+
+  test('the export lists every member preview for a server to answer', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-previews-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples', '--quiet'],
+      { stdio: 'pipe' });
+    const previews = JSON.parse(fs.readFileSync(path.join(out, 'previews.json'), 'utf8'));
+    const read = previews['/api/samples/type/samples.memorystore']['read-system.string'];
+    assert.equal(read.ogTitle, 'MemoryStore.Read method');
+    assert.match(read.title, /^MemoryStore\.Read method \| /);
+    assert.equal(read.description, 'Reads the value stored under key.');
   });
 });
 

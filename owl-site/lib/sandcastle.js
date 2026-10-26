@@ -140,7 +140,7 @@ class Sandcastle {
     }
 
     for (const [docId, entry] of Object.entries(model.index.entries)) {
-      const url = this.routes.forEntry(entry);
+      const url = this.routes.forEntry(entry, true);
       if (!url) continue;
 
       const name = topicName(docId);
@@ -203,9 +203,9 @@ class Sandcastle {
   }
 }
 
-/** Two urls are the same page when they differ only in the fragment. */
+/** Two urls are the same page when they differ only in the query or the fragment. */
 function samePage(a, b) {
-  return a.split('#')[0] === b.split('#')[0];
+  return a.split(/[?#]/)[0] === b.split(/[?#]/)[0];
 }
 
 /**

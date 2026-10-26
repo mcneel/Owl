@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 
 const { Model } = require('./model');
-const { Routes, slugify } = require('./routes');
+const { Routes, slugify, MEMBER_PARAM } = require('./routes');
 const { Renderer } = require('./pages');
 const { Diagrams, probe } = require('./diagrams');
 const { Sandcastle, stub } = require('./sandcastle');
@@ -237,7 +237,7 @@ class Site {
         // reader to the one page with the mode flag on.
         const html = route.mode
           ? this.renderer.typeStubPage(route.slug)
-          : this.renderer.type(route.slug);
+          : this.renderer.type(route.slug, (query && query.get(MEMBER_PARAM)) || '');
         return html ? this.html(html) : this.notFound(pathname);
       }
 

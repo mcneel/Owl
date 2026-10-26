@@ -132,7 +132,15 @@ owl build MyLib.csproj --docify        # mylib.storage/ and mylib.storage/read
 
 Each old address gets a page that forwards the reader. If your host can send redirects itself, answer from
 `redirects.json` in the output instead. It maps each old address, lower case and without a trailing slash, to its
-new one. Keep the request's query on the new address.
+new one. Add the request's query to the new address's own.
+
+## Member Link Previews
+
+A member's address reads `type/mylib.storage/?member=read#read`, so a pasted link can preview as that member
+rather than its type. A plain file host previews it as the type. To preview the member, have your host answer a
+type page carrying `?member=` with the matching entry from `previews.json` in the output: put its `title` in the
+page's `<title>`, its `ogTitle` in `og:title`, and its `description` in `description` and `og:description`.
+Entries are keyed by type address, lower case and without a trailing slash, then by member.
 
 ## Check Documentation in CI
 
