@@ -190,8 +190,8 @@ ${icons.spriteHtml()}
     <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
   </form>
   ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
-  ${whatsNewLink(versions, routes)}
   ${versionSelector(versions)}
+  ${whatsNewLink(versions, routes)}
   ${themeSwitch()}
 </header>
 
