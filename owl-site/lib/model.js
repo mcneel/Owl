@@ -28,16 +28,20 @@ const MAIN_DOC = 'main.md';
 const LOGO_FILE = 'logo.svg';
 const LOGO_DARK_FILE = 'logo-dark.svg';
 
+/** Filename, case-insensitive, in an assembly folder listing its categories in sidebar order. */
+const SORT_FILE = 'sort.txt';
+
 /**
  * Reads the authored content under the docs directory.
  *
- * Five kinds of file live here:
+ * Six kinds of file live here:
  *
  *   MAIN.md                        the site landing page
  *   logo.svg                       the header icon
  *   logo-dark.svg                  the header icon under the dark theme
  *   <AssemblyName>/MAIN.md         that assembly's landing page
  *   <AssemblyName>/<Category>.md   a category overview
+ *   <AssemblyName>/SORT.txt        category names, one per line, first to last
  *
  * The folder must match an assembly name and the stem must match a <category> tag in the source,
  * both compared case-insensitively, with no front-matter. Category keys are composite because
@@ -46,6 +50,7 @@ const LOGO_DARK_FILE = 'logo-dark.svg';
 function loadAuthoredDocs(apiDir, warnings) {
   const categories = new Map();
   const mains = new Map();
+  const orders = new Map();
   let siteMain = null;
   let siteLogo = '';
   let siteLogoDark = '';
@@ -53,7 +58,7 @@ function loadAuthoredDocs(apiDir, warnings) {
   // No directory named at all is the namespace-mode site, which has no authored pages by
   // definition; a named one that is not there yet is a site whose first page is still to be written.
   if (!apiDir || !fs.existsSync(apiDir)) {
-    return { categories, mains, siteMain, siteLogo, siteLogoDark };
+    return { categories, mains, orders, siteMain, siteLogo, siteLogoDark };
   }
 
   const read = (file) => {
@@ -104,6 +109,19 @@ function loadAuthoredDocs(apiDir, warnings) {
     const assemblyDir = path.join(apiDir, entry.name);
 
     for (const file of fs.readdirSync(assemblyDir).sort()) {
+      if (file.toLowerCase() === SORT_FILE) {
+        const text = read(path.join(assemblyDir, file));
+        if (text !== null) {
+          // Blank lines and '#' lines are left out so the list can be spaced and annotated.
+          const names = text
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line && !line.startsWith('#'));
+          orders.set(entry.name.toLowerCase(), { names, file: path.join(assemblyDir, file) });
+        }
+        continue;
+      }
+
       if (!file.toLowerCase().endsWith('.md')) continue;
 
       const full = path.join(assemblyDir, file);
@@ -126,7 +144,7 @@ function loadAuthoredDocs(apiDir, warnings) {
     }
   }
 
-  return { categories, mains, siteMain, siteLogo, siteLogoDark };
+  return { categories, mains, orders, siteMain, siteLogo, siteLogoDark };
 }
 
 /** Documented means carrying a &lt;summary&gt;, which is the one thing owl-gen counts. */
@@ -212,6 +230,7 @@ class Model {
 
     const authored = loadAuthoredDocs(this.apiDir, this.warnings);
     this.categoryDocs = authored.categories;
+    this.categoryOrders = authored.orders;
 
     /** MAIN.md, or null. Drives the site landing page. */
     this.siteMain = authored.siteMain;
@@ -347,6 +366,34 @@ class Model {
     for (const bucket of this.categories.values()) {
       bucket.types.sort((a, b) => compareTypes(a.type, b.type));
     }
+
+    this.checkCategoryOrders();
+  }
+
+  /** Warns about SORT.txt lines naming no category, which would otherwise be silently ignored. */
+  checkCategoryOrders() {
+    for (const [assemblyKey, { names, file }] of this.categoryOrders) {
+      const known = new Set(
+        [...this.categories.values()]
+          .filter((c) => c.assembly.toLowerCase() === assemblyKey)
+          .map((c) => c.category.toLowerCase())
+      );
+      for (const name of names) {
+        if (!known.has(name.toLowerCase())) this.warnings.push(`${file}: no category named '${name}'`);
+      }
+    }
+  }
+
+  /** An assembly's SORT.txt as a rank per lowercased category name; empty without one. */
+  categoryRanks(assemblyName) {
+    const order = this.categoryOrders.get(assemblyName.toLowerCase());
+    const ranks = new Map();
+    if (!order) return ranks;
+    for (const name of order.names) {
+      const key = name.toLowerCase();
+      if (!ranks.has(key)) ranks.set(key, ranks.size);
+    }
+    return ranks;
   }
 
   /**
@@ -419,9 +466,10 @@ class Model {
   }
 
   categoriesOfAssembly(assemblyName) {
+    const ranks = this.categoryRanks(assemblyName);
     return [...this.categories.values()]
       .filter((c) => c.assembly === assemblyName)
-      .sort((a, b) => compareCategories(a.category, b.category));
+      .sort((a, b) => compareCategories(a.category, b.category, ranks));
   }
 
   /**
@@ -455,7 +503,9 @@ class Model {
 
   allCategories() {
     return [...this.categories.values()].sort(
-      (a, b) => a.assembly.localeCompare(b.assembly) || compareCategories(a.category, b.category)
+      (a, b) =>
+        a.assembly.localeCompare(b.assembly) ||
+        compareCategories(a.category, b.category, this.categoryRanks(a.assembly))
     );
   }
 
@@ -497,11 +547,21 @@ function compareTypes(a, b) {
   return left.length - right.length;
 }
 
-/** Named categories alphabetically, with '(Uncategorized)' always last. */
-function compareCategories(a, b) {
+/**
+ * Categories in their SORT.txt order, then the unlisted ones alphabetically, and '(Uncategorized)'
+ * always last.
+ *
+ * @param {Map<string, number>} ranks  from Model.categoryRanks; omit for plain alphabetical order
+ */
+function compareCategories(a, b, ranks = new Map()) {
   const aLast = a === '(Uncategorized)' ? 1 : 0;
   const bLast = b === '(Uncategorized)' ? 1 : 0;
   if (aLast !== bLast) return aLast - bLast;
+
+  const aRank = ranks.get(a.toLowerCase()) ?? Infinity;
+  const bRank = ranks.get(b.toLowerCase()) ?? Infinity;
+  if (aRank !== bRank) return aRank < bRank ? -1 : 1;
+
   return a.localeCompare(b);
 }
 

@@ -59,9 +59,19 @@ docs/api/MAIN.md                  home page
 docs/api/logo.svg                 header icon
 docs/api/MyLib/MAIN.md            MyLib's page
 docs/api/MyLib/Storage.md         the Storage category's page
+docs/api/MyLib/SORT.txt           category order, optional
 ```
 
 The sidebar lists your categories, and owl shows a placeholder for any page you haven't written yet.
+
+Categories are listed alphabetically. To choose the order, list them one per line in `SORT.txt`:
+
+```
+Storage
+Shapes
+```
+
+Categories you leave out follow, alphabetically.
 
 Pages somewhere else? Use `--docs path/to/pages`.
 

@@ -269,6 +269,39 @@ describe('with hand-written pages', () => {
     assert.match(page, /Shapes/);
     assert.match(page, /Storage/);
   });
+
+  test('SORT.txt puts the sidebar\'s categories in its order', () => {
+    const page = html(site.routes.assembly('Samples.VisualBasic'));
+    assert.ok(page.indexOf('ns_cat_Storage') < page.indexOf('ns_cat_Helpers'), 'Storage should come before Helpers');
+  });
+
+  test('without SORT.txt the categories are alphabetical', () => {
+    const page = html(site.routes.assembly('Samples.CSharp'));
+    assert.ok(page.indexOf('ns_cat_Shapes') < page.indexOf('ns_cat_Storage'), 'Shapes should come before Storage');
+  });
+});
+
+describe('category order', () => {
+  /** A copy of the samples' pages with this SORT.txt in Samples.CSharp. */
+  function withSort(sort) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-sort-test-'));
+    fs.cpSync(docs, dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Samples.CSharp', 'SORT.txt'), sort);
+    return make({ apiDir: dir });
+  }
+
+  test('unlisted categories follow the listed ones alphabetically, and Uncategorized stays last', () => {
+    const { site } = withSort('# first\n\nstorage\n');
+    const names = site.model.categoryTreeOfAssembly('Samples.CSharp').map((g) => g.category);
+    assert.equal(names[0], 'Storage');
+    assert.equal(names[1], 'Shapes');
+    assert.equal(names.at(-1), '(Uncategorized)');
+  });
+
+  test('a name that is not a category is reported', () => {
+    const { site } = withSort('Storage\nNowhere\n');
+    assert.ok(site.model.warnings.some((w) => /no category named 'Nowhere'/.test(w)));
+  });
 });
 
 describe('options', () => {
