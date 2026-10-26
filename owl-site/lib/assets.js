@@ -196,7 +196,7 @@ header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellips
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #version-current, #theme-switch, #sidebar-toggle { height: 30px; }
+#asm-filter, #search, #version-filter, #version-current, #whatsnew-link, #theme-switch, #sidebar-toggle { height: 30px; }
 
 /* ---- Sidebar toggle ----
    The theme toggle's face, before the title and against the column it shows and hides. */
@@ -271,6 +271,29 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
    without the chevron or the hover, since there is nothing to open. */
 #version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
 
+/* On the search field's face rather than the accent: it goes somewhere, it does not choose anything. */
+#whatsnew-link { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; white-space: nowrap; text-decoration: none; background: var(--nav-field); color: var(--nav-fg); }
+#whatsnew-link:hover, #whatsnew-link[aria-current="page"] { background: var(--nav-focus); }
+
+/* ---- What's New ---- */
+/* No breadcrumbs above it, so the head brings its own room at the top. */
+.whatsnew-head .page-head-brief { padding-top: 1.1rem; }
+/* Shown once the list has arrived, since until then there is nothing for it to filter. */
+.whatsnew-filter { display: none; margin-top: 0.75rem; }
+/* The header search's height, across the whole head. */
+.whatsnew-filter .derived-filter { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 0.85rem; }
+.whatsnew-filter.ready { display: block; }
+.whatsnew-note { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--text3); }
+.whatsnew-list, .whatsnew-members { list-style: none; margin: 0; padding: 0; }
+.whatsnew-type { padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+.whatsnew-members { margin: 0.3rem 0 0 1.6rem; }
+.whatsnew-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; font-size: 0.88rem; }
+.whatsnew-members .whatsnew-row { font-size: 0.82rem; padding: 0.12rem 0; }
+.whatsnew-row > a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.whatsnew-row > a:hover { color: var(--flash); }
+.whatsnew-type > .whatsnew-row > a { font-family: monospace; }
+.whatsnew-sig { color: var(--text4); }
+
 /* ---- Theme switch ---- */
 /* A track on the search field's face with the lit segment raised out of it, rather than the accent
    the two selects above wear: those are jumps that change what is being read, and this only changes
@@ -322,7 +345,8 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 /* On also carries the tabs' weight, so a live switch reads in the bar's own voice and a dead one
    a step quieter. */
 .toggle-btn[aria-pressed="true"] { font-weight: 500; }
-#toggle-obsolete[aria-pressed="true"] { border-bottom-color: var(--note-obsolete); }
+#toggle-obsolete[aria-pressed="true"], #whatsnew-obsolete[aria-pressed="true"] { border-bottom-color: var(--note-obsolete); }
+#whatsnew-added[aria-pressed="true"] { border-bottom-color: var(--oc-green-6); }
 #toggle-inherited[aria-pressed="true"] { border-bottom-color: var(--flash); }
 .toggle-btn[aria-pressed="false"] { border-bottom-color: var(--border2); }
 .asm-legend { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: 0.5rem; }
@@ -743,6 +767,8 @@ a.chip:hover { color: var(--flash); }
    chip that parts when the API arrived from when it stopped being the way, and the bare word
    atop an inherited card's provenance. */
 .chip-deprecated { color: var(--note-obsolete); }
+/* What's New's arrival mark, in its Added switch's green. */
+.chip-added { color: var(--oc-green-6); }
 .inherited-from .chip-deprecated { margin-bottom: 0.15rem; }
 .asm-name ~ .chip-since, .chip-action ~ .chip-since { margin-left: 0; }
 
@@ -1268,16 +1294,23 @@ const JS = `
   }
 
   // ---- Version filter ----
-  // An API belongs to a version unless a <since> puts it after that version. Untagged means it
-  // predates every version on the list, which is why the absence of the attribute shows it.
+  // A listed version covers itself and everything up to the next one listed, so picking 8 keeps
+  // what 8.1 and 8.5 added. Untagged means it predates every version on the list, which is why the
+  // absence of the attribute shows it.
   var VERSION_KEY = 'docs-version';
   var versionSelect = document.getElementById('version-filter');
   // A site offering one version writes it as a label rather than a menu. There is nothing to
   // choose, but the page is still filtered to it, so the version is read off the label instead.
   var versionFixed = document.getElementById('version-current');
   var activeVersion = '';
-  if (versionSelect) activeVersion = versionSelect.value;
-  else if (versionFixed) activeVersion = versionFixed.getAttribute('data-version') || '';
+  var listedVersions = [];
+  if (versionSelect) {
+    activeVersion = versionSelect.value;
+    listedVersions = [].map.call(versionSelect.options, function (option) { return option.value; });
+  } else if (versionFixed) {
+    activeVersion = versionFixed.getAttribute('data-version') || '';
+    listedVersions = activeVersion ? [activeVersion] : [];
+  }
 
   // A leading prefix is dropped before the numbers are read, since a version offered as 'V9' is
   // labelled the way the reader knows it while a <since> is written as the bare 8.0.
@@ -1303,10 +1336,276 @@ const JS = `
     return 0;
   }
 
+  // The oldest listed version after this one, which is where this one's run ends; '' for the newest.
+  function nextListed(version) {
+    var next = '';
+    listedVersions.forEach(function (listed) {
+      if (compareVersions(listed, version) > 0 && (!next || compareVersions(listed, next) < 0)) next = listed;
+    });
+    return next;
+  }
+
   function withinVersion(el) {
     var since = el.getAttribute('data-since');
     if (!since || !activeVersion) return true;
-    return compareVersions(since, activeVersion) <= 0;
+    var until = nextListed(activeVersion);
+    return !until || compareVersions(since, until) < 0;
+  }
+
+  // ---- What's New ----
+  // The url names the comparison: '9' is the run the version filter gives 9, '6...9' exactly what
+  // came after 6 up to and including 9, nothing the newest. Read here rather than written into the page,
+  // so that a server can answer any pair with the one shell. See whatsNew in lib/pages.js.
+  var whatsNew = document.getElementById('whatsnew');
+  var whatsNewLink = document.getElementById('whatsnew-link');
+
+  // Mirrors versionLabel in lib/layout.js.
+  function versionText(version) {
+    return /^[0-9]/.test(version) ? 'v' + version : version;
+  }
+
+  // contains says whether a <since> or <deprecated> falls in the range.
+  function whatsNewRange() {
+    var root = whatsNew.getAttribute('data-root') || '';
+    var spec = location.pathname.indexOf(root) === 0
+      ? location.pathname.slice(root.length).replace(/[/]+$/, '')
+      : '';
+    try { spec = decodeURIComponent(spec); } catch (e) {}
+    if (!spec) spec = listedVersions[0] || '';
+
+    var ends = spec.split('...');
+    // A pair is taken as written rather than snapped to the listed runs, so 8.4...8.12 means what it says.
+    if (ends.length === 2) {
+      return {
+        older: ends[0],
+        newer: ends[1],
+        named: true,
+        contains: function (version) {
+          return compareVersions(version, ends[0]) > 0 && compareVersions(version, ends[1]) <= 0;
+        },
+      };
+    }
+
+    // Listed or not, a version is compared with the nearest listed one before it.
+    var older = '';
+    listedVersions.forEach(function (version) {
+      if (compareVersions(version, spec) < 0 && (!older || compareVersions(version, older) > 0)) older = version;
+    });
+    var until = nextListed(spec);
+    return {
+      older: older,
+      newer: spec,
+      named: false,
+      contains: function (version) {
+        return compareVersions(version, spec) >= 0 && (!until || compareVersions(version, until) < 0);
+      },
+    };
+  }
+
+  var whatsNewAt = whatsNew ? whatsNewRange() : null;
+
+  function drawWhatsNew(asset) {
+    var at = whatsNewAt;
+    var status = document.getElementById('whatsnew-status');
+
+    function within(version) {
+      return Boolean(version) && at.contains(version);
+    }
+
+    function chips(since, deprecated) {
+      return (
+        (within(since) ? '<span class="chip chip-added">Added ' + escapeHtml(versionText(since)) + '</span>' : '') +
+        (within(deprecated)
+          ? '<span class="chip chip-deprecated">Obsolete ' + escapeHtml(versionText(deprecated)) + '</span>'
+          : '')
+      );
+    }
+
+    function icon(name) {
+      return (
+        '<svg class="kind-icon" aria-hidden="true" focusable="false"><use href="#${ICON_PREFIX}' +
+        escapeHtml(name || 'class') + '"/></svg>'
+      );
+    }
+
+    // Worked out once: each row's markup and what the filter and switches ask of it. Typing then
+    // filters this list and redraws in one write, rather than walking thousands of rows on the page.
+    var entries = [];
+
+    (asset.types || []).forEach(function (t) {
+      var url = (asset.prefix || '') + t[1] + '/';
+      var typeAdded = within(t[3]);
+      var typeObsolete = within(t[4]);
+      var members = [];
+
+      (t[5] || []).forEach(function (m) {
+        // A new type's members arrived with it, and its own row already says so.
+        var memberAdded = within(m[4]) && !typeAdded;
+        var memberObsolete = within(m[5]);
+        if (!memberAdded && !memberObsolete) return;
+
+        var label = m[1] === null ? m[0] : m[0] + '(' + m[1] + ')';
+        members.push({
+          name: label.toLowerCase(),
+          added: memberAdded,
+          obsolete: memberObsolete,
+          html:
+            '<li class="whatsnew-row">' + icon(m[3]) +
+            '<a href="' + escapeHtml(url + '#' + m[2]) + '">' + escapeHtml(m[0]) +
+            (m[1] === null ? '' : '<span class="whatsnew-sig">(' + escapeHtml(m[1]) + ')</span>') +
+            '</a>' + chips(memberAdded ? m[4] : '', m[5]) + '</li>',
+        });
+      });
+
+      if (!typeAdded && !typeObsolete && members.length === 0) return;
+
+      entries.push({
+        name: t[0].toLowerCase(),
+        added: typeAdded,
+        obsolete: typeObsolete,
+        html:
+          '<div class="whatsnew-row">' + icon(t[2]) +
+          '<a href="' + escapeHtml(url) + '">' + escapeHtml(t[0]) + '</a>' + chips(t[3], t[4]) + '</div>',
+        members: members,
+      });
+    });
+
+    // The list says what changed; the line under the heading is only for when there is no list.
+    if (entries.length === 0) {
+      status.textContent = 'Nothing was added or made obsolete.';
+      return;
+    }
+    status.remove();
+    filterWhatsNew(entries);
+  }
+
+  // A type that matches keeps all its members; otherwise it stays only to hold members that match.
+  // The switches hide what is marked only with what they turn off.
+  function filterWhatsNew(entries) {
+    var row = document.querySelector('.whatsnew-filter');
+    var bar = document.querySelector('.whatsnew-bar');
+    var field = row && row.querySelector('.derived-filter');
+    var clear = row && row.querySelector('.derived-filter-clear');
+    var empty = document.querySelector('.whatsnew-empty');
+    var toggles = {
+      added: document.getElementById('whatsnew-added'),
+      obsolete: document.getElementById('whatsnew-obsolete'),
+    };
+
+    function on(name) {
+      return !toggles[name] || toggles[name].getAttribute('aria-pressed') === 'true';
+    }
+
+    function draw() {
+      var q = field ? field.value.trim().toLowerCase() : '';
+      var showAdded = on('added');
+      var showObsolete = on('obsolete');
+      var passes = function (e) { return (showAdded && e.added) || (showObsolete && e.obsolete); };
+      var html = '';
+
+      entries.forEach(function (e) {
+        var whole = !q || e.name.indexOf(q) >= 0;
+        var rows = '';
+        e.members.forEach(function (m) {
+          if (passes(m) && (whole || m.name.indexOf(q) >= 0)) rows += m.html;
+        });
+        if (!(whole && passes(e)) && !rows) return;
+        html +=
+          '<li class="whatsnew-type">' + e.html +
+          (rows ? '<ul class="whatsnew-members">' + rows + '</ul>' : '') + '</li>';
+      });
+
+      whatsNew.innerHTML = html ? '<ul class="whatsnew-list">' + html + '</ul>' : '';
+      if (empty) empty.hidden = Boolean(html);
+    }
+
+    // The filter and the switches ride in the url, so a reload or a shared link opens on the same list.
+    // A switch is written only when it is off, the way it starts on.
+    function remember() {
+      var params = urlParams();
+      var text = field.value.trim();
+      if (text) params.set('filter', text);
+      else params.delete('filter');
+      Object.keys(toggles).forEach(function (name) {
+        if (on(name)) params.delete(name);
+        else params.set(name, 'off');
+      });
+      writeParams(params);
+    }
+
+    if (row && bar) {
+      var asked = urlParams();
+      field.value = asked.get('filter') || '';
+      row.classList.toggle('filled', field.value.length > 0);
+      Object.keys(toggles).forEach(function (name) {
+        if (asked.get(name) === 'off') toggles[name].setAttribute('aria-pressed', 'false');
+      });
+    }
+
+    draw();
+    if (!row || !bar) return;
+    row.classList.add('ready');
+    bar.hidden = false;
+
+    Object.keys(toggles).forEach(function (name) {
+      toggles[name].addEventListener('click', function () {
+        toggles[name].setAttribute('aria-pressed', String(!on(name)));
+        draw();
+        remember();
+      });
+    });
+
+    // Held until typing pauses, so a quick word is one redraw rather than one per letter.
+    var pending = 0;
+    field.addEventListener('input', function () {
+      // The raw value, not the query: spaces are nothing to filter by but something to clear.
+      row.classList.toggle('filled', field.value.length > 0);
+      clearTimeout(pending);
+      pending = setTimeout(function () {
+        draw();
+        remember();
+      }, 100);
+    });
+    clear.addEventListener('click', function () {
+      field.value = '';
+      row.classList.remove('filled');
+      clearTimeout(pending);
+      draw();
+      remember();
+      field.focus();
+    });
+  }
+
+  if (whatsNewAt) {
+    var heading = whatsNewAt.named
+      ? "What's New from " + versionText(whatsNewAt.older) + ' to ' + versionText(whatsNewAt.newer)
+      : "What's New in " + versionText(whatsNewAt.newer);
+    var whatsNewStatus = document.getElementById('whatsnew-status');
+    document.getElementById('whatsnew-title').textContent = heading;
+    document.title = document.title.replace(/^What's New/, heading);
+
+    if (whatsNewAt.named && compareVersions(whatsNewAt.older, whatsNewAt.newer) >= 0) {
+      whatsNewStatus.textContent =
+        'Put the older version first: ' + whatsNewAt.newer + '...' + whatsNewAt.older + '.';
+    } else if (!whatsNewAt.older) {
+      whatsNewStatus.textContent = versionText(whatsNewAt.newer) + ' is the first public version of this API.';
+    } else {
+      fetch(whatsNew.getAttribute('data-src'))
+        .then(function (response) {
+          if (!response.ok) throw new Error(String(response.status));
+          return response.json();
+        })
+        .then(drawWhatsNew, function () {
+          whatsNewStatus.textContent = 'The list of changes could not be loaded.';
+        });
+    }
+  }
+
+  // The header link follows the menu, so it always opens on the version being read.
+  function syncWhatsNewLink() {
+    if (!whatsNewLink || !activeVersion) return;
+    whatsNewLink.href = whatsNewLink.getAttribute('data-root') + encodeURIComponent(activeVersion) + '/';
+    if (whatsNew) whatsNewLink.setAttribute('aria-current', 'page');
   }
 
   // ---- Example tabs ----
@@ -1430,7 +1729,7 @@ const JS = `
   // ---- The url as view state ----
   // What the reader has narrowed the page to belongs in the address bar: a filtered page survives a
   // reload that way, and a link to one arrives filtered rather than whole. The kind tab writes k
-  // here; the search box writes q and a.
+  // here; the search box writes q and a; What's New writes filter, added and obsolete.
   //
   // Merged into whatever is already in the url rather than rebuilt from the writer's own fields,
   // because two writers share it - a keystroke in the search box must not drop the tab's k, and a
@@ -2033,6 +2332,9 @@ const JS = `
       if (!versionSelect.value) versionSelect.selectedIndex = 0;
     } catch (e) {}
 
+    // A What's New page is about the version in its url, whatever was picked last.
+    if (whatsNewAt && listedVersions.indexOf(whatsNewAt.newer) !== -1) versionSelect.value = whatsNewAt.newer;
+
     activeVersion = versionSelect.value;
     // Versions are listed newest first, so anything past the first is an older one.
     versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
@@ -2041,13 +2343,21 @@ const JS = `
       activeVersion = versionSelect.value;
       versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
       try { localStorage.setItem(VERSION_KEY, activeVersion); } catch (e) {}
+      syncWhatsNewLink();
+      // Here the version is the page, so picking another goes to its page, filtered the same way.
+      if (whatsNew) {
+        location.href = whatsNewLink.href + location.search;
+        return;
+      }
       applyFilter();
       applyTreeFilters();
     });
 
+    syncWhatsNewLink();
     applyFilter();
     applyTreeFilters();
   } else if (activeVersion) {
+    syncWhatsNewLink();
     // The one-version label: nothing to remember and nothing to listen to, but what came after that
     // version is hidden here exactly as the menu would hide it.
     applyFilter();

@@ -24,6 +24,7 @@ public class Gadget : IConverter<string, int>, IDisposable
   /// <summary>Keeps the gadget.</summary>
   /// <param name="mode">Where to keep it.</param>
   /// <param name="fallback">Where to keep it when that fails.</param>
+  /// <deprecated>2.1</deprecated>
   public void Keep(Mode mode = Mode.Disk, Mode? fallback = Mode.Memory) { }
 
   /// <summary>Set once, at construction.</summary>
@@ -33,6 +34,7 @@ public class Gadget : IConverter<string, int>, IDisposable
   public Gadget() { }
 
   /// <summary>Makes a gadget with an id.</summary>
+  /// <since>2.1</since>
   public Gadget(int id) => Id = id;
 
   /// <summary>Cleans up.</summary>

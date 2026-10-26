@@ -260,6 +260,12 @@ class Site {
         return html ? this.html(html) : this.notFound(pathname);
       }
 
+      case 'whatsnew': {
+        // Versions are what the page compares, so a site that names none has no such page.
+        if (this.versions.length === 0 || !validWhatsNew(route.spec)) return this.notFound(pathname);
+        return this.html(this.renderer.whatsNew(route.spec));
+      }
+
       case 'sandcastle': {
         const url = this.sandcastle ? this.sandcastle.lookup(route.name) : null;
         return url ? this.redirect(url) : this.notFound(pathname);
@@ -299,6 +305,15 @@ class Site {
           type: 'application/json; charset=utf-8',
           body: JSON.stringify(this.renderer.searchAsset()),
         };
+      case 'whatsnew.json':
+        if (this.versions.length === 0) {
+          return { status: 404, type: 'text/plain; charset=utf-8', body: 'Not found' };
+        }
+        return {
+          status: 200,
+          type: 'application/json; charset=utf-8',
+          body: JSON.stringify(this.renderer.whatsNewAsset()),
+        };
       default: {
         // The rows the trees leave out, one asset per tree shape. Answered from the renderer the
         // pages were written by, so a key it has no tree for is a 404 rather than an empty tree.
@@ -335,6 +350,16 @@ class Site {
   notFound(pathname) {
     return { status: 404, type: 'text/html; charset=utf-8', body: this.renderer.notFound(pathname) };
   }
+}
+
+/**
+ * True for the specs a What's New url can carry: nothing, one version, or 'older...newer'. Any
+ * versions will do, listed or not, as long as each has a number to compare.
+ */
+function validWhatsNew(spec) {
+  if (!spec) return true;
+  const ends = spec.split('...');
+  return ends.length <= 2 && ends.every((end) => /\d/.test(end));
 }
 
 module.exports = { Site };

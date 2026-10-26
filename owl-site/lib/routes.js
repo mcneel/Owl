@@ -185,6 +185,14 @@ class Routes {
     return `${this.base}/search/${params.length > 0 ? `?${params.join('&')}` : ''}`;
   }
 
+  /**
+   * What changed in a version: '9' is 9 up to the next version listed, and '6.0...9.0' exactly what
+   * came after 6.0 up to and including 9.0, older first. Without a spec, the newest listed version.
+   */
+  whatsNew(spec = '') {
+    return `${this.base}/whatsnew/${spec ? `${encodeURIComponent(spec)}/` : ''}`;
+  }
+
   asset(name) {
     return `${this.base}/assets/${name}`;
   }
@@ -259,6 +267,11 @@ class Routes {
       return { kind: 'assembly', slug: parts[1] };
     }
 
+    // Ahead of docify, whose one-segment paths would otherwise take /whatsnew/ for a type name.
+    if (parts[0] === 'whatsnew' && parts.length <= 2) {
+      return { kind: 'whatsnew', spec: parts.length === 2 ? safeDecode(parts[1]) : '' };
+    }
+
     if (parts[0] === 'category' && parts.length === 3) {
       return { kind: 'category', assembly: parts[1], category: parts[2] };
     }
@@ -271,6 +284,15 @@ class Routes {
     if (parts.length === 1 || parts.length === 2) return { kind: 'docify', path: parts.join('/') };
 
     return null;
+  }
+}
+
+/** A path segment decoded, or as it came when it is not valid percent-encoding. */
+function safeDecode(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
   }
 }
 

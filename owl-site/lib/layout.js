@@ -191,6 +191,7 @@ ${icons.spriteHtml()}
   </form>
   ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
   ${versionSelector(versions)}
+  ${whatsNewLink(versions, routes)}
   ${themeSwitch()}
 </header>
 
@@ -450,8 +451,8 @@ function versionLabel(version) {
  *
  * Each entry is the label and what a <since> is compared against both, so naming them '9' or '2.1'
  * is a matter of what the reader should see rather than of what owl will accept. Selecting one
- * hides anything a <since> puts after it, which is why an untagged API belongs to every version
- * rather than to none.
+ * hides anything a <since> puts at or after the next version listed, so 8 keeps what 8.5 added, and
+ * an untagged API belongs to every version rather than to none.
  *
  * One version is written as a label rather than a menu. A menu of one offers the reader a choice
  * they have already been given, but dropping it altogether would drop the filtering with it - a
@@ -482,6 +483,18 @@ function versionSelector(versions) {
   return (
     '<label class="skip-link" for="version-filter">API version</label>' +
     `<select id="version-filter" title="API version">${options}</select>`
+  );
+}
+
+/**
+ * The way to what the picked version changed. Written for the newest; the script points it at
+ * whichever version the menu holds. None for a single version, which has nothing before it to change from.
+ */
+function whatsNewLink(versions, routes) {
+  if (versions.length < 2 || !routes) return '';
+  return (
+    `<a id="whatsnew-link" href="${attr(routes.whatsNew(versions[0]))}" ` +
+    `data-root="${attr(routes.whatsNew())}">What's New</a>`
   );
 }
 

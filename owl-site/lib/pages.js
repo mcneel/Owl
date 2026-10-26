@@ -437,6 +437,32 @@ function memberKey(member) {
   return `${member.kind}|${member.name}|${parameters}`;
 }
 
+/**
+ * A filter field with its funnel and clear marks, as the derived-types tree and the What's New page
+ * carry it. The script finds it by its classes; extra classes go on the row.
+ */
+function filterFieldHtml(placeholder, label, rowClass = '') {
+  const row = rowClass ? `derived-filter-row ${rowClass}` : 'derived-filter-row';
+  return (
+    `<div class="${row}"><input type="search" class="derived-filter" ` +
+    `placeholder="${attr(placeholder)}" aria-label="${attr(label)}" autocomplete="off">` +
+    // The funnel crossed out - the same mark undone, not a third drawing; hidden behind
+    // the funnel until there is something to clear.
+    '<button type="button" class="derived-filter-clear" aria-label="Clear filter">' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path fill="currentColor" d="M19.79 5.61A.998.998 0 0 0 19 4H6.83l7.97 7.97zM2.81 ' +
+    '2.81L1.39 4.22L10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-2.17l5.78 5.78l1.41-1.41z"/>' +
+    '</svg></button>' +
+    '<svg class="derived-filter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
+    'd="M4.25,5.61C6.27,8.2 10,13 10,13L10,19C10,19.55 10.45,20 11,20L13,20C13.55,20 ' +
+    '14,19.55 14,19L14,13C14,13 17.72,8.2 19.74,5.61C19.876,5.435 19.95,5.22 19.95,4.998C' +
+    '19.95,4.451 19.499,4 18.952,4C18.951,4 18.951,4 18.95,4L5.04,4C4.21,4 3.74,4.95 ' +
+    '4.25,5.61Z"/>' +
+    '</svg></div>'
+  );
+}
+
 class Renderer {
   constructor(model, routes, options = {}) {
     this.model = model;
@@ -2004,22 +2030,7 @@ ${this.seeAlsoHtml(type.docs)}
     // control to ignore. The empty note travels with the box - only a filter can empty the list.
     const filter =
       listed > 10
-        ? '<div class="derived-filter-row"><input type="search" class="derived-filter" ' +
-          'placeholder="Filter Derived Types" aria-label="Filter derived types" autocomplete="off">' +
-          // The funnel crossed out - the same mark undone, not a third drawing; hidden behind
-          // the funnel until there is something to clear.
-          '<button type="button" class="derived-filter-clear" aria-label="Clear filter">' +
-          '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-          '<path fill="currentColor" d="M19.79 5.61A.998.998 0 0 0 19 4H6.83l7.97 7.97zM2.81 ' +
-          '2.81L1.39 4.22L10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-2.17l5.78 5.78l1.41-1.41z"/>' +
-          '</svg></button>' +
-          '<svg class="derived-filter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-          '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
-          'd="M4.25,5.61C6.27,8.2 10,13 10,13L10,19C10,19.55 10.45,20 11,20L13,20C13.55,20 ' +
-          '14,19.55 14,19L14,13C14,13 17.72,8.2 19.74,5.61C19.876,5.435 19.95,5.22 19.95,4.998C' +
-          '19.95,4.451 19.499,4 18.952,4C18.951,4 18.951,4 18.95,4L5.04,4C4.21,4 3.74,4.95 ' +
-          '4.25,5.61Z"/>' +
-          '</svg></div>'
+        ? filterFieldHtml('Filter Derived Types', 'Filter derived types')
         : '';
     const empty = filter ? '<div class="tree-empty" hidden>Nothing matches.</div>' : '';
 
@@ -3352,6 +3363,97 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   // ------------------------------------------------------------------
+  // What's New
+  // ------------------------------------------------------------------
+
+  /**
+   * The page listing what a version added and made obsolete, filled in the browser from
+   * whatsnew.json. One shell answers every spec - see Routes.whatsNew - because the comparison is
+   * worked out from the url, which lets a server answer pairs the export never wrote.
+   */
+  whatsNew(spec = '') {
+    const root = this.routes.whatsNew();
+    const body = `
+<div class="page-head sticky-head whatsnew-head">
+  <div class="page-head-brief">
+    <div class="page-title-row"><h1 class="page-title" id="whatsnew-title">What's New</h1></div>
+    <p class="page-intro" id="whatsnew-status">Loading…</p>
+    ${
+      // Hidden until there is a list to filter; the empty note travels with it, as on the derived tree.
+      filterFieldHtml('Filter Changes', 'Filter changes', 'whatsnew-filter')
+    }
+    ${this.whatsNewNoteHtml()}
+  </div>
+  ${
+    // The type page's switches in the type page's place, at the foot of the head; both start on.
+    '<div class="filter-bar whatsnew-bar" hidden><div class="member-toggles">' +
+    '<button type="button" class="toggle-btn" id="whatsnew-added" aria-pressed="true" ' +
+    'title="Show or hide what was added">Added</button>' +
+    '<button type="button" class="toggle-btn" id="whatsnew-obsolete" aria-pressed="true" ' +
+    'title="Show or hide what was made obsolete">Obsolete</button>' +
+    '</div></div>'
+  }
+</div>
+<p class="page-intro whatsnew-empty" hidden>Nothing matches.</p>
+<div id="whatsnew" data-src="${attr(this.routes.asset('whatsnew.json'))}" data-root="${attr(root)}"></div>
+<noscript><p class="page-intro">This page needs JavaScript to list what changed.</p></noscript>
+`;
+
+    return this.shell({
+      title: "What's New",
+      description: `What each version of the ${this.siteName} API added and made obsolete.`,
+      // The bare url is the newest version's page under another name.
+      canonical: this.routes.whatsNew(spec || this.versions[0]),
+      body,
+      sidebar: this.namespaceMode ? this.namespaceTree() : this.assembliesTree(),
+      treeKey: this.namespaceMode ? 'namespaces' : 'assemblies',
+      assemblies: this.assemblyChoices(''),
+    });
+  }
+
+  /** How to compare two versions; nothing on a site that lists only one. */
+  whatsNewNoteHtml() {
+    if (this.versions.length < 2) return '';
+    return (
+      `<p class="whatsnew-note">Tip: Compare any two versions with a URL like <code>${escape(this.routes.whatsNew())}` +
+      'X.x...X.x/</code>: it lists what came after the first, up to and including the second.</p>'
+    );
+  }
+
+  /**
+   * Every type and member carrying a &lt;since&gt; or &lt;deprecated&gt;, for the page to pick a
+   * range out of. Rows are positional, as the tree asset's are:
+   *   type    [fullName, slug, icon, since, deprecated, members]
+   *   member  [name, parameters or null, anchor, icon, since, deprecated]
+   * Parameters are there for the callables, whose overloads would otherwise read the same.
+   */
+  whatsNewAsset() {
+    const tagged = (docs) => Boolean(docs && (docs.since || docs.deprecated));
+    const rows = [];
+
+    for (const { type } of this.model.allTypes()) {
+      const members = (type.members || []).filter((m) => tagged(m.docs)).map((m) => [
+        memberDisplayName(m),
+        CALLABLE_KINDS.has(m.kind)
+          ? (m.parameters || []).map((p) => (p.refKind ? `${p.refKind} ` : '') + p.type.display).join(', ')
+          : null,
+        m.anchor,
+        theme.kindIcon(m.kind),
+        m.docs.since || '',
+        m.docs.deprecated || '',
+      ]);
+
+      if (!tagged(type.docs) && members.length === 0) continue;
+
+      const docs = type.docs || {};
+      rows.push([type.fullName, type.slug, theme.kindIcon(type.kind), docs.since || '', docs.deprecated || '', members]);
+    }
+
+    rows.sort((a, b) => a[0].localeCompare(b[0]));
+    return { schema: 1, prefix: this.baseRoutes.typePrefix(), types: rows };
+  }
+
+  // ------------------------------------------------------------------
   // sitemap / robots / 404
   // ------------------------------------------------------------------
 
@@ -3378,6 +3480,9 @@ ${this.seeAlsoHtml(type.docs)}
         }
       }
     }
+
+    // The listed versions' pages; the bare url is another name for the newest, so it is left out.
+    for (const version of this.versions) urls.push(this.routes.whatsNew(version));
 
     return urls;
   }
