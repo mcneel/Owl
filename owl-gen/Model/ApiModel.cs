@@ -41,6 +41,19 @@ sealed class ApiAttribute
 
   /// <summary>Constructor and named arguments, already formatted.</summary>
   public List<string>? Arguments { get; set; }
+
+  /// <summary>True when the attribute class lives outside the documented set.</summary>
+  public bool External { get; set; }
+
+  /// <summary>
+  /// Assembly the attribute class is declared in, recorded only when it is external.
+  /// </summary>
+  [JsonPropertyName("asm")] public string? Assembly { get; set; }
+
+  /// <summary>
+  /// Types the arguments write by name, enums and typeof's, so the site can link them.
+  /// </summary>
+  public List<TypeRef>? Types { get; set; }
 }
 
 /// <summary>

@@ -117,6 +117,9 @@ describe('type pages', () => {
   test('member signatures are written out in full', () => {
     const page = text(type('Members.Gadget'));
     assert.match(page, /public const int MaxSize = 10/);
+    assert.match(page, /public const Mode DefaultMode = Mode\.Disk/);
+    assert.match(page, /public void Keep\(Mode mode = Mode\.Disk, Mode\? fallback = Mode\.Memory\)/);
+    assert.match(page, /mode\s*Mode = Mode\.Disk/);
     assert.match(page, /public readonly int Id/);
     assert.match(page, /public string Label \{ get; \}/);
     assert.match(page, /public void Configure\(ref int a, out int b, in int c, int d = 5, params string\[\] rest\)/);
@@ -130,6 +133,28 @@ describe('type pages', () => {
     const page = text(type('MemoryStore'));
     assert.match(page, /CachedStore/);
     assert.match(page, /VbStore/);
+  });
+
+  test('attributes sit above the declaration and link by doc id', () => {
+    assert.match(text(type('Point')), /\[Serializable\]\s*public struct Point/);
+    assert.match(html(type('Point')), /href="https:\/\/learn\.microsoft\.com\/dotnet\/api\/system\.serializableattribute"/);
+    // A type argument links as any type does; a named argument's name is a property, not the Name type.
+    const final = html(type('FinalName'));
+    assert.match(final, /<a href="[^"]*">StoredBy<\/a>/);
+    assert.match(final, /<a href="[^"]*">MemoryStore<\/a>/);
+    assert.match(final, /<span class="tok-type">Name<\/span> <span class="tok-punct">=<\/span>/);
+
+    // A framework enum only an attribute names still reaches Learn.
+    assert.match(
+      html(type('StoredByAttribute')),
+      /<a href="https:\/\/learn\.microsoft\.com\/dotnet\/api\/system\.attributetargets"[^>]*>AttributeTargets<\/a>/
+    );
+
+    // Obsolete is the note's to say, not a line's, on a type as on a member.
+    const old = text(type('OldStore'));
+    assert.match(old, /Use MemoryStore instead/);
+    assert.doesNotMatch(old, /\[Obsolete/);
+    assert.doesNotMatch(text(type('Owned`1').replace('`', '-')), /\[Obsolete/);
   });
 
   test('obsolete members are marked', () => {

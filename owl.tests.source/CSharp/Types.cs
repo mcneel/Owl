@@ -31,10 +31,15 @@ public sealed class CachedStore : MemoryStore
   public override string? Read(string key) => base.Read(key);
 }
 
+/// <summary>A store from before there were others.</summary>
+[System.Obsolete("Use MemoryStore instead")]
+public class OldStore { }
+
 /// <summary>Should never appear: internal.</summary>
 internal class InternalThing { }
 
 /// <summary>A point in two dimensions.</summary>
+[System.Serializable]
 public struct Point
 {
   /// <summary>Horizontal position.</summary>
@@ -57,7 +62,23 @@ public enum Mode
 /// <summary>An immutable name.</summary>
 public record Name(string First, string Last);
 
+/// <summary>Names the store a type is kept in.</summary>
+[System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct, AllowMultiple = false)]
+public sealed class StoredByAttribute : System.Attribute
+{
+  /// <summary>Names the store.</summary>
+  /// <param name="store">The store's type.</param>
+  public StoredByAttribute(System.Type store) => Store = store;
+
+  /// <summary>The store's type.</summary>
+  public System.Type Store { get; }
+
+  /// <summary>What the store files it under.</summary>
+  public string? Name { get; set; }
+}
+
 /// <summary>A name that cannot be derived from.</summary>
+[StoredBy(typeof(MemoryStore), Name = "final")]
 public sealed record FinalName(string Value);
 
 /// <summary>A pair of numbers, by value.</summary>
