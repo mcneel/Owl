@@ -19,9 +19,6 @@ const { stub: docifyStub } = require('./lib/docify');
  * slash, to the url it moved to. A server that can redirect should answer from it, with the
  * request's query carried across, rather than serve the stub pages.
  *
- * previews.json maps each type url, keyed the same way, to the previews of its members by anchor. A
- * server that can rewrite a page should answer a type url carrying ?member= with that member's.
- *
  * Usage:
  *   node build.js --json .owl/json --out dist [--base /prefix] [--site-url https://host]
  *   node build.js --json .owl/json --out dist [--api-versions 9,8]
@@ -250,15 +247,6 @@ if (site.docify) {
 if (site.sandcastle || site.docify) {
   write(`${site.base}/redirects.json`, JSON.stringify(moved));
 }
-
-// A shared member url is its type page with ?member= on it, and a file host answers that with the
-// type's preview. A server that can rewrite a page's head should answer it from this list instead,
-// so the link previews as the member it was shared for.
-const previews = {};
-for (const [url, members] of Object.entries(site.renderer.memberPreviews())) {
-  previews[movedKey(url)] = members;
-}
-write(`${site.base}/previews.json`, JSON.stringify(previews));
 
 const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 

@@ -638,16 +638,6 @@ describe('member previews', () => {
     assert.equal(head('/type/samples.memorystore/', 'member=nothing'), made.html('/type/samples.memorystore/').split('</head>')[0]);
   });
 
-  test('the export lists every member preview for a server to answer', () => {
-    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-previews-'));
-    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples', '--quiet'],
-      { stdio: 'pipe' });
-    const previews = JSON.parse(fs.readFileSync(path.join(out, 'previews.json'), 'utf8'));
-    const read = previews['/api/samples/type/samples.memorystore']['read-system.string'];
-    assert.equal(read.ogTitle, 'MemoryStore.Read method');
-    assert.match(read.title, /^MemoryStore\.Read method \| /);
-    assert.equal(read.description, 'Reads the value stored under key.');
-  });
 });
 
 describe('slugs', () => {

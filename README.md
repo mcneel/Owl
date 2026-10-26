@@ -137,10 +137,10 @@ new one. Add the request's query to the new address's own.
 ## Member Link Previews
 
 A member's address reads `type/mylib.storage/?member=read#read`, so a pasted link can preview as that member
-rather than its type. A plain file host previews it as the type. To preview the member, have your host answer a
-type page carrying `?member=` with the matching entry from `previews.json` in the output: put its `title` in the
-page's `<title>`, its `ogTitle` in `og:title`, and its `description` in `description` and `og:description`.
-Entries are keyed by type address, lower case and without a trailing slash, then by member.
+rather than its type. A plain file host previews it as the type. To preview the member, have your host rewrite a
+type page carrying `?member=` before sending it: find the element whose `id` is the member's name, and put its
+`.member-name` and `data-kind` in the page's `<title>` and `og:title`, and its `.summary` text in `description`
+and `og:description`.
 
 ## Check Documentation in CI
 
