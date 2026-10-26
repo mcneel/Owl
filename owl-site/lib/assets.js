@@ -1057,6 +1057,16 @@ dd { margin-left: 1rem; color: var(--text3); }
 .plain-list a { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.2rem; color: var(--text2); text-decoration: none; font-size: 0.86rem; }
 .plain-list a:hover { color: var(--flash); }
 .plain-list .count { margin-left: auto; font-size: 0.74rem; color: var(--text4); }
+/* The name column is as wide as the longest name; each row spans both columns so its rule runs across. */
+.ns-described { display: grid; grid-template-columns: max-content 1fr; column-gap: 1.5rem; }
+.ns-described li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: start; }
+.ns-described .ns-summary { padding: 0.33rem 0 0.4rem; font-size: 0.82rem; line-height: 1.5; color: var(--text3); }
+/* Too narrow for two columns, so the summary drops under its name. */
+@media (max-width: 640px) {
+  .ns-described { display: block; }
+  .ns-described li { display: block; }
+  .ns-described .ns-summary { margin: -0.2rem 0 0 1.7rem; padding-top: 0; }
+}
 
 /* ---- Search ---- */
 #search-page-input { width: 100%; max-width: 32rem; padding: 0.5rem 0.8rem; font-size: 0.95rem; background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; outline: none; }

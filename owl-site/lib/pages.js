@@ -1253,22 +1253,30 @@ ${this.namespaceListHtml(namespaces.map((ns) => ns.name))}
   /**
    * A list of namespaces, as the assembly page and a dump's landing page both show them.
    *
-   * Names only: the counts the model can supply are per assembly, and this list is not always one
-   * assembly's, so a number here would sometimes mean 'in this assembly' and sometimes 'in total'.
+   * Names and summaries, no counts: the counts the model can supply are per assembly, and this
+   * list is not always one assembly's, so a number here would sometimes mean 'in this assembly'
+   * and sometimes 'in total'.
    */
   namespaceListHtml(names) {
+    const summaries = names.map((name) => this.summaryHtml(this.namespaceDocs(name)));
+    // Once any row has a summary, the list becomes two columns, so rows without one line up too.
+    const described = summaries.some(Boolean);
     const items = names
-      .map(
-        (name) =>
+      .map((name, i) => {
+        // Outside the link, since a summary may carry links of its own.
+        return (
           `<li><a href="${attr(this.routes.namespace(name))}">` +
           icons.iconHtml('namespace') +
-          `${escape(name || '(global)')}</a></li>`
-      )
+          `${escape(name || '(global)')}</a>` +
+          (described ? `<div class="ns-summary">${summaries[i]}</div>` : '') +
+          '</li>'
+        );
+      })
       .join('');
 
     return `<section class="ns-section">
   <h2 class="ns-heading">Namespaces</h2>
-  <ul class="plain-list">${items}</ul>
+  <ul class="plain-list${described ? ' ns-described' : ''}">${items}</ul>
 </section>`;
   }
 

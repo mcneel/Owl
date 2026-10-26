@@ -44,6 +44,17 @@ public sealed class ModelTests(SampleModel model)
     Assert.False(model.Has("T:Samples.InternalThing"));
   }
 
+  [Fact]
+  public void InternalNamespaceDocDescribesItsNamespace()
+  {
+    Assert.False(model.Has("T:Samples.Shapes.NamespaceDoc"));
+
+    string file = Path.Combine(model.Directory, "Samples.CSharp.json");
+    JsonElement shapes = JsonDocument.Parse(File.ReadAllText(file)).RootElement.GetProperty("namespaces")
+        .EnumerateArray().Single(n => n.GetProperty("name").GetString() == "Samples.Shapes");
+    Assert.Contains("Shapes and what can be done", shapes.GetProperty("docs").GetRawText());
+  }
+
   [Theory]
   [InlineData("T:Samples.MemoryStore", "Hidden")]
   [InlineData("T:Samples.Shapes.Shape", "Secret")]

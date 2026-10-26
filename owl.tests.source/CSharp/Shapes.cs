@@ -51,3 +51,7 @@ public static class ShapeExtensions
   /// <param name="mode">Where to keep it.</param>
   public static void Keep(this Shape shape, Mode mode = Mode.Memory) { }
 }
+
+/// <summary>Shapes and what can be done with them.</summary>
+[System.Runtime.CompilerServices.CompilerGenerated]
+class NamespaceDoc { }
