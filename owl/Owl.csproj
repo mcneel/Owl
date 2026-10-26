@@ -52,11 +52,10 @@
 
   <!-- What the package says about itself, whichever way owl is built. -->
   <PropertyGroup>
-    <!-- VersionPrefix rather than Version, because the two behave differently under a suffix: an
-         explicit Version wins outright and would make -p:VersionSuffix do nothing, while a prefix
-         composes with one. CI packs with -p:VersionSuffix=ci.<run>, giving 0.1.0-ci.42; packing
-         with neither gives a plain 0.1.0. -->
-    <VersionPrefix>0.3.0</VersionPrefix>
+    <!-- Releases take their version from the git tag (publish.yml passes -p:Version), so these only
+         label builds that are not releases: 0.0.0-dev locally, 0.0.0-ci.<run> from CI. -->
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
 
     <PackageId>McNeel.Owl</PackageId>
     <Authors>McNeel</Authors>

@@ -1,6 +1,6 @@
 name: test
 
-# Runs on every push and PR to main. A push to main also keeps a 0.1.0-ci.<run> prerelease package
+# Runs on every push and PR to main. A push to main also keeps a 0.0.0-ci.<run> prerelease package
 # as a download. publish.yml calls this to test before it publishes.
 on:
   push:
@@ -34,9 +34,10 @@ jobs:
       - name: Test the website
         run: node --test owl.tests/site/
 
+  # Main only: a release tag also arrives as a push when publish.yml calls this.
   package:
     needs: [test]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       # LFS, or the package icon is packed as a pointer file rather than the image.

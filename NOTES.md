@@ -201,14 +201,15 @@ is a few dozen rows.
 
 owl ships as a .NET tool and nothing else. `.github/workflows/test.yml` packs a
 prerelease on every push to `main` and keeps it as a workflow artifact, and
-`.github/workflows/publish.yml`, run by hand, pushes a release to nuget.org.
+`.github/workflows/publish.yml`, run by a version tag, pushes a release to
+nuget.org.
 
 ```
 dotnet pack owl/Owl.csproj -c Release -p:VersionSuffix=ci.<run> -o nupkg
 ```
 
 ```
-McNeel.Owl.0.1.0-ci.<run>.nupkg   3.5 MB   tools/net8.0/any, one package for every platform
+McNeel.Owl.0.0.0-ci.<run>.nupkg   3.5 MB   tools/net8.0/any, one package for every platform
 ```
 
 Framework-dependent and RID-agnostic, which is not the compromise it sounds
@@ -222,19 +223,42 @@ it straight from the tree.
 
 ### Versioning
 
-The base is `VersionPrefix` in `owl/Owl.csproj`, so the number is owned by the
-project rather than by a workflow file, and CI supplies only the suffix.
-`VersionPrefix` rather than `Version` because the two differ under a suffix: an
-explicit `Version` wins outright and would make `VersionSuffix` do nothing,
-while a prefix composes with it. Packing with neither gives a plain `0.1.0`.
+A release's version is its git tag, not a number in the source: `v1.2.3`
+publishes `1.2.3`. `publish.yml` passes it as `-p:Version`, which wins outright
+over what `owl/Owl.csproj` says, so releasing never needs a commit of its own
+and the tag records exactly what shipped. The project file holds
+`VersionPrefix` `0.0.0` and `VersionSuffix` `dev`, so anything not built from a
+tag says so: `0.0.0-dev` locally, `0.0.0-ci.<run>` from CI, which overrides only
+the suffix.
 
 `owl --version` reads `AssemblyInformationalVersionAttribute` rather than the
 assembly version, which is four numbers and cannot hold a prerelease suffix —
-every `0.1.0-ci.N` build would otherwise report itself as plain `0.1.0`.
+every `0.0.0-ci.N` build would otherwise report itself as plain `0.0.0`.
 
 `RollForward` is `LatestMajor` because the tool targets `net8.0`: on a machine
 whose newest runtime is 9 or 10 it otherwise refuses to start rather than roll
 forward to what is there.
+
+### Releasing
+
+1. Merge everything the release needs into `main`.
+2. Tag the merge commit and push the tag:
+
+   ```
+   git switch main && git pull
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+
+3. `publish.yml` runs the tests, refuses a tag that is not on `main`, pushes
+   `McNeel.Owl` `1.2.3` to nuget.org, and makes a GitHub release on the tag.
+
+The release notes are GitHub's generated list of PRs merged since the previous
+tag, by title, so a PR's title is what a reader of the release sees.
+
+A failed run can be re-run from the Actions tab; a version already on nuget.org,
+or a release that already exists, is skipped rather than failing. To fix a bad
+release, tag a new version — nuget.org does not take the same version twice.
 
 ### One binary, three parts
 
