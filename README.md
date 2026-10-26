@@ -101,7 +101,12 @@ public class FileStore { }
 owl build MyLib.csproj --api-versions 3,2,1
 ```
 
-Readers pick a version from the header and see only what existed in it.
+Readers pick a version from the header and see what existed up to the next version listed: picking 2 shows
+what 2.1 added, but not what 3 added.
+
+The header's What's New link lists what the picked version added and made obsolete, up to the next version
+listed. To compare any two versions, open `whatsnew/8.4...8.12/`: it lists what came after 8.4, up to and including 8.12. That works on a plain file host only for
+the listed versions; build with `--server` (below) for any pair.
 
 ## Link to Your Source Code
 

@@ -160,7 +160,11 @@ const server = http.createServer((req, res) => {
     return send(res, 301, { Location: location }, '', head);
   }
 
-  const relative = pathname.slice(BASE.length);
+  let relative = pathname.slice(BASE.length);
+  // One page answers every comparison; it reads which from the url. Only listed versions were exported.
+  if (/^\/whatsnew\/[^/]+\/$/.test(relative) && !fs.existsSync(path.join(ROOT, relative))) {
+    relative = '/whatsnew/';
+  }
   let file = path.join(ROOT, relative);
   if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
     return notFound(res, head);

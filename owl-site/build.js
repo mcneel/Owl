@@ -209,6 +209,13 @@ const searchResult = site.resolve(site.routes.search(), null, false);
 write(site.routes.search().replace(/\?.*$/, ''), searchResult.body);
 pages++;
 
+// The bare What's New url is the newest version's page under another name, so it is not in the
+// sitemap either; a server answers any comparison the export did not write with this file.
+if (site.versions.length > 0) {
+  write(site.routes.whatsNew(), site.resolve(site.routes.whatsNew(), null, false).body);
+  pages++;
+}
+
 if (!urls.includes(site.routes.home())) {
   const rootResult = site.resolve(site.routes.home(), null, false);
   write(site.routes.home(), rootResult.body);
@@ -261,7 +268,9 @@ if (site.sandcastle || site.docify) {
 
 const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 
-for (const asset of ['app.css', 'app.js', 'search.json', ...trees]) {
+const whatsNew = site.versions.length > 0 ? ['whatsnew.json'] : [];
+
+for (const asset of ['app.css', 'app.js', 'search.json', ...trees, ...whatsNew]) {
   const result = site.asset(asset);
   write(site.routes.asset(asset), result.body);
   bytes += Buffer.byteLength(result.body, 'utf8');

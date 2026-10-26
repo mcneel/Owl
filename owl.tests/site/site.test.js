@@ -396,6 +396,73 @@ describe('options', () => {
   });
 });
 
+describe("what's new", () => {
+  const { site, get, html } = make({ apiDir: docs, apiVersions: '3,2.1,2' });
+
+  test('needs --api-versions', () => {
+    const { get: plain, html: plainHtml, site: plainSite } = make({ apiDir: docs });
+    assert.equal(plain('/whatsnew/').status, 404);
+    assert.equal(plain('/whatsnew/2.1/').status, 404);
+    assert.equal(plainSite.asset('whatsnew.json').status, 404);
+    assert.doesNotMatch(plainHtml(plainSite.routes.home()), /whatsnew-link/);
+  });
+
+  test('a single version gets no header link', () => {
+    assert.doesNotMatch(make({ apiVersions: '3' }).html('/'), /whatsnew-link/);
+  });
+
+  test('the header links to the newest version', () => {
+    assert.match(html(site.routes.home()), /<a id="whatsnew-link" href="\/whatsnew\/3\/" data-root="\/whatsnew\/">/);
+  });
+
+  test('a version, a pair or neither has a page', () => {
+    for (const url of ['/whatsnew/', '/whatsnew/2.1/', '/whatsnew/9/', '/whatsnew/2...3/', '/whatsnew/6.0...9.0/']) {
+      assert.equal(get(url).status, 200, url);
+    }
+    assert.equal(get('/whatsnew/latest/').status, 404);
+    assert.equal(get('/whatsnew/1...2...3/').status, 404);
+  });
+
+  test('the page pins its heading, filter box and toggles', () => {
+    const page = html('/whatsnew/2/');
+    assert.match(page, /<div class="page-head sticky-head whatsnew-head">\s*<div class="page-head-brief">/);
+    assert.match(page, /class="derived-filter-row whatsnew-filter"><input type="search" class="derived-filter" placeholder="Filter Changes"/);
+    assert.match(page, /id="whatsnew-added" aria-pressed="true"[^>]*>Added<\/button>/);
+    assert.match(page, /id="whatsnew-obsolete" aria-pressed="true"[^>]*>Obsolete<\/button>/);
+  });
+
+  test('the page shows how to compare two versions', () => {
+    assert.match(html('/whatsnew/2/'), /<code>\/whatsnew\/X\.x\.\.\.X\.x\/<\/code>: it lists/);
+    assert.doesNotMatch(make({ apiVersions: '3' }).html('/whatsnew/'), /whatsnew-note/);
+  });
+
+  test('the bare url is the newest version under another name', () => {
+    assert.match(html('/whatsnew/'), /<link rel="canonical" href="\/whatsnew\/3\/">/);
+  });
+
+  test('each listed version is in the sitemap', () => {
+    const urls = site.renderer.sitemapUrls();
+    for (const version of ['3', '2.1', '2']) assert.ok(urls.includes(`/whatsnew/${version}/`), version);
+    assert.ok(!urls.includes('/whatsnew/'));
+  });
+
+  test('the asset holds every tagged type and member, and nothing else', () => {
+    const asset = JSON.parse(site.asset('whatsnew.json').body);
+    const row = (name) => asset.types.find((t) => t[0] === name);
+
+    assert.deepEqual(row('Samples.CachedStore').slice(3, 6), ['2.1', '', []]);
+    assert.deepEqual(row('Samples.Docs.Tagged').slice(3, 5), ['2.0', '3.0']);
+    assert.equal(row('Samples.OldStore'), undefined);
+
+    const gadget = row('Samples.Members.Gadget');
+    assert.deepEqual(gadget.slice(3, 5), ['', '']);
+    const members = Object.fromEntries(gadget[5].map((m) => [`${m[0]}(${m[1]})`, m]));
+    assert.deepEqual(members['Gadget(int)'].slice(4), ['2.1', '']);
+    assert.deepEqual(members['Keep(Mode, Mode?)'].slice(4), ['', '2.1']);
+    assert.equal(Object.keys(members).length, 2);
+  });
+});
+
 describe('assets', () => {
   const { site } = make({ apiDir: docs });
 
@@ -651,7 +718,7 @@ describe('exported server', () => {
   before(async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-server-'));
     execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--out', out, '--base', '/api/samples',
-      '--docify', '--server', '--quiet'], { stdio: 'pipe' });
+      '--docify', '--api-versions', '3,2', '--server', '--quiet'], { stdio: 'pipe' });
 
     server = spawn('node', [path.join(out, 'server.js')], { env: { ...process.env, PORT: '0' } });
     const port = await new Promise((resolve) => {
@@ -667,6 +734,15 @@ describe('exported server', () => {
 
   /** The head of the page the server answers url with. */
   const head = async (url) => (await (await fetch(root + url)).text()).split('</head>')[0];
+
+  test("answers any What's New comparison with the one page", async () => {
+    const shell = await (await fetch(`${root}/api/samples/whatsnew/`)).text();
+    assert.equal((await fetch(`${root}/api/samples/whatsnew/2/`)).status, 200);
+    const pair = await fetch(`${root}/api/samples/whatsnew/6.0...9.0/`);
+    assert.equal(pair.status, 200);
+    assert.equal(await pair.text(), shell);
+    assert.equal((await fetch(`${root}/api/samples/assets/whatsnew.json`)).status, 200);
+  });
 
   test('sits beside the pages rather than among them', async () => {
     assert.equal((await fetch(`${root}/api/samples/server.js`)).status, 404);
