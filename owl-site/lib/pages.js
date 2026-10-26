@@ -778,14 +778,21 @@ class Renderer {
       }
     };
 
+    // An attribute's arguments name types nothing else may: AttributeTargets is rarely a parameter.
+    const addAttributes = (attributes) => {
+      for (const attribute of attributes || []) for (const type of attribute.types || []) add(type);
+    };
+
     for (const entry of this.model.allTypes()) {
       add(entry.type.baseType);
       for (const iface of entry.type.interfaces || []) add(iface);
+      addAttributes(entry.type.attributes);
 
       for (const member of entry.type.members || []) {
         add(member.returnType);
         add(member.explicitInterface);
         for (const parameter of member.parameters || []) add(parameter.type);
+        addAttributes(member.attributes);
       }
     }
 
@@ -893,6 +900,38 @@ class Renderer {
   /** A highlighted, cross-linked signature: the one call every place that shows one makes. */
   signatureHtml(code, assemblyName, ownName) {
     return this.linkTypesIn(highlight(code, 'csharp'), assemblyName, ownName);
+  }
+
+  /**
+   * A declaration with its attributes on the lines above it, '[Name(args)]' as source writes them.
+   *
+   * Each name links by its doc id rather than by spelling: the model drops the 'Attribute' suffix
+   * the class is actually called by. Arguments link as a signature does, all but a named argument's
+   * name, which is a property of the attribute and would otherwise read as a type.
+   */
+  declarationHtml(attributes, code, assemblyName, ownName) {
+    const punct = (text) => `<span class="tok-punct">${escape(text)}</span>`;
+
+    const lines = (attributes || []).map((attribute) => {
+      // Coloured as the highlighter would colour the whole line: a call when arguments follow.
+      const kind = attribute.arguments ? 'func' : 'type';
+      const url = docnodes.crefUrl({ id: attribute.id, asm: attribute.asm }, this.docContext);
+      const name = url
+        ? this.linkedToken(kind, escape(attribute.display), url)
+        : `<span class="tok-${kind}">${escape(attribute.display)}</span>`;
+
+      const args = (attribute.arguments || []).map((argument) => {
+        const named = /^(\w+) = ([\s\S]*)$/.exec(argument);
+        if (!named) return this.signatureHtml(argument, assemblyName);
+        return `<span class="tok-type">${escape(named[1])}</span> ${punct('=')} ${this.signatureHtml(named[2], assemblyName)}`;
+      });
+
+      const list = attribute.arguments ? punct('(') + args.join(punct(',') + ' ') + punct(')') : '';
+      return punct('[') + name + list + punct(']');
+    });
+
+    lines.push(this.signatureHtml(code, assemblyName, ownName));
+    return `<div class="declaration">${lines.join('\n')}</div>`;
   }
 
   /**
@@ -1598,7 +1637,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
   <div class="page-head-brief">
     <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     ${derived ? derived.tree : ''}
-    <div class="declaration">${this.signatureHtml(this.declarationOf(type), assembly)}</div>
+    ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly)}
     ${
       summaryHtml
         ? '<div class="page-head-intro">' +
@@ -2397,7 +2436,7 @@ ${this.seeAlsoHtml(type.docs)}
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
       // constant's value rides on the end the way the source states it.
-      `<div class="declaration">${this.signatureHtml(this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name))}</div>` +
+      this.declarationHtml(member.attributes, this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name)) +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '');
 

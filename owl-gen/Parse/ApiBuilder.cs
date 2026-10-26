@@ -1004,7 +1004,7 @@ sealed class ApiBuilder
     return result;
   }
 
-  static List<ApiAttribute>? BuildAttributes(ISymbol symbol)
+  List<ApiAttribute>? BuildAttributes(ISymbol symbol)
   {
     var result = new List<ApiAttribute>();
 
@@ -1017,21 +1017,30 @@ sealed class ApiBuilder
       }
 
       string fullName = CSharpDisplay.Of(attributeClass, DisplayFormats.TypeFullName);
-      if (s_hiddenAttributes.Contains(fullName))
+      // Obsolete has its own field, which the site shows as a note rather than a line.
+      if (s_hiddenAttributes.Contains(fullName) || fullName == "System.ObsoleteAttribute")
       {
         continue;
       }
 
       var arguments = new List<string>();
+      var named = new List<ITypeSymbol>();
       foreach (TypedConstant argument in attribute.ConstructorArguments)
       {
         arguments.Add(FormatTypedConstant(argument));
+        CollectNamedTypes(argument, named);
       }
 
-      foreach (KeyValuePair<string, TypedConstant> named in attribute.NamedArguments)
+      foreach (KeyValuePair<string, TypedConstant> pair in attribute.NamedArguments)
       {
-        arguments.Add($"{named.Key} = {FormatTypedConstant(named.Value)}");
+        arguments.Add($"{pair.Key} = {FormatTypedConstant(pair.Value)}");
+        CollectNamedTypes(pair.Value, named);
       }
+
+      List<TypeRef> types = named
+          .Distinct<ITypeSymbol>(SymbolEqualityComparer.Default)
+          .Select(BuildTypeRef)
+          .ToList();
 
       string display = attributeClass.Name;
       if (display.EndsWith("Attribute", StringComparison.Ordinal) && display.Length > "Attribute".Length)
@@ -1039,15 +1048,45 @@ sealed class ApiBuilder
         display = display[..^"Attribute".Length];
       }
 
+      // Same external and assembly as a type reference, so a framework attribute still links out.
+      TypeRef reference = BuildTypeRef(attributeClass);
       result.Add(new ApiAttribute
       {
-        DocId = DocIds.Of(attributeClass),
+        DocId = reference.DocId,
         Display = display,
         Arguments = arguments.Count == 0 ? null : arguments,
+        External = reference.External,
+        Assembly = reference.Assembly,
+        Types = types.Count == 0 ? null : types,
       });
     }
 
     return result.Count == 0 ? null : result;
+  }
+
+  /// <summary>The types an argument writes by name: an enum's, or the one given to typeof.</summary>
+  static void CollectNamedTypes(TypedConstant constant, List<ITypeSymbol> into)
+  {
+    if (constant.IsNull)
+    {
+      return;
+    }
+
+    switch (constant.Kind)
+    {
+      case TypedConstantKind.Array:
+        foreach (TypedConstant value in constant.Values)
+        {
+          CollectNamedTypes(value, into);
+        }
+        break;
+      case TypedConstantKind.Enum when constant.Type is not null:
+        into.Add(constant.Type);
+        break;
+      case TypedConstantKind.Type when constant.Value is ITypeSymbol type:
+        into.Add(type);
+        break;
+    }
   }
 
   static ObsoleteInfo? BuildObsolete(ISymbol symbol)

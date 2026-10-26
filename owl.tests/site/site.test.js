@@ -132,6 +132,28 @@ describe('type pages', () => {
     assert.match(page, /VbStore/);
   });
 
+  test('attributes sit above the declaration and link by doc id', () => {
+    assert.match(text(type('Point')), /\[Serializable\]\s*public struct Point/);
+    assert.match(html(type('Point')), /href="https:\/\/learn\.microsoft\.com\/dotnet\/api\/system\.serializableattribute"/);
+    // A type argument links as any type does; a named argument's name is a property, not the Name type.
+    const final = html(type('FinalName'));
+    assert.match(final, /<a href="[^"]*">StoredBy<\/a>/);
+    assert.match(final, /<a href="[^"]*">MemoryStore<\/a>/);
+    assert.match(final, /<span class="tok-type">Name<\/span> <span class="tok-punct">=<\/span>/);
+
+    // A framework enum only an attribute names still reaches Learn.
+    assert.match(
+      html(type('StoredByAttribute')),
+      /<a href="https:\/\/learn\.microsoft\.com\/dotnet\/api\/system\.attributetargets"[^>]*>AttributeTargets<\/a>/
+    );
+
+    // Obsolete is the note's to say, not a line's, on a type as on a member.
+    const old = text(type('OldStore'));
+    assert.match(old, /Use MemoryStore instead/);
+    assert.doesNotMatch(old, /\[Obsolete/);
+    assert.doesNotMatch(text(type('Owned`1').replace('`', '-')), /\[Obsolete/);
+  });
+
   test('obsolete members are marked', () => {
     assert.match(text(type('Owned`1').replace('`', '-')), /Obsolete/);
   });

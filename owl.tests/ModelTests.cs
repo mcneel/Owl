@@ -274,6 +274,29 @@ public sealed class ModelTests(SampleModel model)
   }
 
   [Fact]
+  public void AttributesLinkLikeTypeReferences()
+  {
+    JsonElement attribute = model.Type("T:Samples.Point").Arr("attributes").Single();
+    Assert.Equal("T:System.SerializableAttribute", attribute.Str("id"));
+    Assert.Equal("Serializable", attribute.Str("display"));
+    Assert.True(attribute.Bool("external"));
+    Assert.NotNull(attribute.Str("asm"));
+
+    Assert.False(model.Member("T:Samples.Owned`1", "M:Samples.Owned`1.Clear").TryGetProperty("attributes", out _));
+    Assert.False(model.Type("T:Samples.OldStore").TryGetProperty("attributes", out _));
+  }
+
+  [Fact]
+  public void AttributeArgumentsNameTheirTypes()
+  {
+    // Named so the site can link it, which nothing else in the samples would.
+    JsonElement usage = model.Type("T:Samples.StoredByAttribute").Arr("attributes").Single();
+    JsonElement targets = usage.Arr("types").Single();
+    Assert.Equal("T:System.AttributeTargets", targets.Str("id"));
+    Assert.True(targets.Bool("external"));
+  }
+
+  [Fact]
   public void SourceIsRecordedRelativeToTheRepo()
   {
     JsonElement source = model.Type("T:Samples.CachedStore").GetProperty("source");
