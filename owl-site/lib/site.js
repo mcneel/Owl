@@ -266,6 +266,9 @@ class Site {
         return this.html(this.renderer.whatsNew(route.spec));
       }
 
+      case 'references':
+        return this.html(this.renderer.references());
+
       case 'sandcastle': {
         const url = this.sandcastle ? this.sandcastle.lookup(route.name) : null;
         return url ? this.redirect(url) : this.notFound(pathname);
@@ -313,6 +316,12 @@ class Site {
           status: 200,
           type: 'application/json; charset=utf-8',
           body: JSON.stringify(this.renderer.whatsNewAsset()),
+        };
+      case 'references.json':
+        return {
+          status: 200,
+          type: 'application/json; charset=utf-8',
+          body: JSON.stringify(this.renderer.referencesAsset()),
         };
       default: {
         // The rows the trees leave out, one asset per tree shape. Answered from the renderer the

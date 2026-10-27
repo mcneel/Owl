@@ -193,6 +193,14 @@ class Routes {
     return `${this.base}/whatsnew/${spec ? `${encodeURIComponent(spec)}/` : ''}`;
   }
 
+  /**
+   * Everything whose signature uses a type. The slug rides in the query so that one file answers
+   * every type on a plain file host.
+   */
+  references(typeSlug = '') {
+    return `${this.base}/references/${typeSlug ? `?type=${encodeURIComponent(typeSlug)}` : ''}`;
+  }
+
   asset(name) {
     return `${this.base}/assets/${name}`;
   }
@@ -231,6 +239,7 @@ class Routes {
 
     if (path === '' || path === '/') return { kind: 'home' };
     if (path === '/search' || path === '/search/') return { kind: 'search' };
+    if (path === '/references' || path === '/references/') return { kind: 'references' };
     if (path === '/sitemap.xml') return { kind: 'sitemap' };
     if (path === '/robots.txt') return { kind: 'robots' };
 

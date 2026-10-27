@@ -532,6 +532,83 @@ describe("what's new", () => {
   });
 });
 
+describe('references', () => {
+  const { site, html, type } = make();
+  const asset = JSON.parse(site.asset('references.json').body);
+
+  /** What uses a sample type, as 'how label' lines. */
+  const uses = (name) => {
+    const found = asset.refs[slugify('Samples.' + name)];
+    if (!found) return [];
+    return found[1]
+      .map(([user, how]) => {
+        const u = asset.users[user];
+        const label = u[6] === 1 ? `${u[5]} ${u[0]}` : u[6] === 2 ? `${u[0]} ${u[5]}` : u[0];
+        return `${asset.kinds[how]} ${label}`;
+      })
+      .sort();
+  };
+
+  test('one noindex page answers every type', () => {
+    const page = html('/references/');
+    assert.match(page, /<meta name="robots" content="noindex/);
+    assert.match(page, /id="refs" data-src="\/assets\/references\.json"/);
+    assert.match(page, /<div class="filter-bar refs-tabs" hidden><\/div>/);
+    assert.ok(!site.renderer.sitemapUrls().some((url) => url.includes('/references/')));
+  });
+
+  test('lists every way a signature uses a type', () => {
+    assert.deepEqual(uses('MemoryStore'), ['attribute FinalName', 'base CachedStore', 'base VbStore']);
+    assert.deepEqual(uses('IStore'), ['interface MemoryStore', 'parameter StoreHelpers.ReadFrom']);
+    assert.deepEqual(uses('StoredByAttribute'), ['attribute FinalName']);
+    assert.ok(uses('Mode').includes('parameter ShapeExtensions.Keep'));
+  });
+
+  test('finds a type inside generics and arrays', () => {
+    const point = uses('Point');
+    assert.ok(point.includes('returns Route.Stops'));
+    assert.ok(point.includes('returns Route.Named'));
+    assert.ok(point.includes('returns Route.Corners'));
+    assert.ok(uses('Name').includes('parameter Route.Corners'));
+  });
+
+  test('operators are one group of their own, written as declared', () => {
+    // Point's own, and two of Route's: one that takes a point, one that returns one.
+    assert.deepEqual(uses('Point').filter((line) => line.includes('operator')), [
+      'operator Point operator +',
+      'operator Point operator ~',
+      'operator Route operator +',
+    ]);
+    assert.deepEqual(uses('Members.Gadget').filter((line) => line.startsWith('operator')), [
+      'operator explicit operator Gadget',
+      'operator implicit operator int',
+    ]);
+  });
+
+  test('a type written inside a base is not derived from', () => {
+    assert.ok(uses('Point').includes('baseargument PointList'));
+    assert.ok(!uses('Point').includes('base PointList'));
+    assert.ok(uses('Name').includes('baseargument PointList'));
+    assert.ok(!uses('Name').includes('interface PointList'));
+  });
+
+  test('a use carries its return type', () => {
+    const user = (label) => asset.users.find((u) => u[0] === label);
+    assert.equal(user('Route.Stops')[5], 'List<Point>');
+    assert.equal(user('Route.Corners')[5], 'Point[]');
+    assert.equal(user('Route.Corners')[1], 'Owned<Name>');
+  });
+
+  test('a member is listed where it is declared, not where it is inherited', () => {
+    assert.ok(!uses('Shapes.Shape').some((line) => line.includes('Circle.')));
+  });
+
+  test('a type page links to its references only when something uses it', () => {
+    assert.match(html(type('Point')), /<a class="chip chip-refs" href="\/references\/\?type=samples\.point">References<\/a>/);
+    assert.doesNotMatch(html(type('OldStore')), /chip-refs/);
+  });
+});
+
 describe('assets', () => {
   const { site } = make({ apiDir: docs });
 
@@ -813,6 +890,8 @@ describe('exported server', () => {
     assert.equal(pair.status, 200);
     assert.equal(await pair.text(), shell);
     assert.equal((await fetch(`${root}/api/samples/assets/whatsnew.json`)).status, 200);
+    assert.equal((await fetch(`${root}/api/samples/references/?type=samples.point`)).status, 200);
+    assert.equal((await fetch(`${root}/api/samples/assets/references.json`)).status, 200);
   });
 
   test('sits beside the pages rather than among them', async () => {

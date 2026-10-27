@@ -209,6 +209,10 @@ const searchResult = site.resolve(site.routes.search(), null, false);
 write(site.routes.search().replace(/\?.*$/, ''), searchResult.body);
 pages++;
 
+// Noindex like search, and one file for every type: the type it lists is read from the query.
+write(site.routes.references(), site.resolve(site.routes.references(), null, false).body);
+pages++;
+
 // The bare What's New url is the newest version's page under another name, so it is not in the
 // sitemap either; a server answers any comparison the export did not write with this file.
 if (site.versions.length > 0) {
@@ -270,7 +274,7 @@ const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 
 const whatsNew = site.versions.length > 0 ? ['whatsnew.json'] : [];
 
-for (const asset of ['app.css', 'app.js', 'search.json', ...trees, ...whatsNew]) {
+for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...trees, ...whatsNew]) {
   const result = site.asset(asset);
   write(site.routes.asset(asset), result.body);
   bytes += Buffer.byteLength(result.body, 'utf8');

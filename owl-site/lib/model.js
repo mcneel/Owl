@@ -246,6 +246,7 @@ class Model {
 
     this.buildNamespaceIndex();
     this.buildCategoryIndex();
+    this.buildReferences();
   }
 
   /**
@@ -430,6 +431,62 @@ class Model {
   docsPath(relative) {
     const dir = path.relative(process.cwd(), this.apiDir) || '.';
     return path.join(dir, relative);
+  }
+
+  /**
+   * Fills referencesByDocId: type doc id to the places its signature appears, each as
+   * {type, assembly, member, how}, member null for the type itself. how is one of REFERENCE_KINDS in pages.js.
+   */
+  buildReferences() {
+    /** @type {Map<string, object[]>} */
+    this.referencesByDocId = new Map();
+
+    for (const [assembly, document] of this.assemblies) {
+      for (const type of document.types) {
+        // A member is listed where it is declared; a type inheriting it adds nothing new.
+        this.addReferences(type, assembly, null);
+        for (const member of type.members || []) this.addReferences(type, assembly, member);
+      }
+    }
+  }
+
+  addReferences(type, assembly, member) {
+    const seen = new Set();
+    // innerHow files what is only written inside the type, which can be a different use of it.
+    const add = (ref, how, innerHow = how) => {
+      if (!ref) return;
+      for (const [id, use] of [[ref.id, how], ...(ref.inner || []).map((inner) => [inner, innerHow])]) {
+        // Framework types have no page to put a list on, and a type in its own declaration is not a use.
+        if (!id || !this.typesByDocId.has(id) || (!member && id === type.docId)) continue;
+        const key = `${id} ${use}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        let list = this.referencesByDocId.get(id);
+        if (!list) this.referencesByDocId.set(id, (list = []));
+        list.push({ type, assembly, member, how: use });
+      }
+    };
+
+    const node = member || type;
+    // An operator's parameters and result are both its operands, so it is one use, not two.
+    const operator = member && (member.kind === 'operator' || member.kind === 'conversion');
+    if (!member) {
+      // Route : List<Point> derives from List, not from Point.
+      add(type.baseType, 'base', 'baseargument');
+      for (const ref of type.interfaces || []) add(ref, 'interface', 'baseargument');
+    }
+    add(node.returnType, operator ? 'operator' : 'returns');
+    for (const p of node.parameters || []) add(p.type, operator ? 'operator' : 'parameter');
+    for (const attribute of node.attributes || []) {
+      add(attribute, 'attribute');
+      for (const ref of attribute.types || []) add(ref, 'attribute');
+    }
+  }
+
+  /** Where a type is used in signatures across the documented set, empty when nowhere. */
+  referencesTo(docId) {
+    return this.referencesByDocId.get(docId) || [];
   }
 
   typeBySlug(slug) {
