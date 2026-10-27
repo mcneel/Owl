@@ -68,7 +68,7 @@ static class Requirements
     if (Find("node") is null)
     {
       throw new OwlError(
-        "Node is required to serve or export the site, and 'node' was not found on PATH.\n" +
+        "Node is required to serve, export or verify the site, and 'node' was not found on PATH.\n" +
         $"Install Node {MIN_NODE} or newer from https://nodejs.org, or run 'owl gen' on its own to\n" +
         "write the model without rendering it.");
     }

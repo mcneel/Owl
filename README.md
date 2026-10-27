@@ -89,6 +89,15 @@ Pages can also include math:
 The area of a circle is $\pi r^2$.
 ```
 
+Pages can link to your API. Write the name the way you would in `<see cref="..."/>`:
+
+```markdown
+[FileStore](xref:FileStore) saves files. Call [](xref:FileStore.Read(string)) to read one back.
+```
+
+Leave the text empty and owl fills in the name. Qualify a name that matches more than one thing, as in
+`xref:MyLib.Storage.FileStore`, or give its doc id, as in `xref:M:MyLib.FileStore.Read(System.String)`.
+
 ## Documentation Version
 
 ```csharp
@@ -158,7 +167,7 @@ starts with `npm start` on the port the host gives it. It also redirects the old
 owl verify MyLib.csproj
 ```
 
-Lists undocumented API, and fails on broken `<see cref="..."/>` links.
+Lists undocumented API, and fails on broken `<see cref="..."/>` links and broken `xref:` links in your pages.
 
 ## More Options
 

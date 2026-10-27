@@ -210,7 +210,10 @@ sealed class Command
       Requirements.Dotnet();
     }
 
-    if (Name is "serve" or "build")
+    // verify reads the authored pages too, for xref links, and they are resolved by owl-site.
+    bool verifiesPages = Name == "verify" && DocsDir is not null;
+
+    if (Name is "serve" or "build" || verifiesPages)
     {
       Requirements.Node();
     }
@@ -218,6 +221,12 @@ sealed class Command
     if (Generates)
     {
       int code = Tools.Gen(Projects.Concat(["--out", ModelDir!]).Concat(GenArgs));
+
+      // verify's findings fail the run without spoiling the model, so the pages are still checked.
+      if (verifiesPages && File.Exists(Path.Combine(ModelDir!, "index.json")))
+      {
+        return Math.Max(code, Tools.Site("verify.js", Model().Concat(LinkArgs())));
+      }
 
       // A failed generation leaves no model, or a stale one, so rendering it would be misleading.
       if (code != 0)
@@ -237,6 +246,23 @@ sealed class Command
       "build" => Tools.Site("build.js", Model().Concat(["--out", OutDir]).Concat(SiteArgs)),
       _ => throw new OwlError($"Unknown command '{Name}'."),
     };
+  }
+
+  /// <summary>The site options that change where an xref leads, for verify to resolve them as build would.</summary>
+  IEnumerable<string> LinkArgs()
+  {
+    for (int i = 0; i < SiteArgs.Count; i++)
+    {
+      if (SiteArgs[i] == "--link")
+      {
+        yield return SiteArgs[i];
+        yield return SiteArgs[++i];
+      }
+      else if (SiteArgs[i] == "--skip-undocumented")
+      {
+        yield return SiteArgs[i];
+      }
+    }
   }
 
   string[] Model() =>

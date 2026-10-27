@@ -32,14 +32,30 @@ const INLINE_MATH = /\$(?!\s)((?:[^$\n\\]|\\.)+?)(?<!\s)\$(?!\d)/g;
  */
 const INLINE_DISPLAY_MATH = /\$\$([^\n]+?)\$\$/g;
 
+/**
+ * A link to the API: [label](xref:FileStore.Read(string)), the label optional. The target may hold
+ * one level of parentheses, and spaces inside them, since that is how a parameter list is written.
+ */
+const XREF = /\[([^\]]*)\]\(xref:((?:[^()\s]|\([^()]*\))+)\)/g;
+
 /** Inline formatting. Escaping happens first so authored HTML is shown, not executed. */
 function inline(text, context = {}) {
   // Code spans come out before anything else and go back in last, so what is written inside one is
   // shown rather than read: a dollar in a code span is a dollar, not the start of an equation.
   const codeSpans = [];
-  let source = String(text).replace(/`([^`]+)`/g, (_, code) => {
+  const codeSpan = (_, code) => {
     codeSpans.push(code);
     return `\u0000${codeSpans.length - 1}\u0000`;
+  };
+
+  // Xref links come out in the same pass, because a doc id's backticks are not code spans. The
+  // target is a name rather than markup, so it is kept from the escaping; the label stays in the
+  // text between two markers and is formatted with everything else.
+  const xrefs = [];
+  let source = String(text).replace(new RegExp('`([^`]+)`|' + XREF.source, 'g'), (whole, code, label, target) => {
+    if (code !== undefined) return codeSpan(whole, code);
+    xrefs.push(target);
+    return `\u0002${xrefs.length - 1}\u0002${label.replace(/`([^`]+)`/g, codeSpan)}\u0003`;
   });
 
   // Math next, and ahead of the escaping: TeX is not HTML, and the '<' in an inequality has to
@@ -75,6 +91,12 @@ function inline(text, context = {}) {
   out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   out = out.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+  // Without a resolver - a page rendered outside any site - the link is its text and nothing more.
+  out = out.replace(/\u0002(\d+)\u0002([^\u0003]*)\u0003/g, (_, i, label) => {
+    const target = xrefs[Number(i)];
+    return context.xref ? context.xref(target, label) : label || escape(target);
+  });
 
   out = out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${escape(codeSpans[Number(i)])}</code>`);
   out = out.replace(/\u0001(\d+)\u0001/g, (_, i) => equations[Number(i)]);
@@ -344,6 +366,7 @@ function firstParagraph(markdown) {
 
   return collected
     .join(' ')
+    .replace(XREF, (_, label, target) => label || target)
     .replace(/[*_`~]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .trim();

@@ -8,6 +8,7 @@ const docnodes = require('./docnodes');
 const icons = require('./icons');
 const { Links } = require('./links');
 const markdown = require('./markdown');
+const { Xrefs, DOC_ID, parseTarget } = require('./xref');
 const theme = require('./theme');
 
 /**
@@ -859,6 +860,104 @@ class Renderer {
     );
   }
 
+  /** How one authored page renders: its xref links resolve here and warn under its file name. */
+  markdownFor(doc) {
+    return { ...this.markdownContext, xref: (target, labelHtml) => this.xrefHtml(target, labelHtml, doc.file) };
+  }
+
+  /**
+   * An xref link in an authored page, as the see-ref a &lt;see cref&gt; to the same thing renders.
+   *
+   * @param {string} target     what followed 'xref:', a cref-style name or a doc id
+   * @param {string} labelHtml  the link's own text, or '' to be labelled with the name it found
+   * @param {string} file       the page it was written in, for the warning when it finds nothing
+   */
+  xrefHtml(target, labelHtml, file) {
+    const { url, label, problem } = this.resolveXref(target.trim());
+
+    if (problem) {
+      const key = `${file}\u0000${target}`;
+      this.xrefWarned = this.xrefWarned || new Set();
+
+      // Warned once per page and target, since a page can be rendered once per version and mode.
+      if (!this.xrefWarned.has(key)) {
+        this.xrefWarned.add(key);
+        this.warn(`${file || 'markdown'}: xref:${target} ${problem}`);
+      }
+    }
+
+    return docnodes.refHtml(url, labelHtml || escape(label));
+  }
+
+  /** Where an xref target leads and what it is called, or the problem that left it nowhere. */
+  resolveXref(target) {
+    if (DOC_ID.test(target)) {
+      const entry = this.model.entry(target);
+      const url = docnodes.crefUrl({ id: target }, this.docContext);
+      const label = entry ? this.entryLabel(target, entry) : lastSegment(target.slice(2).replace(/\(.*$/, ''));
+      return url ? { url, label } : { url: '', label, problem: 'names nothing documented' };
+    }
+
+    this.xrefs = this.xrefs || new Xrefs(this.model.index.entries);
+    const found = this.xrefs.find(target);
+
+    if (found.docId) return { url: this.routes.forEntry(this.model.entry(found.docId)), label: target };
+
+    if (found.ambiguous) {
+      const some = found.ambiguous.slice(0, 3).join(', ');
+      return { url: '', label: target, problem: `could mean any of ${some}; qualify it or write its doc id` };
+    }
+
+    if (this.model.namespaces.has(target)) return { url: this.routes.namespace(target), label: target };
+
+    const url = this.externalXrefUrl(target);
+    return url ? { url, label: target } : { url: '', label: target, problem: 'names nothing documented' };
+  }
+
+  /**
+   * An xref the documented set does not answer to, tried as written names are: keywords, the
+   * framework, then the sibling sites. A member of an outside type leads to the type's page.
+   */
+  externalXrefUrl(target) {
+    const { segments, params } = parseTarget(target);
+    const path = segments.map((s) => s.name).join('.');
+    const last = segments[segments.length - 1];
+
+    if (segments.length === 1 && !params) return this.spelledTypeUrl(last.name, last.arity || 0);
+
+    if (/^(System|Microsoft)\./.test(path)) return docnodes.learnUrl('T:' + path);
+
+    // Qualified, so the doc id the model recorded has to end the way the name does.
+    const external = (segment, suffix) => {
+      const ref = this.externalTypesByName().get(`${segment.name}\`${segment.arity || 0}`) ||
+        this.externalTypesByName().get(segment.name);
+      if (!ref) return '';
+
+      const name = ref.id.slice(2).replace(/`\d+/g, '');
+      if (name !== suffix && !name.endsWith('.' + suffix)) return '';
+
+      return this.links.typeUrl(ref.id, ref.asm) || docnodes.learnUrl(ref.id) || '';
+    };
+
+    if (!params) {
+      const asType = external(last, path);
+      if (asType) return asType;
+    }
+
+    if (segments.length < 2) return '';
+
+    const owner = segments[segments.length - 2];
+    return external(owner, path.slice(0, path.lastIndexOf('.')));
+  }
+
+  /** A doc id's name as a reader knows it: 'Owned<T>', or 'Gadget.Pick' for a member. */
+  entryLabel(docId, entry) {
+    if (!entry.anchor) return entry.name;
+
+    const owner = this.model.entry(docnodes.containingTypeDocId(docId));
+    return owner ? `${owner.name.replace(/<.*$/, '')}.${entry.name}` : entry.name;
+  }
+
   /**
    * Makes the type tokens in an already-highlighted signature clickable.
    *
@@ -1189,7 +1288,7 @@ class Renderer {
 
     let body;
     if (main) {
-      body = `<div class="cat-doc site-intro">${markdown.render(main.markdown, this.markdownContext)}</div>`;
+      body = `<div class="cat-doc site-intro">${markdown.render(main.markdown, this.markdownFor(main))}</div>`;
     } else if (this.namespaceMode) {
       body = `${heading}</div>
 ${this.namespaceListHtml(this.model.sortedNamespaces().map((ns) => ns.name))}`;
@@ -1237,7 +1336,7 @@ ${this.namespaceListHtml(this.model.sortedNamespaces().map((ns) => ns.name))}`;
 
     let intro;
     if (main) {
-      intro = `<div class="cat-doc">${markdown.render(main.markdown, this.markdownContext)}</div>`;
+      intro = `<div class="cat-doc">${markdown.render(main.markdown, this.markdownFor(main))}</div>`;
     } else if (this.namespaceMode) {
       intro = `${title}</div>`;
     } else {
@@ -1388,7 +1487,7 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
 
     // The authored page opens with its own heading, so writing a title over it would say the
     // category's name twice. The title only steps in when there is nothing authored to open with.
-    const overview = bucket.doc ? markdown.render(bucket.doc.markdown, this.markdownContext) : '';
+    const overview = bucket.doc ? markdown.render(bucket.doc.markdown, this.markdownFor(bucket.doc)) : '';
 
     const body = `
 ${
