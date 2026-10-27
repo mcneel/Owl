@@ -396,6 +396,23 @@ describe('options', () => {
   });
 });
 
+describe('search scope', () => {
+  test('narrows to the assembly the picker shows', () => {
+    const { html, type } = make({ apiDir: docs });
+    const page = html(type('MemoryStore'));
+    assert.match(page, /id="asm-filter"/);
+    assert.match(page, /data-scope="samples\.csharp"/);
+  });
+
+  test('searches the whole API where there is no picker', () => {
+    const { html, type } = make();
+    const page = html(type('MemoryStore'));
+    assert.doesNotMatch(page, /id="asm-filter"/);
+    assert.match(page, /data-scope=""/);
+    assert.doesNotMatch(page, /name="a"/);
+  });
+});
+
 describe("what's new", () => {
   const { site, get, html } = make({ apiDir: docs, apiVersions: '3,2.1,2' });
 
