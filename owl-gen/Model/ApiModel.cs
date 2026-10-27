@@ -371,6 +371,16 @@ sealed class TypeRef
   /// across several assemblies, and only some of them are documented anywhere.
   /// </remarks>
   [JsonPropertyName("asm")] public string? Assembly { get; set; }
+
+  /// <summary>
+  /// Doc ids of the types written inside this one, such as <c>Point3d</c> in
+  /// <c>List&lt;Point3d&gt;</c>. Null when there are none.
+  /// </summary>
+  /// <remarks>
+  /// <see cref="DocId"/> names only the open generic, so without these a type
+  /// passed as an argument would never be found as referenced.
+  /// </remarks>
+  public List<string>? Inner { get; set; }
 }
 
 /// <summary>Accessor visibility for a property or indexer.</summary>

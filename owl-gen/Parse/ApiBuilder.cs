@@ -900,7 +900,45 @@ sealed class ApiBuilder
       // Only for the ones from elsewhere: a type of ours is found by doc id, and naming the
       // assembly on all thirty-six thousand references would be most of them saying so.
       Assembly = external ? target?.ContainingAssembly?.Name : null,
+      Inner = InnerTypeIds(target),
     };
+  }
+
+  /// <summary>Doc ids of every type nested in a type's arguments, at any depth, or null.</summary>
+  static List<string>? InnerTypeIds(ITypeSymbol? type)
+  {
+    var ids = new List<string>();
+    var pending = new Stack<ITypeSymbol>();
+
+    if (type is INamedTypeSymbol named)
+    {
+      foreach (var arg in named.TypeArguments)
+      {
+        pending.Push(arg);
+      }
+    }
+
+    while (pending.Count > 0)
+    {
+      ITypeSymbol? inner = DocIds.Unwrap(pending.Pop());
+      if (inner is not INamedTypeSymbol n)
+      {
+        continue;
+      }
+
+      string? id = DocIds.Of(n);
+      if (id is not null && !ids.Contains(id))
+      {
+        ids.Add(id);
+      }
+
+      foreach (var arg in n.TypeArguments)
+      {
+        pending.Push(arg);
+      }
+    }
+
+    return ids.Count == 0 ? null : ids;
   }
 
   List<ApiParameter>? BuildParameters(ImmutableArray<IParameterSymbol> parameters, DocBlock docs)

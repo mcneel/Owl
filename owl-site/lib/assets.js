@@ -770,7 +770,12 @@ a.chip:hover { color: var(--flash); }
 /* What's New's arrival mark, in its Added switch's green. */
 .chip-added { color: var(--oc-green-6); }
 .inherited-from .chip-deprecated { margin-bottom: 0.15rem; }
-.asm-name ~ .chip-since, .chip-action ~ .chip-since { margin-left: 0; }
+.asm-name ~ .chip-since, .chip-action ~ .chip-since, .chip-refs ~ .chip-since { margin-left: 0; }
+/* Where a type is used, at the end of its title row ahead of the version it arrived in. */
+.chip-refs { margin-left: auto; flex-shrink: 0; padding-top: 0.18rem; padding-bottom: 0.18rem; }
+#refs .ns-heading { margin: 1.5rem 0 0.25rem; }
+/* The groups have no kind ink of their own, so every tab underlines in the accent All uses. */
+.refs-tabs .filter-btn.active { border-bottom-color: var(--flash); }
 
 /* ---- Category overview doc ---- */
 .cat-doc { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; line-height: 1.7; font-size: 0.88rem; color: var(--text2); scroll-margin-top: 1rem; }
@@ -1599,6 +1604,161 @@ const JS = `
           whatsNewStatus.textContent = 'The list of changes could not be loaded.';
         });
     }
+  }
+
+  // ---- References ----
+  // One shell for every type: which one is in ?type=, and its uses come from references.json.
+  var refs = document.getElementById('refs');
+
+  // Matches REFERENCE_KINDS in lib/pages.js, by position.
+  var REF_HEADINGS = [
+    'Parameter Of', 'Operators', 'Derived Types', 'Implemented By', 'Base Type Argument Of', 'Returned By', 'Attribute On',
+  ];
+
+  function drawReferences(asset) {
+    var slug = urlParams().get('type') || '';
+    var status = document.getElementById('refs-status');
+    var found = (asset.refs || {})[slug];
+    var url = (asset.prefix || '') + slug + '/';
+
+    var title = document.getElementById('refs-title');
+    var name = found ? found[0] : slug;
+    title.innerHTML = 'References to <a href="' + escapeHtml(url) + '">' + escapeHtml(name) + '</a>';
+    document.title = document.title.replace(/^References/, 'References to ' + name);
+
+    if (!found) {
+      status.textContent = slug ? 'Nothing in this API uses this type.' : 'No type was named.';
+      return;
+    }
+    status.remove();
+
+    // The type marked wherever a signature spells it, by its bare name: that is how signatures write it.
+    var bare = name.replace(/<.*$/, '').split('.').pop();
+    var spelled = new RegExp('(^|[^A-Za-z0-9_])(' + bare + ')(?![A-Za-z0-9_])', 'g');
+    function marked(text) {
+      return escapeHtml(text).replace(spelled, '$1<mark>$2</mark>');
+    }
+
+    var returnsAt = asset.kinds.indexOf('returns');
+    var groups = REF_HEADINGS.map(function () { return []; });
+    found[1].forEach(function (pair) {
+      var u = asset.users[pair[0]];
+      var ret = u[5];
+      var form = u[6];
+      var lead = ret !== null && (form === 1 || (form === 0 && pair[1] === returnsAt));
+      var label =
+        (lead ? marked(ret) + ' ' : '') + escapeHtml(u[0]) + (ret !== null && form === 2 ? ' ' + marked(ret) : '');
+      var href = (asset.prefix || '') + u[2] + '/' + (u[3] ? '#' + u[3] : '');
+      groups[pair[1]].push({
+        name: u[0].toLowerCase(),
+        text: (label.replace(/<[^>]*>/g, '') + (u[1] || '')).toLowerCase(),
+        html:
+          '<li class="whatsnew-type"><div class="whatsnew-row">' +
+          '<svg class="kind-icon" aria-hidden="true" focusable="false"><use href="#${ICON_PREFIX}' +
+          escapeHtml(u[4] || 'class') + '"/></svg>' +
+          '<a href="' + escapeHtml(href) + '">' + label +
+          (u[1] === null ? '' : '<span class="whatsnew-sig">(' + marked(u[1]) + ')</span>') +
+          '</a></div></li>',
+      });
+    });
+    groups.forEach(function (rows) {
+      rows.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+    });
+
+    var row = document.querySelector('.whatsnew-filter');
+    var field = row && row.querySelector('.derived-filter');
+    var clear = row && row.querySelector('.derived-filter-clear');
+    var empty = document.querySelector('.whatsnew-empty');
+
+    // Added after the page's own tab script has run, so these are this section's alone to drive.
+    var tabs = document.querySelector('.refs-tabs');
+    var used = [];
+    groups.forEach(function (rows, i) { if (rows.length) used.push(i); });
+    var shown = 'all';
+    var asked = urlParams().get('k');
+    used.forEach(function (i) { if (asset.kinds[i] === asked) shown = asked; });
+
+    function tab(key, label) {
+      return '<button type="button" class="filter-btn' + (key === shown ? ' active' : '') +
+        '" data-kind="' + escapeHtml(key) + '">' + escapeHtml(label) + '</button>';
+    }
+
+    // As on a type page: All and one group is not a choice.
+    if (tabs && used.length >= 2) {
+      tabs.innerHTML = tab('all', 'All') + used.map(function (i) { return tab(asset.kinds[i], REF_HEADINGS[i]); }).join('');
+      tabs.hidden = false;
+      tabs.addEventListener('click', function (e) {
+        var button = e.target.closest && e.target.closest('.filter-btn');
+        if (!button) return;
+        shown = button.getAttribute('data-kind');
+        tabs.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.toggle('active', b === button); });
+        draw();
+        remember();
+      });
+    }
+
+    function draw() {
+      var q = field ? field.value.trim().toLowerCase() : '';
+      var html = '';
+      groups.forEach(function (rows, i) {
+        if (shown !== 'all' && asset.kinds[i] !== shown) return;
+        var kept = '';
+        rows.forEach(function (r) {
+          if (!q || r.text.indexOf(q) >= 0) kept += r.html;
+        });
+        if (kept) html += '<h2 class="ns-heading">' + REF_HEADINGS[i] + '</h2><ul class="whatsnew-list">' + kept + '</ul>';
+      });
+      refs.innerHTML = html;
+      if (empty) empty.hidden = Boolean(html);
+    }
+
+    // In the url beside the type, so a reload or a shared link opens on the same list.
+    function remember() {
+      var params = urlParams();
+      var text = field.value.trim();
+      if (text) params.set('filter', text);
+      else params.delete('filter');
+      if (shown !== 'all') params.set('k', shown);
+      else params.delete('k');
+      writeParams(params);
+    }
+
+    if (field) {
+      field.value = urlParams().get('filter') || '';
+      row.classList.toggle('filled', field.value.length > 0);
+    }
+    draw();
+    if (!field) return;
+    row.classList.add('ready');
+
+    var pending = 0;
+    field.addEventListener('input', function () {
+      row.classList.toggle('filled', field.value.length > 0);
+      clearTimeout(pending);
+      pending = setTimeout(function () {
+        draw();
+        remember();
+      }, 100);
+    });
+    clear.addEventListener('click', function () {
+      field.value = '';
+      row.classList.remove('filled');
+      clearTimeout(pending);
+      draw();
+      remember();
+      field.focus();
+    });
+  }
+
+  if (refs) {
+    fetch(refs.getAttribute('data-src'))
+      .then(function (response) {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json();
+      })
+      .then(drawReferences, function () {
+        document.getElementById('refs-status').textContent = 'The list of references could not be loaded.';
+      });
   }
 
   // The header link follows the menu, so it always opens on the version being read.

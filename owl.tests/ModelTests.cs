@@ -324,6 +324,32 @@ public sealed class ModelTests(SampleModel model)
   }
 
   [Fact]
+  public void TypeArgumentsAreRecordedAsInnerTypes()
+  {
+    JsonElement stops = model.Member("T:Samples.Route", "P:Samples.Route.Stops").GetProperty("returnType");
+    Assert.Equal("T:System.Collections.Generic.List`1", stops.Str("id"));
+    Assert.Equal(["T:Samples.Point"], stops.Strs("inner"));
+
+    JsonElement named = model.Member("T:Samples.Route", "M:Samples.Route.Named").GetProperty("returnType");
+    Assert.Equal(
+        new[] { "T:System.String", "T:System.Collections.Generic.List`1", "T:Samples.Point" }.Order(),
+        named.Strs("inner").Order());
+
+    JsonElement names = model.Member("T:Samples.Route", "M:Samples.Route.Corners(Samples.Owned{Samples.Name})")
+        .Arr("parameters").Single().GetProperty("type");
+    Assert.Equal(["T:Samples.Name"], names.Strs("inner"));
+  }
+
+  [Fact]
+  public void InnerTypesLeaveOutTypeParametersAndPlainTypes()
+  {
+    JsonElement pick = model.Member("T:Samples.Route", "M:Samples.Route.Pick``1(System.Collections.Generic.List{``0})");
+    Assert.False(pick.Arr("parameters").Single().GetProperty("type").TryGetProperty("inner", out _));
+    Assert.False(model.Member("T:Samples.Route", "M:Samples.Route.Corners(Samples.Owned{Samples.Name})")
+        .GetProperty("returnType").TryGetProperty("inner", out _));
+  }
+
+  [Fact]
   public void EnumArgumentsAreWrittenByName()
   {
     JsonElement usage = model.Type("T:Samples.StoredByAttribute").Arr("attributes").Single();

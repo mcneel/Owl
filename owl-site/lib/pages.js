@@ -182,6 +182,26 @@ function genericSuffix(member) {
  * not carry them, and they are put back: 'Cast&lt;T&gt;' is how the declaration reads and how it is
  * called, and two overloads can differ by nothing else.
  */
+/** How a type can be used, in the order the References page lists them. Matches Model.addReferences. */
+const REFERENCE_KINDS = ['parameter', 'operator', 'base', 'interface', 'baseargument', 'returns', 'attribute'];
+
+/**
+ * A use's name on the References page: Type or Type.Member, and an operator by its symbol, since the
+ * group it is listed under already says it is one.
+ */
+function referenceLabel(type, member) {
+  if (!member) return type.name;
+  if (member.kind === 'operator') return `operator ${operatorSymbol(member)}`;
+  if (member.kind === 'conversion') return `${operatorSymbol(member)} operator`;
+  return `${type.name}.${memberDisplayName(member)}`;
+}
+
+/** Where a row writes its return type: 0 only under Returned By, 1 always ahead, 2 always behind. */
+function referenceForm(member) {
+  if (!member) return 0;
+  return member.kind === 'operator' ? 1 : member.kind === 'conversion' ? 2 : 0;
+}
+
 function memberDisplayName(member) {
   const name = member.explicitInterface
     ? `${member.explicitInterface.display}.${lastSegment(member.name)}`
@@ -1774,7 +1794,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
 <article>
 <div class="page-head sticky-head">
   <div class="page-head-brief">
-    <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.sinceChipHtml(type.docs)}</div>
+    <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.referencesChipHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     ${derived ? derived.tree : ''}
     ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly)}
     ${
@@ -2056,6 +2076,12 @@ ${this.seeAlsoHtml(type.docs)}
       .join(separator);
 
     return `<span class="type-chain">${separator}${links}</span>`;
+  }
+
+  /** The way to everything that uses the type, left off a type nothing uses. */
+  referencesChipHtml(type) {
+    if (this.model.referencesTo(type.docId).length === 0) return '';
+    return `<a class="chip chip-refs" href="${attr(this.baseRoutes.references(type.slug))}">References</a>`;
   }
 
   /**
@@ -3463,6 +3489,82 @@ ${this.seeAlsoHtml(type.docs)}
         return entry;
       }),
     };
+  }
+
+  // ------------------------------------------------------------------
+  // References
+  // ------------------------------------------------------------------
+
+  /**
+   * The page listing everything whose signature uses a type, filled in the browser from
+   * references.json. One shell for every type - see Routes.references.
+   */
+  references() {
+    const body = `
+<div class="page-head sticky-head whatsnew-head">
+  <div class="page-head-brief">
+    <div class="page-title-row"><h1 class="page-title" id="refs-title">References</h1></div>
+    <p class="page-intro" id="refs-status">Loading…</p>
+    ${filterFieldHtml('Filter References', 'Filter references', 'whatsnew-filter')}
+  </div>
+  ${
+    // Tabs for the groups this type has, written by the script once it knows them.
+    '<div class="filter-bar refs-tabs" hidden></div>'
+  }
+</div>
+<p class="page-intro whatsnew-empty" hidden>Nothing matches.</p>
+<div id="refs" data-src="${attr(this.routes.asset('references.json'))}"></div>
+<noscript><p class="page-intro">This page needs JavaScript to list references.</p></noscript>
+`;
+
+    return this.shell({
+      title: 'References',
+      description: `Where each type of the ${this.siteName} API is used.`,
+      canonical: this.routes.references(),
+      body,
+      sidebar: this.namespaceMode ? this.namespaceTree() : this.assembliesTree(),
+      treeKey: this.namespaceMode ? 'namespaces' : 'assemblies',
+      assemblies: this.assemblyChoices(''),
+      noindex: true,
+    });
+  }
+
+  /**
+   * What the References page draws from: users holds [label, params or null, slug, anchor, icon, return type
+   * or null, where the return type goes (see referenceForm)], and refs maps a type's slug to its name and [user index, kind index]
+   * pairs.
+   */
+  referencesAsset() {
+    const users = [];
+    const userAt = new Map();
+    const refs = {};
+
+    for (const { type } of this.model.allTypes()) {
+      const found = this.model.referencesTo(type.docId);
+      if (found.length === 0) continue;
+
+      refs[type.slug] = [type.name, found.map(({ type: owner, member, how }) => {
+        const key = `${owner.slug}#${member ? member.anchor : ''}`;
+        if (!userAt.has(key)) {
+          userAt.set(key, users.length);
+          const node = member || owner;
+          users.push([
+            referenceLabel(owner, member),
+            CALLABLE_KINDS.has(node.kind) || owner.kind === 'delegate'
+              ? (node.parameters || []).map((p) => (p.refKind ? `${p.refKind} ` : '') + p.type.display).join(', ')
+              : null,
+            owner.slug,
+            member ? member.anchor : '',
+            theme.kindIcon(node.kind),
+            node.returnType ? node.returnType.display : null,
+            referenceForm(member),
+          ]);
+        }
+        return [userAt.get(key), REFERENCE_KINDS.indexOf(how)];
+      })];
+    }
+
+    return { schema: 1, prefix: this.baseRoutes.typePrefix(), kinds: REFERENCE_KINDS, users, refs };
   }
 
   // ------------------------------------------------------------------

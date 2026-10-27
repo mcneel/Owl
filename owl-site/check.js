@@ -121,7 +121,7 @@ function collectPages() {
   const urls = site.renderer
     .sitemapUrls()
     .concat(site.renderer.stubUrls())
-    .concat([site.routes.search()]);
+    .concat([site.routes.search(), site.routes.references()]);
   for (const url of urls) {
     const result = site.resolve(url.replace(/\?.*$/, ''), null, false);
     if (result.status !== 200) {
