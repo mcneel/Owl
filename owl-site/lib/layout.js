@@ -80,6 +80,10 @@ function page(options) {
     versions = [],
   } = options;
 
+  // Search narrows to what the header's picker says; with no picker the reader sees the whole API,
+  // so that is what the box searches.
+  const scope = assemblies.length > 1 ? currentAssembly : '';
+
   const stickyTop = renderBreadcrumbs(breadcrumbs) + (filterBar || '');
   const absolute = (url) =>
     siteUrl && url && url.startsWith('/') ? siteUrl.replace(/\/$/, '') + url : url;
@@ -166,14 +170,14 @@ ${icons.spriteHtml()}
     <input type="search" id="search" name="q" placeholder="Search"
            value="${attr(currentQuery)}" autocomplete="off"
            data-index-url="${attr(routes.asset('search.json'))}"
-           data-scope="${attr(currentAssembly ? slugify(currentAssembly) : '')}"${
+           data-scope="${attr(scope ? slugify(scope) : '')}"${
              routes.modeSuffix ? `\n           data-ns="${attr(routes.modeSuffix)}"` : ''
            }>
     ${
       // Carries the assembly being read into the search, so the box searches what the selector
       // beside it says. Nothing on a page that belongs to no assembly, which searches everything.
-      currentAssembly
-        ? `<input type="hidden" name="a" value="${attr(slugify(currentAssembly))}">`
+      scope
+        ? `<input type="hidden" name="a" value="${attr(slugify(scope))}">`
         : ''
     }
     <svg class="nav-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

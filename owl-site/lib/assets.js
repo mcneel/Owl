@@ -2050,6 +2050,13 @@ const JS = `
     var searchBox = document.getElementById('search');
     if (searchBox) searchBox.setAttribute('data-ns', '${NS_QUERY}');
 
+    // With the selector gone the box searches the whole API, as it does on the server's pages.
+    if (searchBox) {
+      searchBox.setAttribute('data-scope', '');
+      var scopeField = searchBox.form && searchBox.form.querySelector('input[name="a"]');
+      if (scopeField) scopeField.remove();
+    }
+
     // Every way from this page to a type or an example carries the flag on: the links the server
     // wrote plain, and the declaring-type arrows the tree steers by data-href.
     document.querySelectorAll('a[href], [data-href]').forEach(function (el) {
