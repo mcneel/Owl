@@ -58,7 +58,7 @@ static void PrintUsage()
       owl gen   <project...>   Write the documentation model
       owl serve <project...>   Write it, then serve it locally
       owl build <project...>   Write it, then export a static site
-      owl verify <project...>  Write it, then report undocumented API and broken crefs
+      owl verify <project...>  Write it, then report undocumented API and broken crefs and xrefs
 
     A project is a .csproj or a .vbproj. Pass several to document them as one set, so crefs between
     them become links and derived types are found across the whole set.

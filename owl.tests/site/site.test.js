@@ -310,6 +310,58 @@ describe('with hand-written pages', () => {
   });
 });
 
+describe('xref links', () => {
+  const { html, site, type } = make({ apiDir: docs });
+
+  /** The see-ref an xref became, by the text it shows. */
+  const ref = (label) => {
+    const page = html(site.routes.category('Samples.CSharp', 'Storage'));
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const match = new RegExp(`<(a|span) class="see-ref[^"]*"(?: href="([^"]*)")?[^>]*>${escaped}</\\1>`).exec(page);
+    assert.ok(match, `no see-ref reading ${label}`);
+    return match[2] || '';
+  };
+
+  test('a type, labelled with its name', () => {
+    assert.equal(ref('CachedStore'), type('CachedStore'));
+  });
+
+  test('a member keeps the label it was given', () => {
+    assert.equal(ref('reading'), type('CachedStore') + '#read-system.string');
+  });
+
+  test('generics, constructors and doc ids', () => {
+    assert.equal(ref('Owned<T>'), type('Owned`1'));
+    assert.equal(ref('Gadget.Gadget(int)'), type('Members.Gadget') + '#ctor-system.int32');
+    assert.equal(ref('Gadget.Pick'), type('Members.Gadget') + '#pick-1-0-0');
+  });
+
+  test('a namespace', () => {
+    assert.equal(ref('Samples.Docs'), site.routes.namespace('Samples.Docs'));
+  });
+
+  test('keywords and framework names lead to Learn', () => {
+    assert.equal(ref('string'), 'https://learn.microsoft.com/dotnet/api/system.string');
+    assert.equal(ref('System.IO.Stream.Read'), 'https://learn.microsoft.com/dotnet/api/system.io.stream.read');
+  });
+
+  test('an ambiguous or unknown name is text, with a warning naming the file', () => {
+    assert.equal(ref('Read'), '');
+    assert.equal(ref('NoSuchThing'), '');
+
+    const warnings = site.model.warnings.filter((w) => w.includes('xref:'));
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[0], /Storage\.md: xref:Read could mean any of/);
+    assert.match(warnings[1], /Storage\.md: xref:NoSuchThing names nothing documented/);
+  });
+
+  test('verify.js lists them and fails', () => {
+    const verify = path.join(repo, 'owl-site', 'verify.js');
+    const run = () => execFileSync('node', [verify, '--json', jsonDir, '--docs', docs], { stdio: 'pipe' });
+    assert.throws(run, (err) => err.status === 1 && /2 broken xref link\(s\)/.test(String(err.stdout)));
+  });
+});
+
 describe('category order', () => {
   /** A copy of the samples' pages with this SORT.txt in Samples.CSharp. */
   function withSort(sort) {
