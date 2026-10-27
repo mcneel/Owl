@@ -126,6 +126,8 @@ ${canonicalUrl ? `<link rel="canonical" href="${attr(canonicalUrl)}">` : ''}
 <meta property="og:title" content="${attr(title || siteName)}">
 ${description ? `<meta property="og:description" content="${attr(description)}">` : ''}
 ${ogUrl ? `<meta property="og:url" content="${attr(ogUrl)}">` : ''}
+<!-- Link previewers that prefer the canonical page would otherwise drop a shared member's preview for its type's. -->
+<meta property="og:ignore_canonical" content="true">
 <meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="${attr(routes.asset('app.css'))}">
 <link rel="sitemap" type="application/xml" href="${attr(routes.sitemap())}">
