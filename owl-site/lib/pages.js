@@ -498,16 +498,16 @@ function operatorSymbol(member) {
   return match ? `${match[1] || ''}${match[2]}` : name;
 }
 
-/** Member display order: data before behaviour, rather than the order symbols arrive in. */
+/** Member display order, kept as the previous API site had it so readers find sections where they expect. */
 const MEMBER_ORDER = [
+  'constructor',
+  'destructor',
   'enumvalue',
   'field',
   'property',
   'indexer',
-  'event',
-  'constructor',
-  'destructor',
   'method',
+  'event',
   'operator',
   'conversion',
 ];

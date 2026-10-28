@@ -61,6 +61,9 @@ public class Gadget : IConverter<string, int>, IDisposable
   /// <summary>Releases the gadget, only through <see cref="IDisposable"/>.</summary>
   void IDisposable.Dispose() { }
 
+  /// <summary>Combines two gadgets.</summary>
+  public static Gadget operator +(Gadget a, Gadget b) => new(a.Id + b.Id);
+
   /// <summary>Turns an id into a gadget.</summary>
   public static explicit operator Gadget(int id) => new(id);
 

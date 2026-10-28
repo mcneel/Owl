@@ -114,6 +114,21 @@ describe('type pages', () => {
     }
   });
 
+  test('tabs and sections follow the same order', () => {
+    const page = html(type('Members.Gadget'));
+    const tabs = [...page.matchAll(/class="filter-btn[^"]*"[^>]*data-kind="([^"]+)"/g)].map((m) => m[1]);
+    const sections = [...page.matchAll(/class="ns-section type-section" id="([^"]+)"/g)].map((m) => m[1]);
+
+    assert.deepEqual(tabs, ['all', 'constructor', 'field', 'property', 'indexer', 'method', 'event', 'operator', 'conversion']);
+    assert.deepEqual(sections, ['constructor', 'destructor', 'field', 'property', 'indexer', 'method', 'event', 'operator', 'conversion']);
+  });
+
+  test('indexers have a tab of their own', () => {
+    const page = html(type('Members.Gadget'));
+    assert.match(page, /data-kind="indexer">Indexers<\/button>/);
+    assert.match(page, /data-filter="indexer" data-kind="indexer"/);
+  });
+
   test('member signatures are written out in full', () => {
     const page = text(type('Members.Gadget'));
     assert.match(page, /public const int MaxSize = 10/);
@@ -593,6 +608,7 @@ describe('references', () => {
       'operator Route operator +',
     ]);
     assert.deepEqual(uses('Members.Gadget').filter((line) => line.startsWith('operator')), [
+      'operator Gadget operator +',
       'operator explicit operator Gadget',
       'operator implicit operator int',
     ]);
