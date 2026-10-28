@@ -175,10 +175,9 @@ const FILTER_KINDS = [
  * what nobody browses by kind. A type page is already about one type, so the only question left is
  * which of its members you came for, and the tabs answer it in the words the sections below use.
  *
- * An indexer is a property, as it is in the sections. Operators and conversions carry tabs of
- * their own rather than filing under Methods: each is a section of its own on the page, a table
- * of the type's operations rather than more of what it does by name, and the tab is worded from
- * the section it narrows to. A finalizer files with the constructors, which is why that tab names both: a type declares at
+ * Indexers, operators and conversions carry tabs of their own rather than filing under Properties
+ * or Methods: each is a section of its own on the page, and the tab is worded from the section it
+ * narrows to. A finalizer files with the constructors, which is why that tab names both: a type declares at
  * most one, and a tab that narrows a list to a single row is a tab nobody needs - the two together
  * are the one thing they state, which is how the type begins and ends. An enum value is the field
  * it is underneath: an enum page lists nothing else, so a Values tab would be a button that never
@@ -194,7 +193,7 @@ const MEMBER_FILTERS = {
   operator: 'operator',
   conversion: 'conversion',
   property: 'property',
-  indexer: 'property',
+  indexer: 'indexer',
   field: 'field',
   enumvalue: 'field',
   event: 'event',
@@ -203,11 +202,8 @@ const MEMBER_FILTERS = {
 /**
  * The type page's tabs, in the order they appear in the bar.
  *
- * Members in the order the page lists them would open on the enum values and fields, which is where
- * a type's members are least often looked up. These read the other way about: how the type is made,
- * then what it does, then the data behind it - so the tabs a reader reaches for are the ones nearest
- * the left edge they start from. Operators and conversions close the row: most types declare
- * neither, so trailing them keeps the everyday tabs in the same place on every page.
+ * The same order the page lists its sections in (MEMBER_ORDER in pages.js), so a tab and the
+ * section it narrows to sit in the same place.
  *
  * A page renders only the ones its own members use, inherited members included, and memberFilterTabs
  * is what settles both that and the wording of the first tab.
@@ -215,9 +211,10 @@ const MEMBER_FILTERS = {
 const MEMBER_FILTER_KINDS = [
   { key: 'all', label: 'All' },
   { key: 'constructor', label: 'Constructors' },
-  { key: 'method', label: 'Methods' },
-  { key: 'property', label: 'Properties' },
   { key: 'field', label: 'Fields' },
+  { key: 'property', label: 'Properties' },
+  { key: 'indexer', label: 'Indexers' },
+  { key: 'method', label: 'Methods' },
   { key: 'event', label: 'Events' },
   { key: 'operator', label: 'Operators' },
   { key: 'conversion', label: 'Convertors' },

@@ -2034,9 +2034,12 @@ const JS = `
     applyFilter();
   }
 
+  // A new tab is a new list, so it starts from its top: left where All was, it would open near its end.
+  var listScroller = document.querySelector('.main-content');
   filterButtons.forEach(function (button) {
     button.addEventListener('click', function () {
       selectKind(button.getAttribute('data-kind'));
+      if (listScroller) listScroller.scrollTop = 0;
     });
   });
 
