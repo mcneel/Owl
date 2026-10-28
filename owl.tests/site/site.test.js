@@ -648,6 +648,13 @@ describe('assets', () => {
     assert.doesNotMatch(search, /InternalThing/);
   });
 
+  test('search finds fully qualified names as name matches', () => {
+    const names = (q) => site.renderer.searchIndexEntries(q, 10).rows.map((row) => row.name);
+    assert.equal(names('Samples.MemoryStore')[0], 'MemoryStore');
+    assert.equal(names('Samples.MemoryStore.Read')[0], 'MemoryStore.Read');
+    assert.equal(names('samples.memorystore.re')[0], 'MemoryStore.Read');
+  });
+
   test('the stylesheet and script are served', () => {
     assert.equal(site.asset('app.css').status, 200);
     assert.equal(site.asset('app.js').status, 200);
