@@ -158,7 +158,10 @@ const server = http.createServer((req, res) => {
   const target = moved[pathname.toLowerCase().replace(/\/+$/, '')];
   if (target) {
     const hash = target.indexOf('#');
-    const location = hash === -1 ? target + url.search : target.slice(0, hash) + url.search + target.slice(hash);
+    const [base, fragment] = hash === -1 ? [target, ''] : [target.slice(0, hash), target.slice(hash)];
+    // Member targets carry their own ?member=, so the asked-for query joins it rather than starting another.
+    const query = url.search.slice(1);
+    const location = query ? base + (base.includes('?') ? '&' : '?') + query + fragment : target;
     return send(res, 301, { Location: location }, '', head);
   }
 
