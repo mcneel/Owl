@@ -50,6 +50,17 @@ public static class ShapeExtensions
   /// <param name="shape">The shape to keep.</param>
   /// <param name="mode">Where to keep it.</param>
   public static void Keep(this Shape shape, Mode mode = Mode.Memory) { }
+
+  /// <summary>Whether the shape is larger than a limit.</summary>
+  /// <param name="shape">The shape to measure.</param>
+  /// <param name="maxArea">The limit.</param>
+  /// <param name="overArea">How far past the limit the area is.</param>
+  /// <returns>True when the area is past the limit.</returns>
+  public static bool IsOver(this Shape shape, double maxArea, out double overArea)
+  {
+    overArea = shape.Area - maxArea;
+    return overArea > 0;
+  }
 }
 
 /// <summary>Shapes and what can be done with them.</summary>
