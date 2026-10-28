@@ -2356,8 +2356,9 @@ ${this.seeAlsoHtml(type.docs)}
           (modifiers ? escape(modifiers) + ' ' : '') + this.typeRefHtml(p.type) + escape(dflt);
         return (
           '<tr>' +
-          `<td class="param-name">${escape(p.name)}</td>` +
-          `<td class="param-type">${typeHtml}</td>` +
+          // Type beside the name rather than in a column of its own, so every description starts at
+          // the same place instead of after whichever type ran longest.
+          `<td class="param-name">${escape(p.name)} <span class="param-type">(${typeHtml})</span></td>` +
           `<td>${p.doc ? docnodes.render(p.doc, this.docContext) : ''}</td>` +
           '</tr>'
         );
