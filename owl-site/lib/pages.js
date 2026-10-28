@@ -355,6 +355,96 @@ function exampleFileNodes(docs) {
 }
 
 /**
+ * Whether a member has an Examples page: one with file-backed examples, or an extension method,
+ * whose page shows both ways of calling it when its author wrote none.
+ */
+function hasExamplePage(member) {
+  return exampleFileNodes(member.docs).length > 0 || Boolean(member.isExtensionMethod);
+}
+
+/** Python 2 words a parameter name must not collide with. */
+const PYTHON_KEYWORDS = new Set(`and as assert break class continue def del elif else except exec finally for
+  from global if import in is lambda not or pass print raise return try while with yield None True False`.split(/\s+/));
+
+function pythonName(name) {
+  const snake = name
+    .replace(/^@/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase();
+  return PYTHON_KEYWORDS.has(snake) ? `${snake}_` : snake;
+}
+
+/**
+ * Code nodes calling an extension method both as an extension and as a static method, in C# and
+ * in IronPython 2. Arguments are the parameters' own names, so these show the call, not a program.
+ */
+function extensionUsageNodes(type, member, assembly) {
+  const [receiver, ...rest] = member.parameters || [];
+  if (!receiver) return [];
+
+  const name = lastSegment(member.name);
+  const returns = member.returnType && member.returnType.display !== 'void' ? member.returnType.display : null;
+
+  // The second call reuses what the first declared, so the block reads as code that compiles.
+  const csArg = (p, declare) => {
+    if (p.refKind === 'out') return declare ? `out ${p.type.display} ${p.name}` : `out ${p.name}`;
+    if (p.refKind === 'ref') return `ref ${p.name}`;
+    if (p.refKind === 'ref readonly') return `in ${p.name}`;
+    return p.name;
+  };
+  const csCall = (target, params, declare) =>
+    (returns ? (declare ? `${returns} result = ` : 'result = ') : '') +
+    `${target}.${name}(${params.map((p) => csArg(p, declare)).join(', ')});`;
+
+  const cs = [
+    ...(type.namespace ? [`using ${type.namespace};`, ''] : []),
+    '// As an extension method',
+    csCall(receiver.name, rest, true),
+    '',
+    '// As a static method',
+    csCall(type.name, [receiver, ...rest], false),
+  ].join('\n');
+
+  // IronPython drops out arguments from the call and hands them back, with ref ones, after the result.
+  const outputs = [
+    ...(returns ? ['result'] : []),
+    ...(member.parameters || []).filter((p) => p.refKind === 'out' || p.refKind === 'ref').map((p) => pythonName(p.name)),
+  ];
+  const pyArgs = (params) => params.filter((p) => p.refKind !== 'out').map((p) => pythonName(p.name)).join(', ');
+  const pyCall = (target, params) =>
+    (outputs.length > 0 ? `${outputs.join(', ')} = ` : '') + `${target}.${name}(${pyArgs(params)})`;
+
+  const root = type.namespace || type.name;
+  const py = [
+    'import clr',
+    `clr.AddReference('${assembly}')`,
+    `import ${root}`,
+    `clr.ImportExtensions(${root})`,
+    '',
+    '# As an extension method',
+    pyCall(pythonName(receiver.name), rest),
+    '',
+    '# As a static method',
+    pyCall(type.namespace ? `${type.namespace}.${type.name}` : type.name, [receiver, ...rest]),
+  ].join('\n');
+
+  return [
+    { t: 'code', lang: 'cs', v: cs },
+    { t: 'code', lang: 'python', v: py },
+  ];
+}
+
+/**
+ * The code an Examples page tabs: the author's when there is a file-backed example, otherwise the
+ * generated calls of an extension method.
+ */
+function examplePageCode(type, member, assembly) {
+  if (exampleFileNodes(member.docs).length > 0) return exampleCodeNodes(member.docs);
+  return member.isExtensionMethod ? extensionUsageNodes(type, member, assembly) : [];
+}
+
+/**
  * The symbol a C# operator method stands for, keyed by the name the compiler gave it.
  *
  * Nobody looking for `==` knows to look for `op_Equality`, and a dozen `op_` names sort together
@@ -1579,8 +1669,8 @@ ${
     const member = (type.members || []).find((m) => m.anchor === anchor);
     if (!member) return null;
 
-    // Only a file-backed example gets a page; anything else is on the card already.
-    if (exampleFileNodes(member.docs).length === 0) return null;
+    // Only a file-backed example or an extension method gets a page; anything else is on the card already.
+    if (!hasExamplePage(member)) return null;
 
     return this.exampleBody(type, assembly, member);
   }
@@ -1588,7 +1678,7 @@ ${
   exampleBody(type, assembly, member) {
     // Ranked, then by the order the comment listed them, so languages of equal rank keep the
     // sequence the author chose rather than one this decides for them.
-    const code = exampleCodeNodes(member.docs)
+    const code = examplePageCode(type, member, assembly)
       .map((node, i) => ({ node, i }))
       .sort(
         (a, b) =>
@@ -1601,7 +1691,9 @@ ${
 
     // Everything in the example that is not a code block: the prose around it, which is where any
     // explanation of what the example does actually lives.
-    const prose = (member.docs.example || []).filter((node) => node.t !== 'code');
+    // Only with the author's code: generated usage stands in for an example the card already shows.
+    const prose =
+      exampleFileNodes(member.docs).length > 0 ? (member.docs.example || []).filter((node) => node.t !== 'code') : [];
 
     const tabs = code
       .map((node, i) => {
@@ -2580,7 +2672,7 @@ ${this.seeAlsoHtml(type.docs)}
         : '';
 
     const exampleButton =
-      exampleFiles.length > 0
+      hasExamplePage(member)
         ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
         : '';
 
@@ -3680,7 +3772,7 @@ ${this.seeAlsoHtml(type.docs)}
       urls.push(this.routes.type(type.slug));
 
       for (const member of type.members || []) {
-        if (exampleFileNodes(member.docs).length > 0) {
+        if (hasExamplePage(member)) {
           urls.push(this.routes.example(type.slug, member.anchor));
         }
       }

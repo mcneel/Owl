@@ -214,6 +214,19 @@ describe('doc comments', () => {
     assert.doesNotMatch(page, /outside the region/);
   });
 
+  test('an extension method gets a page calling it both ways', () => {
+    const { site, text: pageText, html: pageHtml, type: typeUrl } = make();
+    const url = site.routes.example(slugify('Samples.Shapes.ShapeExtensions'), 'isover-samples.shapes.shape-system.double-system.double');
+    const page = pageText(url);
+    assert.match(page, /using Samples\.Shapes;/);
+    assert.match(page, /bool result = shape\.IsOver\(maxArea, out double overArea\);/);
+    assert.match(page, /result = ShapeExtensions\.IsOver\(shape, maxArea, out overArea\);/);
+    assert.match(page, /clr\.ImportExtensions\(Samples\.Shapes\)/);
+    assert.match(page, /result, over_area = shape\.IsOver\(max_area\)/);
+    assert.match(page, /result, over_area = Samples\.Shapes\.ShapeExtensions\.IsOver\(shape, max_area\)/);
+    assert.match(pageHtml(typeUrl('Shapes.ShapeExtensions')), new RegExp(`href="${url.replace(/[.?]/g, '\\$&')}"`));
+  });
+
   test('a missing example file is named on its page', () => {
     const { site, text: pageText } = make();
     const url = site.routes.example(slugify('Samples.Docs.Tagged'), 'noexample');
