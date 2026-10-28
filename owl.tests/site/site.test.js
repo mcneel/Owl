@@ -956,6 +956,13 @@ describe('exported server', () => {
     assert.equal(res.headers.get('location'), '/api/samples/type/samples.memorystore/?plain=true');
   });
 
+  test('redirects old member urls with their query beside the member', async () => {
+    const res = await fetch(`${root}/api/samples/samples.memorystore/read?plain=true&dark=true`, { redirect: 'manual' });
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.get('location'),
+      '/api/samples/type/samples.memorystore/?member=read-system.string&plain=true&dark=true#read-system.string');
+  });
+
 });
 
 describe('slugs', () => {
