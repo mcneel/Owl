@@ -3107,16 +3107,23 @@ const JS = `
       if (scope >= 0 && e[7] !== scope) continue;
       var name = e[0].toLowerCase();
       if (!finalizers && name.charAt(name.lastIndexOf('.') + 1) === '~') continue;
+      // With the namespace in front, for a query written fully qualified. See qualifiedName in lib/pages.js.
+      var ns = qualified ? (index.namespaces || [])[e[6]] : '';
+      var fullName = ns && ns !== '(global)' ? ns.toLowerCase() + '.' + name : name;
       var pos = e[2].indexOf(q);
       if (pos < 0) {
         if (!qualified) continue;
         pos = name.indexOf(q);
+        if (pos < 0) pos = fullName.indexOf(q);
         if (pos < 0) continue;
       }
       // Ranked on the name that was searched, which for a member is its own: see searchRank in
       // lib/pages.js, which ranks the server's answer to the same query the same way.
       var subject = qualified ? name : name.slice(name.lastIndexOf('.') + 1);
       var rank = subject === q ? 0 : (subject.indexOf(q) === 0 ? 1 : (subject.indexOf(q) >= 0 ? 2 : 3));
+      if (rank === 3 && qualified) {
+        rank = fullName === q ? 0 : (fullName.indexOf(q) === 0 ? 1 : (fullName.indexOf(q) >= 0 ? 2 : 3));
+      }
       matches.push([rank, pos, e, kindGroup(e)]);
     }
 

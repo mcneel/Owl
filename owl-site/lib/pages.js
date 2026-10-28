@@ -145,11 +145,19 @@ function isFinalizerName(name) {
   return lastSegment(name).charAt(0) === '~';
 }
 
-function searchRank(name, q, qualified) {
+function searchRank(name, q, qualified, fullName = name) {
   const subject = qualified ? name : lastSegment(name);
   if (subject === q) return 0;
   if (subject.indexOf(q) === 0) return 1;
-  return subject.indexOf(q) >= 0 ? 2 : 3;
+  if (subject.indexOf(q) >= 0) return 2;
+  // 'rhino.rhinodoc' names the type as fully as the reader knows it, so it ranks as a name match.
+  if (!qualified) return 3;
+  return fullName === q ? 0 : fullName.indexOf(q) === 0 ? 1 : fullName.indexOf(q) >= 0 ? 2 : 3;
+}
+
+/** A row's name with its namespace in front, lowercased: what a fully qualified query is written as. */
+function qualifiedName(row) {
+  return (row.namespace ? `${row.namespace}.${row.name}` : row.name).toLowerCase();
 }
 
 /**
@@ -3414,15 +3422,17 @@ ${this.seeAlsoHtml(type.docs)}
       if (!finalizers && isFinalizerName(row.name)) continue;
 
       const name = row.name.toLowerCase();
+      const fullName = qualified ? qualifiedName(row) : name;
       let pos = row.haystack.indexOf(q);
 
       if (pos < 0) {
         if (!qualified) continue;
         pos = name.indexOf(q);
+        if (pos < 0) pos = fullName.indexOf(q);
         if (pos < 0) continue;
       }
 
-      hits.push({ rank: searchRank(name, q, qualified), group: searchGroup(row), pos, row });
+      hits.push({ rank: searchRank(name, q, qualified, fullName), group: searchGroup(row), pos, row });
     }
 
     // Ordered rather than handed back in the order the model happens to hold: the first hundred rows
