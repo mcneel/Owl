@@ -785,7 +785,7 @@ a.chip:hover { color: var(--flash); }
 .cat-doc p { margin: 0.4rem 0; }
 .cat-doc ul, .cat-doc ol { margin: 0.4rem 0 0.4rem 1.25rem; }
 .cat-doc li { margin: 0.2rem 0; }
-.cat-doc code { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0.1rem 0.3rem; border-radius: 3px; }
+.cat-doc code { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0 0.3rem; box-shadow: 0 -0.1rem var(--bg3), 0 0.1rem var(--bg3); border-radius: 3px; }
 .cat-doc pre { background: var(--bg3); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 .cat-doc pre code { background: none; padding: 0; }
 .cat-doc a { color: var(--flash); text-decoration: none; }
@@ -928,8 +928,8 @@ ${TEMML_CSS}
 .section-label { font-weight: 700; color: var(--text3); }
 /* No rule under each row: a parameter list runs to three or four short lines, and ruling them turns
    a small table into a grid to be read across rather than a set of names to be scanned down. */
-table.params { margin-top: 0.3rem; border-collapse: collapse; width: 100%; }
-table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: top; text-align: left; }
+table.params { margin-top: 0.3rem; border-collapse: collapse; width: 100%; font-size-adjust: from-font; }
+table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: baseline; text-align: left; }
 /* The name and its type take what they need and nothing more - 1% is shorthand for shrink-to-fit
    against the nowrap below - so what is left goes to the description, which is what runs out of
    room first and is the only column with anything to wrap. */
@@ -937,8 +937,8 @@ table.params td.param-name { width: 1%; }
 /* The cell already pads after the type; the span's own padding would double the gap. */
 .param-name .param-type { padding-right: 0; }
 /* Body colour, not the link blue it used to borrow: a parameter name is not a link. */
-.param-name { font-family: monospace; font-size: 0.8rem; color: var(--text); white-space: nowrap; padding-right: 0.75rem; }
-.param-type { font-family: monospace; font-size: 0.78rem; color: var(--text3); white-space: nowrap; padding-right: 0.75rem; }
+.param-name { font-family: monospace; color: var(--text); white-space: nowrap; padding-right: 0.75rem; }
+.param-type { font-family: monospace; color: var(--text3); white-space: nowrap; padding-right: 0.75rem; }
 /* Types inside a signature underline on hover rather than recolouring, so the token keeps its
    syntax colour and the declaration does not turn into a row of links. */
 .declaration a, .r-sig a { color: inherit; text-decoration: none; }
@@ -954,8 +954,8 @@ a.see-ref:hover { text-decoration: underline; }
    a reader, so it is greyed to the back of the three - a name being reported, not offered. */
 .see-ref-none { color: var(--text4); }
 .see-ref-external::after { content: "\\2197"; font-size: 0.85em; opacity: 0.6; }
-.param-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0.1rem 0.3rem; border-radius: 3px; color: #0ea5e9; font-style: italic; }
-.langword-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0.1rem 0.3rem; border-radius: 3px; color: var(--tok-keyword); }
+.param-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0 0.3rem; box-shadow: 0 -0.1rem var(--bg3), 0 0.1rem var(--bg3); border-radius: 3px; color: #0ea5e9; font-style: italic; }
+.langword-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0 0.3rem; box-shadow: 0 -0.1rem var(--bg3), 0 0.1rem var(--bg3); border-radius: 3px; color: var(--tok-keyword); }
 .hidden { display: none !important; }
 [hidden] { display: none !important; }
 

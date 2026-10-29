@@ -32,7 +32,7 @@ jobs:
         run: dotnet test owl.tests -c Release
 
       - name: Test the website
-        run: node --test owl.tests/site/
+        run: node --test owl.tests/site/site.test.js
 
   # Main only: a release tag also arrives as a push when publish.yml calls this.
   package:
