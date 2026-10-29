@@ -7,7 +7,10 @@ Public Module StoreHelpers
     Return store.Read(key)
   End Function
 
-  ''' <summary>Joins words, using a project-level import.</summary>
+  ''' <summary>
+  ''' Joins words, using a project-level import. See <see href="https://example.com/join">joining</see>
+  ''' and <a href="https://example.com/words">words</a>.
+  ''' </summary>
   Public Function Join(words As String()) As StringBuilder
     Return New StringBuilder(String.Join(" ", words))
   End Function

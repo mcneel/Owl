@@ -37,7 +37,13 @@ public class Tagged
 
   /// <summary>How many there are.</summary>
   /// <value>Never negative.</value>
+  /// <remarks>See <a href="https://example.com/count">counting</a>.</remarks>
+  /// <seealso cref="Samples.IStore"/>
+  /// <seealso href="https://example.com/sizes">Sizes</seealso>
   public int Count => 0;
+
+  /// <inheritdoc cref="Count"/>
+  public int Size => 0;
 
   /// <summary>Points at something that is not there: <see cref="Missing"/>.</summary>
   public void Broken() { }

@@ -185,6 +185,7 @@ sealed class DocCommentParser
 
         case "inheritdoc":
           block.WantsInheritDoc = true;
+          block.InheritDocCref = InheritDocTarget(node, model, owner);
           break;
       }
     }
@@ -266,6 +267,15 @@ sealed class DocCommentParser
         });
         return;
       }
+
+      case "a" when _xml.TextAttribute(node, "href") is { } aHref:
+        output.Add(new DocNode
+        {
+          Kind = "link",
+          Href = aHref,
+          Value = PlainText(content) is { Length: > 0 } aLabel ? aLabel : aHref,
+        });
+        return;
 
       case "paramref":
         output.Add(new DocNode { Kind = "paramref", Name = _xml.NameAttribute(node) });
@@ -385,6 +395,25 @@ sealed class DocCommentParser
     };
   }
 
+  /// <summary>The symbol an &lt;inheritdoc cref="..."/&gt; names, or null for a bare one.</summary>
+  ISymbol? InheritDocTarget(SyntaxNode node, SemanticModel model, ISymbol owner)
+  {
+    SyntaxNode? cref = _xml.Cref(node);
+    if (cref is null)
+    {
+      return null;
+    }
+
+    SymbolInfo info = _xml.Bind(model, cref);
+    ISymbol? symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
+    if (symbol is null)
+    {
+      _unresolvedCrefs.Add($"{CSharpDisplay.Of(owner)}: unresolved cref '{cref}'");
+    }
+
+    return symbol;
+  }
+
   DocRef ResolveCref(SyntaxNode node, SemanticModel model, ISymbol owner)
   {
     SyntaxNode? cref = _xml.Cref(node);
@@ -394,7 +423,7 @@ sealed class DocCommentParser
       string? href = _xml.TextAttribute(node, "href");
       if (href is not null)
       {
-        return new DocRef { Href = href, Label = href };
+        return new DocRef { Href = href, Label = PlainText(_xml.Content(node)) is { Length: > 0 } label ? label : href };
       }
 
       // A cref the language would not parse as a reference at all, so it never became a cref node.
@@ -573,6 +602,10 @@ sealed class DocCommentParser
           });
           break;
         }
+
+        case "a" when el.Attribute("href")?.Value is { } aHref:
+          output.Add(new DocNode { Kind = "link", Href = aHref, Value = Collapse(el.Value) is { Length: > 0 } aLabel ? aLabel : aHref });
+          break;
 
         case "paramref":
           output.Add(new DocNode { Kind = "paramref", Name = el.Attribute("name")?.Value });

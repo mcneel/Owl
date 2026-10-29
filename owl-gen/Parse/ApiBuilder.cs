@@ -1226,7 +1226,8 @@ sealed class ApiBuilder
 
     try
     {
-      foreach (ISymbol source in InheritDocSources(symbol))
+      IEnumerable<ISymbol> sources = block.InheritDocCref is { } named ? [named] : InheritDocSources(symbol);
+      foreach (ISymbol source in sources)
       {
         DocBlock inherited;
 

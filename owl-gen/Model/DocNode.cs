@@ -199,6 +199,12 @@ sealed class DocBlock
   [JsonIgnore]
   public bool WantsInheritDoc { get; set; }
 
+  /// <summary>
+  /// The symbol named by &lt;inheritdoc cref="..."/&gt;, inherited from in place of the base.
+  /// </summary>
+  [JsonIgnore]
+  public Microsoft.CodeAnalysis.ISymbol? InheritDocCref { get; set; }
+
   /// <summary>True when no tag carried any content.</summary>
   [JsonIgnore]
   public bool IsEmpty =>

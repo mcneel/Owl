@@ -216,6 +216,11 @@ describe('doc comments', () => {
     assert.match(page, /ArgumentNullException/);
   });
 
+  test('a member\'s seealso shows on its card', () => {
+    assert.match(text(type('Docs.Tagged')), /See Also: IStore Sizes/);
+    assert.match(tagged(), /href="https:\/\/example\.com\/sizes"[^>]*>Sizes</);
+  });
+
   test('inheritdoc shows the base member\'s docs', () => {
     assert.match(text(type('Shapes.Circle')), /The shape's area\./);
   });
