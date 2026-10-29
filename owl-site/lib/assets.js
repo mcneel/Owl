@@ -928,8 +928,8 @@ ${TEMML_CSS}
 .section-label { font-weight: 700; color: var(--text3); }
 /* No rule under each row: a parameter list runs to three or four short lines, and ruling them turns
    a small table into a grid to be read across rather than a set of names to be scanned down. */
-table.params { margin-top: 0.3rem; border-collapse: collapse; width: 100%; }
-table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: top; text-align: left; }
+table.params { margin-top: 0.3rem; border-collapse: collapse; width: 100%; font-size-adjust: from-font; }
+table.params td, table.params th { padding: 0.22rem 0.4rem; vertical-align: baseline; text-align: left; }
 /* The name and its type take what they need and nothing more - 1% is shorthand for shrink-to-fit
    against the nowrap below - so what is left goes to the description, which is what runs out of
    room first and is the only column with anything to wrap. */
@@ -937,8 +937,8 @@ table.params td.param-name { width: 1%; }
 /* The cell already pads after the type; the span's own padding would double the gap. */
 .param-name .param-type { padding-right: 0; }
 /* Body colour, not the link blue it used to borrow: a parameter name is not a link. */
-.param-name { font-family: monospace; font-size: 0.8rem; color: var(--text); white-space: nowrap; padding-right: 0.75rem; }
-.param-type { font-family: monospace; font-size: 0.78rem; color: var(--text3); white-space: nowrap; padding-right: 0.75rem; }
+.param-name { font-family: monospace; color: var(--text); white-space: nowrap; padding-right: 0.75rem; }
+.param-type { font-family: monospace; color: var(--text3); white-space: nowrap; padding-right: 0.75rem; }
 /* Types inside a signature underline on hover rather than recolouring, so the token keeps its
    syntax colour and the declaration does not turn into a row of links. */
 .declaration a, .r-sig a { color: inherit; text-decoration: none; }
