@@ -145,9 +145,13 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
 /* ?plain=true and ?dark=true, as docify answered them, for hosts that embed a page - the script
    editor asks for exactly these. Plain drops the site's chrome and is light unless dark is asked
    for, since a host that wants dark says so. Neither is stored: the next visit is a normal one.
-   Same-site links carry both on, so following one inside the host stays plain. Its own try, so a
-   blocked store above cannot cost a host its plain page. */
-(function(){try{var q=new URLSearchParams(location.search);var on=function(k){var v=q.get(k);return v!==null&&v!=='false'&&v!=='0';};var plain=on('plain');var dark=q.get('dark');if(!plain&&dark===null)return;var d=document.documentElement;if(plain)d.setAttribute('data-plain','');var t=on('dark')?'dark':'light';d.setAttribute('data-theme-pref',t);d.setAttribute('data-theme',t);document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a||a.target==='_blank')return;var u=new URL(a.href,location.href);if(u.origin!==location.origin)return;['plain','dark'].forEach(function(k){if(q.has(k)&&!u.searchParams.has(k))u.searchParams.set(k,q.get(k));});a.href=u.href;},true);}catch(e){}})();
+   Its own try, so a blocked store above cannot cost a host its plain page. */
+(function(){try{var q=new URLSearchParams(location.search);var on=function(k){var v=q.get(k);return v!==null&&v!=='false'&&v!=='0';};var plain=on('plain');var dark=q.get('dark');if(!plain&&dark===null)return;var d=document.documentElement;if(plain)d.setAttribute('data-plain','');var t=on('dark')?'dark':'light';d.setAttribute('data-theme-pref',t);d.setAttribute('data-theme',t);}catch(e){}})();
+/* Same-site links and searches carry ?plain, ?dark and ?version on, so following one inside a host
+   stays plain and a shared older version stays that version. Read at the click rather than at load,
+   since picking a version rewrites the address without leaving the page. Mirrors keepParams in
+   lib/assets.js. */
+(function(){try{var K=['plain','dark','version'];var kept=function(){var q=new URLSearchParams(location.search);return K.filter(function(k){return q.has(k);}).map(function(k){return [k,q.get(k)];});};document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a||a.target==='_blank')return;var u=new URL(a.href,location.href);if(u.origin!==location.origin)return;kept().forEach(function(p){if(!u.searchParams.has(p[0]))u.searchParams.set(p[0],p[1]);});a.href=u.href;},true);document.addEventListener('submit',function(e){var f=e.target;if(!f||(f.method||'').toLowerCase()!=='get')return;kept().forEach(function(p){if(f.elements[p[0]])return;var i=document.createElement('input');i.type='hidden';i.name=p[0];i.value=p[1];f.appendChild(i);});},true);}catch(e){}})();
 </script>
 </head>
 <body${bodyClass ? ` class="${attr(bodyClass)}"` : ''}>

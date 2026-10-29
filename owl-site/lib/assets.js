@@ -1304,7 +1304,7 @@ const JS = `
   // A listed version covers itself and everything up to the next one listed, so picking 8 keeps
   // what 8.1 and 8.5 added. Untagged means it predates every version on the list, which is why the
   // absence of the attribute shows it.
-  var VERSION_KEY = 'docs-version';
+  var VERSION_PARAM = 'version';
   var versionSelect = document.getElementById('version-filter');
   // A site offering one version writes it as a label rather than a menu. There is nothing to
   // choose, but the page is still filtered to it, so the version is read off the label instead.
@@ -1825,7 +1825,7 @@ const JS = `
     if (!jump) return;
 
     e.preventDefault();
-    window.location.href = jump.getAttribute('data-href');
+    window.location.href = keepParams(jump.getAttribute('data-href'));
   });
 
   // ---- Examples dock ----
@@ -1883,7 +1883,7 @@ const JS = `
           dockBody.scrollTop = 0;
         })
         .catch(function () {
-          window.location.href = href;
+          window.location.href = keepParams(href);
         });
     });
   }
@@ -1907,6 +1907,17 @@ const JS = `
   function writeParams(params) {
     var query = params.toString();
     history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+  }
+
+  // A navigation the script makes carries what a clicked link would. Mirrors the same-site link
+  // script in lib/layout.js.
+  function keepParams(url) {
+    var u = new URL(url, location.href);
+    var here = urlParams();
+    ['plain', 'dark', VERSION_PARAM].forEach(function (k) {
+      if (here.has(k) && !u.searchParams.has(k)) u.searchParams.set(k, here.get(k));
+    });
+    return u.href;
   }
 
   function setParam(name, value) {
@@ -2155,7 +2166,7 @@ const JS = `
   var assemblySelect = document.getElementById('asm-filter');
   if (assemblySelect) {
     assemblySelect.addEventListener('change', function () {
-      if (assemblySelect.value) location.href = assemblySelect.value;
+      if (assemblySelect.value) location.href = keepParams(assemblySelect.value);
     });
   }
 
@@ -2496,25 +2507,30 @@ const JS = `
     });
   }
 
-  if (versionSelect) {
-    try {
-      var storedVersion = localStorage.getItem(VERSION_KEY);
-      // A stored version this build no longer offers leaves the select on its default.
-      if (storedVersion) versionSelect.value = storedVersion;
-      if (!versionSelect.value) versionSelect.selectedIndex = 0;
-    } catch (e) {}
+  // The address names the version so a link to it opens on it. The newest is the default and goes
+  // unnamed, which keeps the everyday url clean and lets an old link follow the site forward.
+  function syncVersionParam() {
+    var named = versionSelect.selectedIndex > 0 ? activeVersion : '';
+    if ((urlParams().get(VERSION_PARAM) || '') !== named) setParam(VERSION_PARAM, named);
+  }
 
-    // A What's New page is about the version in its url, whatever was picked last.
+  if (versionSelect) {
+    // A version this build does not offer leaves the select on the newest.
+    versionSelect.value = urlParams().get(VERSION_PARAM) || '';
+    if (!versionSelect.value) versionSelect.selectedIndex = 0;
+
+    // A What's New page is about the version in its path, whatever the query says.
     if (whatsNewAt && listedVersions.indexOf(whatsNewAt.newer) !== -1) versionSelect.value = whatsNewAt.newer;
 
     activeVersion = versionSelect.value;
     // Versions are listed newest first, so anything past the first is an older one.
     versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
+    syncVersionParam();
 
     versionSelect.addEventListener('change', function () {
       activeVersion = versionSelect.value;
       versionSelect.classList.toggle('older', versionSelect.selectedIndex > 0);
-      try { localStorage.setItem(VERSION_KEY, activeVersion); } catch (e) {}
+      syncVersionParam();
       syncWhatsNewLink();
       // Here the version is the page, so picking another goes to its page, filtered the same way.
       if (whatsNew) {
@@ -3454,7 +3470,7 @@ const JS = `
       } else if (event.key === 'Enter' && at >= 0) {
         // Enter with nothing picked submits the form, which is the whole result list.
         event.preventDefault();
-        location.href = rows[at].getAttribute('href');
+        location.href = keepParams(rows[at].getAttribute('href'));
       }
     });
   }
