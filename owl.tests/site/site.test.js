@@ -1017,6 +1017,29 @@ describe('exported server', () => {
       '/api/samples/type/samples.memorystore/?member=read-system.string&plain=true&dark=true#read-system.string');
   });
 
+  test('redirects a type named in its own case to its page', async () => {
+    const res = await fetch(`${root}/api/samples/type/Samples.MemoryStore/?plain=true`, { redirect: 'manual' });
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.get('location'), '/api/samples/type/samples.memorystore/?plain=true');
+  });
+
+  test('redirects a namespace named in its own case to its page', async () => {
+    const res = await fetch(`${root}/api/samples/namespace/Samples.Shapes/`, { redirect: 'manual' });
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.get('location'), '/api/samples/namespace/samples.shapes/');
+  });
+
+  test('redirects a type named in its own case without its trailing slash', async () => {
+    const res = await fetch(`${root}/api/samples/type/Samples.MemoryStore`, { redirect: 'manual' });
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.get('location'), '/api/samples/type/samples.memorystore');
+  });
+
+  test('does not redirect an address with no page in any case', async () => {
+    const res = await fetch(`${root}/api/samples/type/Samples.Nothing/`, { redirect: 'manual' });
+    assert.equal(res.status, 404);
+  });
+
 });
 
 describe('slugs', () => {
