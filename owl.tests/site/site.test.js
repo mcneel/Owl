@@ -667,7 +667,7 @@ describe('assets', () => {
   });
 });
 
-describe('?plain and ?dark', () => {
+describe('?plain, ?dark and ?version', () => {
   const vm = require('node:vm');
   const { html, type } = make();
 
@@ -679,6 +679,7 @@ describe('?plain and ?dark', () => {
     const attributes = new Map();
     const stored = [];
     let onClick = null;
+    let onSubmit = null;
     const origin = 'https://example.com';
     const context = {
       URL,
@@ -691,7 +692,11 @@ describe('?plain and ?dark', () => {
           setAttribute: (k, v) => attributes.set(k, v),
           getAttribute: (k) => attributes.get(k),
         },
-        addEventListener: (name, handler) => { if (name === 'click') onClick = handler; },
+        addEventListener: (name, handler) => {
+          if (name === 'click') onClick = handler;
+          if (name === 'submit') onSubmit = handler;
+        },
+        createElement: () => ({}),
       },
     };
     for (const script of scripts) vm.runInNewContext(script, context);
@@ -703,7 +708,15 @@ describe('?plain and ?dark', () => {
       return a.href;
     };
 
-    return { attributes, stored, click };
+    /** Submits a GET form holding the given fields and returns the names of what it now sends. */
+    const submit = (fields = ['q']) => {
+      const form = { method: 'get', elements: Object.fromEntries(fields.map((f) => [f, {}])), added: [] };
+      form.appendChild = (input) => form.added.push(input);
+      if (onSubmit) onSubmit({ target: form });
+      return [...fields, ...form.added.map((input) => `${input.name}=${input.value}`)];
+    };
+
+    return { attributes, stored, click, submit };
   }
 
   test('a normal visit is unchanged', () => {
@@ -750,6 +763,36 @@ describe('?plain and ?dark', () => {
     assert.equal(click('/search/?q=store'), 'https://example.com/search/?q=store&plain=true&dark=true');
   });
 
+  test('same-site links keep the version', () => {
+    const { attributes, click } = load('?version=8');
+    assert.equal(attributes.has('data-plain'), false);
+    assert.equal(click('/type/samples.istore/'), 'https://example.com/type/samples.istore/?version=8');
+    assert.equal(click('/type/samples.istore/?version=9'), 'https://example.com/type/samples.istore/?version=9');
+  });
+
+  test('all three travel together', () => {
+    const { click } = load('?plain=true&dark=true&version=8');
+    assert.equal(click('/type/samples.istore/#read'), 'https://example.com/type/samples.istore/?plain=true&dark=true&version=8#read');
+  });
+
+  test('navigations the page script makes keep the same parameters as links', () => {
+    const js = make().site.asset('app.js').body;
+    const head = scripts.find((script) => script.includes("'version'"));
+    assert.match(head, /\['plain','dark','version'\]/);
+    assert.match(js, /VERSION_PARAM = 'version'/);
+    assert.match(js, /\['plain', 'dark', VERSION_PARAM\]/);
+  });
+
+  test('the picked version is not remembered between visits', () => {
+    assert.doesNotMatch(make().site.asset('app.js').body, /docs-version/);
+  });
+
+  test('searches keep the version, but not over a field of the same name', () => {
+    assert.deepEqual(load('?version=8').submit(), ['q', 'version=8']);
+    assert.deepEqual(load('?version=8').submit(['q', 'version']), ['q', 'version']);
+    assert.deepEqual(load('').submit(), ['q']);
+  });
+
   test('other sites and new tabs are left alone', () => {
     const { click } = load('?plain=true');
     assert.equal(click('https://learn.microsoft.com/dotnet/api/system.idisposable'), 'https://learn.microsoft.com/dotnet/api/system.idisposable');
@@ -779,6 +822,10 @@ describe('--docify', () => {
 
   test('a type goes to its page, keeping the query', () => {
     assert.equal(moved('/samples.memorystore/'), '/type/samples.memorystore/?plain=true&dark=true');
+  });
+
+  test('an old url keeps its version', () => {
+    assert.equal(moved('/samples.memorystore/', new URLSearchParams('version=8')), '/type/samples.memorystore/?version=8');
   });
 
   test('a member goes to its card on the type page', () => {
