@@ -68,6 +68,9 @@ const notes = [];
 // has rows waiting for it. Filled by collectPages, from whichever of the two sources it read.
 const treeAssets = new Map();
 
+// url -> the Markdown copy served there, and llms.txt, whose links are checked like a page's.
+const markdownPages = new Map();
+
 function fail(message) {
   failures.push(message);
 }
@@ -90,7 +93,10 @@ function collectPages() {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else if (entry.name === 'index.html') {
+        else if (entry.name.endsWith('.md') || entry.name === 'llms.txt') {
+          const rel = path.relative(distDir, full).split(path.sep).join('/');
+          markdownPages.set('/' + rel, fs.readFileSync(full, 'utf8'));
+        } else if (entry.name === 'index.html') {
           const rel = path.relative(distDir, path.dirname(full)).split(path.sep).filter(Boolean);
           pages.set('/' + (rel.length ? rel.join('/') + '/' : ''), fs.readFileSync(full, 'utf8'));
         }
@@ -131,6 +137,15 @@ function collectPages() {
     pages.set(url, result.body);
   }
 
+  for (const url of site.markdown.urls().concat([site.routes.llms()])) {
+    const result = site.resolve(url, null, false);
+    if (result.status !== 200) {
+      fail(`${url} returned ${result.status}`);
+    } else {
+      markdownPages.set(url, result.body);
+    }
+  }
+
   // Read after the pages are rendered, not before: a diagram that d2 refused to draw says so while
   // the page holding it is being made, which is after the model has finished loading.
   for (const warning of site.model.warnings) notes.push('model: ' + warning);
@@ -155,6 +170,9 @@ for (const extra of ['/assets/app.css', '/assets/app.js', '/assets/search.json',
 }
 
 for (const url of treeAssets.keys()) knownUrls.add(url);
+for (const url of markdownPages.keys()) {
+  knownUrls.add(url);
+}
 
 let hrefCount = 0;
 const brokenLinks = new Map();
@@ -227,6 +245,17 @@ for (const [url, html] of pages) {
 
     if (fragment && anchorsByPage.has(target) && !anchorsByPage.get(target).has(fragment)) {
       brokenLinks.set(`${target}#${fragment}`, (brokenLinks.get(`${target}#${fragment}`) || 0) + 1);
+    }
+  }
+}
+
+// The Markdown copies link among themselves, root-relative unless the site was given an origin.
+for (const [url, body] of markdownPages) {
+  for (const match of body.matchAll(/\]\((\/[^)\s]*)\)/g)) {
+    hrefCount++;
+    const target = match[1].split(/[?#]/)[0];
+    if (!knownUrls.has(target)) {
+      brokenLinks.set(`${target} (in ${url})`, (brokenLinks.get(`${target} (in ${url})`) || 0) + 1);
     }
   }
 }
@@ -333,6 +362,7 @@ for (const [title, urls] of duplicateTitles.slice(0, 10)) {
 }
 
 console.log(`pages checked        ${pages.size}`);
+console.log(`markdown copies      ${markdownPages.size}`);
 console.log(`internal links       ${hrefCount}`);
 if (linkedSites.length > 0) console.log(`links to other sites ${outboundLinks}`);
 console.log(`lazy tree groups     ${lazyGroups}`);

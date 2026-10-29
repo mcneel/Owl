@@ -9,7 +9,8 @@ const path = require('node:path');
  * Serves an exported site, written next to it by `owl build --server`.
  *
  * Old Sandcastle and docify urls get a real redirect, and a type page asked for with ?member= previews
- * as that member. Listens on PORT, or 3000 without one.
+ * as that member. A page asked for with Accept: text/markdown answers with its Markdown copy.
+ * Listens on PORT, or 3000 without one.
  *
  * Usage:
  *   npm start
@@ -28,6 +29,7 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -140,6 +142,30 @@ function existsExactly(relative) {
   return true;
 }
 
+/** Whether an Accept header ranks text/markdown at least as high as text/html. Matches lib/mdpages.js. */
+function prefersMarkdown(accept) {
+  let md = 0;
+  let html = 0;
+  for (const part of String(accept || '').split(',')) {
+    const [type, ...params] = part.trim().toLowerCase().split(';');
+    const q = params.map((p) => /^\s*q=([\d.]+)/.exec(p)).find(Boolean);
+    const weight = q ? Number(q[1]) : 1;
+    if (type.trim() === 'text/markdown') {
+      md = weight;
+    } else if (type.trim() === 'text/html') {
+      html = weight;
+    }
+  }
+  return md > 0 && md >= html;
+}
+
+/** The Markdown copy written beside a page directory, '/type/x/' as '<root>/type/x.md', or null. */
+function markdownCopy(relative) {
+  const stem = relative.replace(/\/+$/, '');
+  const file = path.join(ROOT, stem === '' ? 'index.md' : `${stem}.md`);
+  return fs.existsSync(file) ? file : null;
+}
+
 function send(res, status, headers, body, head) {
   res.writeHead(status, headers);
   res.end(head ? undefined : body);
@@ -208,12 +234,19 @@ const server = http.createServer((req, res) => {
     if (!pathname.endsWith('/')) {
       return send(res, 301, { Location: `${url.pathname}/${url.search}`, 'Cache-Control': CACHE }, '', head);
     }
+    // A page with a Markdown copy is answered with it when that is what the client asked for.
+    const copy = prefersMarkdown(req.headers.accept) ? markdownCopy(relative) : null;
+    if (copy) {
+      const headers = { 'Content-Type': TYPES['.md'], 'Cache-Control': CACHE, Vary: 'Accept' };
+      return send(res, 200, headers, fs.readFileSync(copy), head);
+    }
     file = path.join(file, 'index.html');
     if (!fs.existsSync(file)) return notFound(res, head);
   }
 
   const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
-  const headers = { 'Content-Type': type, 'Cache-Control': CACHE };
+  // Pages vary on Accept, so a cache does not hand a browser the Markdown an agent asked for.
+  const headers = { 'Content-Type': type, 'Cache-Control': CACHE, ...(stat.isDirectory() ? { Vary: 'Accept' } : {}) };
 
   // A link previewer never sees the fragment, so ?member= is how a shared member url names its member.
   const member = url.searchParams.get('member');

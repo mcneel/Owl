@@ -209,6 +209,20 @@ single group holding every type it has.
 | `/namespace/type/<type>/`, `/namespace/example/<type>/<member>/` | stubs forwarding the urls namespace mode used to publish; only on a site that has both modes |
 | `/search/` | search; the dev server also answers `?q=` without JavaScript |
 | `/sitemap.xml`, `/robots.txt` | |
+| `/llms.txt` | for AI agents: each assembly with its categories and namespaces, linking their Markdown copies |
+| `<page>.md`, `/index.md` | the Markdown copy of a page, its trailing slash replaced: `/type/<type>.md` |
+| `/type/<type>/<member>.md` | every overload of one member name, e.g. `/type/rhino.geometry.curve/offset.md` |
+
+## Markdown for Agents
+
+Every page above that documents API has a Markdown copy, written beside it by the export and named
+in its head as `<link rel="alternate" type="text/markdown">`. A type's copy lists its members a line
+each and links every name to its own page, so an agent after one method reads a few KB, not the
+whole type. Links in a copy lead to other copies.
+
+A request that ranks `text/markdown` above `text/html` in its `Accept` header gets the copy at the
+page's own address. `serve.js` and the `--server` host answer that; a plain file host serves the
+`.md` files but cannot. Search, references and What's New have no copy yet.
 
 Every page has its own title, meta description, canonical link, Open Graph tags, breadcrumbs and
 JSON-LD, and every link is a real `href`. Every page reads with JavaScript disabled; JavaScript
@@ -237,7 +251,8 @@ owl-site/
     model.js       loads the generated model and the authored markdown
     pages.js       page renderers
     layout.js      page shell, including all SEO metadata
-    docnodes.js    structured doc comments -> HTML, including cref links
+    docnodes.js    structured doc comments -> HTML and Markdown, including cref links
+    mdpages.js     Markdown copies of the pages, and llms.txt
     markdown.js    authored markdown -> HTML
     highlight.js   syntax highlighting at render time
     diagrams.js    ```d2 fences -> inline SVG, drawn by the d2 binary
