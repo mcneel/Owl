@@ -1191,6 +1191,11 @@ describe('exported server', () => {
     assert.equal(res.headers.get('location'), '/api/samples/type/samples.memorystore');
   });
 
+  test('serves the root of a site with several assemblies as its own page', async () => {
+    const res = await fetch(`${root}/api/samples/`, { redirect: 'manual' });
+    assert.equal(res.status, 200);
+  });
+
   test('does not redirect an address with no page in any case', async () => {
     const res = await fetch(`${root}/api/samples/type/Samples.Nothing/`, { redirect: 'manual' });
     assert.equal(res.status, 404);
@@ -1234,6 +1239,46 @@ describe('exported server', () => {
     assert.equal(res.headers.get('cache-control'), null);
   });
 
+});
+
+// A single-assembly root is a refresh page for file hosts; a server should never make a reader wait on it.
+describe('exported server for one assembly', () => {
+  let server;
+  let root;
+  let out;
+
+  before(async () => {
+    const model = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-one-'));
+    fs.cpSync(jsonDir, model, { recursive: true });
+    const index = JSON.parse(fs.readFileSync(path.join(model, 'index.json'), 'utf8'));
+    index.assemblies = index.assemblies.slice(0, 1);
+    fs.writeFileSync(path.join(model, 'index.json'), JSON.stringify(index));
+
+    out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-one-server-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', model, '--out', out, '--base', '/api/samples',
+      '--server', '--quiet'], { stdio: 'pipe' });
+
+    server = spawn('node', [path.join(out, 'server.js')], { env: { ...process.env, PORT: '0' } });
+    const port = await new Promise((resolve) => {
+      server.stdout.on('data', (chunk) => {
+        const found = /listening on (\d+)/.exec(String(chunk));
+        if (found) resolve(found[1]);
+      });
+    });
+    root = `http://localhost:${port}`;
+  });
+
+  after(() => server.kill());
+
+  test('redirects the root to the assembly', async () => {
+    const page = fs.readFileSync(path.join(out, 'site', 'index.html'), 'utf8');
+    const assembly = /url=([^"]+)"/.exec(page)[1];
+    for (const url of ['/api/samples/', '/api/samples']) {
+      const res = await fetch(root + url, { redirect: 'manual' });
+      assert.equal(res.status, 301, url);
+      assert.equal(res.headers.get('location'), assembly, url);
+    }
+  });
 });
 
 describe('slugs', () => {
