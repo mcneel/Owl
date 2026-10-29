@@ -18,6 +18,8 @@ const path = require('node:path');
 // Filled in by build.js with the --base the site was built for.
 const BASE = '__OWL_BASE__';
 const ROOT = path.join(__dirname, 'site');
+// Publishing clears the CDN, so it can hold pages a day; browsers recheck after five minutes.
+const CACHE = 'public, max-age=300, s-maxage=86400';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -176,7 +178,7 @@ const server = http.createServer((req, res) => {
     // Member targets carry their own ?member=, so the asked-for query joins it rather than starting another.
     const query = url.search.slice(1);
     const location = query ? base + (base.includes('?') ? '&' : '?') + query + fragment : target;
-    return send(res, 301, { Location: location }, '', head);
+    return send(res, 301, { Location: location, 'Cache-Control': CACHE }, '', head);
   }
 
   let relative = pathname.slice(BASE.length);
@@ -192,7 +194,7 @@ const server = http.createServer((req, res) => {
   // Pages live at lower case addresses, but people type names as the code spells them.
   const lower = relative.toLowerCase();
   if (lower !== relative && !existsExactly(relative) && fs.existsSync(path.join(ROOT, lower))) {
-    return send(res, 301, { Location: `${url.pathname.toLowerCase()}${url.search}` }, '', head);
+    return send(res, 301, { Location: `${url.pathname.toLowerCase()}${url.search}`, 'Cache-Control': CACHE }, '', head);
   }
 
   let stat;
@@ -204,14 +206,14 @@ const server = http.createServer((req, res) => {
 
   if (stat.isDirectory()) {
     if (!pathname.endsWith('/')) {
-      return send(res, 301, { Location: `${url.pathname}/${url.search}` }, '', head);
+      return send(res, 301, { Location: `${url.pathname}/${url.search}`, 'Cache-Control': CACHE }, '', head);
     }
     file = path.join(file, 'index.html');
     if (!fs.existsSync(file)) return notFound(res, head);
   }
 
   const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
-  const headers = { 'Content-Type': type, 'Cache-Control': 'public, max-age=0' };
+  const headers = { 'Content-Type': type, 'Cache-Control': CACHE };
 
   // A link previewer never sees the fragment, so ?member= is how a shared member url names its member.
   const member = url.searchParams.get('member');
