@@ -301,7 +301,8 @@ describe('with hand-written pages', () => {
   });
 
   test('an unwritten assembly page says where to add it', () => {
-    assert.match(text(site.routes.assembly('Samples.VisualBasic')), /Samples\.VisualBasic\/MAIN\.md to author this page/);
+    // The path is the author's own, so it comes with their platform's separator.
+    assert.match(text(site.routes.assembly('Samples.VisualBasic')), /Samples\.VisualBasic[\\/]MAIN\.md to author this page/);
   });
 
   test('a category page is its Markdown file, with math', () => {
