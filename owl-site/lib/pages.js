@@ -2319,9 +2319,16 @@ ${this.seeAlsoHtml(type.docs)}
   }
 
   seeAlsoHtml(docs) {
+    const links = this.seeAlsoLinks(docs);
+    if (!links) return '';
+    return `<section class="ns-section"><h2 class="ns-heading">See Also</h2><div class="section">${links}</div></section>`;
+  }
+
+  /** A doc's &lt;seealso&gt; targets as links, or '' when it has none. */
+  seeAlsoLinks(docs) {
     if (!docs || !docs.seeAlso || docs.seeAlso.length === 0) return '';
 
-    const links = docs.seeAlso
+    return docs.seeAlso
       .map((ref) => {
         if (ref.href) {
           return `<a class="see-ref" href="${attr(ref.href)}" rel="noopener">${escape(ref.label || ref.href)}</a>`;
@@ -2329,8 +2336,6 @@ ${this.seeAlsoHtml(type.docs)}
         return this.typeRefHtml({ id: ref.id, display: ref.label, external: ref.external, asm: ref.asm });
       })
       .join(' ');
-
-    return `<section class="ns-section"><h2 class="ns-heading">See also</h2><div class="section">${links}</div></section>`;
   }
 
   /**
@@ -2669,6 +2674,11 @@ ${this.seeAlsoHtml(type.docs)}
           `<div class="section"><span class="section-label">Implements:</span> ${links.join(' ')}</div>`
         );
       }
+    }
+
+    const seeAlso = this.seeAlsoLinks(member.docs);
+    if (seeAlso) {
+      detail.push(`<div class="section"><span class="section-label">See Also:</span> ${seeAlso}</div>`);
     }
 
     const summary = this.summaryHtml(member.docs);

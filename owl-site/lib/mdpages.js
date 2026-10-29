@@ -578,16 +578,17 @@ class MarkdownPages {
   }
 
   seeAlso(docs) {
-    if (!docs || !docs.seeAlso || docs.seeAlso.length === 0) {
-      return '';
-    }
-    const links = docs.seeAlso.map((ref) => {
+    const links = this.seeAlsoLinks(docs);
+    return links.length > 0 ? `## See Also\n\n${links.map((l) => `- ${l}`).join('\n')}` : '';
+  }
+
+  seeAlsoLinks(docs) {
+    return ((docs && docs.seeAlso) || []).map((ref) => {
       if (ref.href) {
         return `[${ref.label || ref.href}](${ref.href})`;
       }
       return this.typeLink({ id: ref.id, display: ref.label, asm: ref.asm });
     });
-    return `## See Also\n\n${links.map((l) => `- ${l}`).join('\n')}`;
   }
 
   /** One member in full: what its card on the type page says, as Markdown. */
@@ -644,6 +645,11 @@ class MarkdownPages {
       .filter(Boolean);
     if (implemented.length > 0) {
       out.push(`**Implements:** ${implemented.join(', ')}`);
+    }
+
+    const seeAlso = this.seeAlsoLinks(docs);
+    if (seeAlso.length > 0) {
+      out.push(`**See Also:** ${seeAlso.join(', ')}`);
     }
 
     if (hasExamplePage(member)) {

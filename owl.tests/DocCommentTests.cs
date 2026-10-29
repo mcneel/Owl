@@ -109,6 +109,22 @@ public sealed class DocCommentTests(SampleModel model)
   }
 
   [Fact]
+  public void SeeAlsoWebLinkKeepsItsLabel()
+  {
+    JsonElement seeAlso = model.Member("T:Samples.Docs.Tagged", "P:Samples.Docs.Tagged.Count").Docs().Arr("seeAlso")[1];
+    Assert.Equal("https://example.com/sizes", seeAlso.Str("href"));
+    Assert.Equal("Sizes", seeAlso.Str("label"));
+  }
+
+  [Fact]
+  public void HtmlAnchorIsALink()
+  {
+    JsonElement link = Node(model.Member("T:Samples.Docs.Tagged", "P:Samples.Docs.Tagged.Count").Docs().GetProperty("remarks"), "link");
+    Assert.Equal("https://example.com/count", link.Str("href"));
+    Assert.Equal("counting", link.Str("v"));
+  }
+
+  [Fact]
   public void DeprecatedIsAVersion()
   {
     Assert.Equal("2.0", Tagged.Str("since"));
@@ -197,6 +213,14 @@ public sealed class DocCommentTests(SampleModel model)
   }
 
   [Fact]
+  public void InheritdocFromCref()
+  {
+    JsonElement docs = model.Member("T:Samples.Docs.Tagged", "P:Samples.Docs.Tagged.Size").Docs();
+    Assert.Equal("P:Samples.Docs.Tagged.Count", docs.Str("inheritedFrom"));
+    Assert.Equal("How many there are.", docs.GetProperty("summary")[0].Str("v"));
+  }
+
+  [Fact]
   public void CategoryAndSince()
   {
     JsonElement type = model.Type("T:Samples.CachedStore");
@@ -219,5 +243,13 @@ public sealed class DocCommentTests(SampleModel model)
   {
     JsonElement join = model.Member("T:Samples.VB.StoreHelpers", "M:Samples.VB.StoreHelpers.Join(System.String[])");
     Assert.Equal("T:System.Text.StringBuilder", join.GetProperty("returnType").Str("id"));
+  }
+
+  [Fact]
+  public void VisualBasicWebLinks()
+  {
+    JsonElement summary = model.Member("T:Samples.VB.StoreHelpers", "M:Samples.VB.StoreHelpers.Join(System.String[])").Docs().GetProperty("summary");
+    string[] hrefs = summary.EnumerateArray().Where(n => n.Str("t") == "link").Select(n => n.Str("href")).ToArray();
+    Assert.Equal(["https://example.com/join", "https://example.com/words"], hrefs);
   }
 }
