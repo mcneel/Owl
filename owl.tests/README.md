@@ -6,8 +6,8 @@ result. You need the .NET SDK 8.0+ and Node 18+.
 ## Run
 
 ```bash
-dotnet test owl.tests          # docs data and the owl command
-node --test owl.tests/site/    # the website
+dotnet test owl.tests                       # docs data and the owl command
+node --test owl.tests/site/site.test.js     # the website
 ```
 
 ## What's Here

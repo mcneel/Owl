@@ -2,8 +2,8 @@
 
 // Renders the site for owl.tests.source and checks what readers see.
 //
-//   node --test owl.tests/site/                        generates the samples' model first
-//   OWL_TEST_MODEL=<dir> node --test owl.tests/site/   reuses a model already generated
+//   node --test owl.tests/site/site.test.js                        generates the samples' model first
+//   OWL_TEST_MODEL=<dir> node --test owl.tests/site/site.test.js   reuses a model already generated
 
 const { test, before, after, describe } = require('node:test');
 const assert = require('node:assert/strict');
@@ -301,7 +301,7 @@ describe('with hand-written pages', () => {
   });
 
   test('an unwritten assembly page says where to add it', () => {
-    // The path is the author's own, so it comes with their platform's separator.
+    // The path depends on the dir separator on the platform running the tests, accept "\" and "/"
     assert.match(text(site.routes.assembly('Samples.VisualBasic')), /Samples\.VisualBasic[\\/]MAIN\.md to author this page/);
   });
 
