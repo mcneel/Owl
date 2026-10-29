@@ -15,9 +15,10 @@ const { stub: docifyStub } = require('./lib/docify');
  * rewrite rules, alongside sitemap.xml and robots.txt. Nothing is fetched from a network at
  * runtime, so the export also works from a local folder.
  *
- * With --sandcastle or --docify, redirects.json maps each old url, lower case and with no trailing
- * slash, to the url it moved to. A server that can redirect should answer from it, with the
- * request's query carried across, rather than serve the stub pages.
+ * redirects.json maps each url that only redirects (old --sandcastle or --docify urls, and the root
+ * of a single-assembly site), lower case and with no trailing slash, to the url it moved to. A server
+ * that can redirect should answer from it, with the request's query carried across, rather than
+ * serve the stub pages.
  *
  * With --server, the pages go in <out>/site, and <out> gets a server.js and package.json that serve
  * them: push <out> to a node host and it runs with npm start.
@@ -266,9 +267,12 @@ if (site.docify) {
   pages += redirects;
 }
 
-if (site.sandcastle || site.docify) {
-  write(`${site.base}/redirects.json`, JSON.stringify(moved));
+// The root of a single-assembly site is a refresh page for plain file hosts; a server redirects it.
+if (site.renderer.rootRedirects) {
+  moved[movedKey(site.routes.home())] = site.renderer.homeUrl();
 }
+
+write(`${site.base}/redirects.json`, JSON.stringify(moved));
 
 const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 
