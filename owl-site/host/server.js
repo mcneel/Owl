@@ -124,6 +124,20 @@ function previewAs(html, preview, member) {
   return head + html.slice(headEnd);
 }
 
+/** Whether relative names a file in exactly that case, even on a disk that ignores case. */
+function existsExactly(relative) {
+  let dir = ROOT;
+  for (const part of relative.split('/').filter(Boolean)) {
+    try {
+      if (!fs.readdirSync(dir).includes(part)) return false;
+    } catch {
+      return false;
+    }
+    dir = path.join(dir, part);
+  }
+  return true;
+}
+
 function send(res, status, headers, body, head) {
   res.writeHead(status, headers);
   res.end(head ? undefined : body);
@@ -173,6 +187,12 @@ const server = http.createServer((req, res) => {
   let file = path.join(ROOT, relative);
   if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
     return notFound(res, head);
+  }
+
+  // Pages live at lower case addresses, but people type names as the code spells them.
+  const lower = relative.toLowerCase();
+  if (lower !== relative && !existsExactly(relative) && fs.existsSync(path.join(ROOT, lower))) {
+    return send(res, 301, { Location: `${url.pathname.toLowerCase()}${url.search}` }, '', head);
   }
 
   let stat;
