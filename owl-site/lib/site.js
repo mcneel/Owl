@@ -3,8 +3,9 @@
 const fs = require('node:fs');
 
 const { Model } = require('./model');
-const { Routes, slugify, MEMBER_PARAM } = require('./routes');
+const { Routes, slugify, MEMBER_PARAM, MARKDOWN_KINDS } = require('./routes');
 const { Renderer } = require('./pages');
+const { MarkdownPages } = require('./mdpages');
 const { Diagrams, probe } = require('./diagrams');
 const { Sandcastle, stub } = require('./sandcastle');
 const { Docify, withQuery } = require('./docify');
@@ -144,6 +145,7 @@ class Site {
       // typeset, alongside the diagrams that would not draw.
       warn: (message) => this.model.warnings.push(message),
     });
+    this.markdown = new MarkdownPages(this.renderer);
     return this.model.warnings;
   }
 
@@ -194,8 +196,9 @@ class Site {
    * @param {string} pathname
    * @param {URLSearchParams} query
    * @param {boolean} serverSideSearch
+   * @param {boolean} preferMarkdown  answer a page that has a Markdown copy with it, as for Accept: text/markdown
    */
-  resolve(pathname, query, serverSideSearch = true) {
+  resolve(pathname, query, serverSideSearch = true, preferMarkdown = false) {
     const route = this.routes.match(pathname);
 
     if (!route) {
@@ -205,6 +208,14 @@ class Site {
     // A site that browses by namespace alone has one url per page, so the marked copies are not
     // second names for them - they are nothing at all.
     if (route.mode && this.namespaceMode) return this.notFound(pathname);
+
+    if (route.markdown || (preferMarkdown && !route.mode && MARKDOWN_KINDS.has(route.kind))) {
+      const body = this.markdownPage(route);
+      if (body !== null) {
+        return { status: 200, type: 'text/markdown; charset=utf-8', body };
+      }
+      return route.markdown ? this.notFound(pathname) : this.resolve(pathname, query, serverSideSearch);
+    }
 
     switch (route.kind) {
       case 'home':
@@ -228,6 +239,9 @@ class Site {
 
       case 'robots':
         return { status: 200, type: 'text/plain; charset=utf-8', body: this.renderer.robots() };
+
+      case 'llms':
+        return { status: 200, type: 'text/plain; charset=utf-8', body: this.markdown.llms() };
 
       case 'asset':
         return this.asset(route.name);
@@ -293,6 +307,35 @@ class Site {
 
       default:
         return this.notFound(pathname);
+    }
+  }
+
+  /** A page's Markdown copy, or null when the route names nothing. */
+  markdownPage(route) {
+    const md = this.markdown;
+    switch (route.kind) {
+      case 'home':
+        return md.home();
+      case 'assembly': {
+        const found = this.assemblyBySlug(route.slug);
+        return found ? md.assembly(found.name) : null;
+      }
+      case 'namespace': {
+        const name = this.namespaceBySlug(route.slug);
+        return name === null ? null : md.namespace(name);
+      }
+      case 'category': {
+        const bucket = this.namespaceMode ? null : this.categoryBySlugs(route.assembly, route.category);
+        return bucket ? md.category(bucket) : null;
+      }
+      case 'type':
+        return md.type(route.slug);
+      case 'member':
+        return md.member(route.slug, route.file);
+      case 'example':
+        return md.example(route.slug, route.anchor);
+      default:
+        return null;
     }
   }
 

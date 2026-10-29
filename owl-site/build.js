@@ -284,6 +284,19 @@ for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...t
   bytes += Buffer.byteLength(result.body, 'utf8');
 }
 
+// Each page's Markdown copy beside it, for agents; a file host serves these as they are.
+for (const url of site.markdown.urls()) {
+  const result = site.resolve(url, null, false);
+  if (result.status !== 200) {
+    console.error(`error: ${url} returned ${result.status}`);
+    process.exitCode = 1;
+    continue;
+  }
+  write(url, result.body);
+  bytes += Buffer.byteLength(result.body, 'utf8');
+}
+write(site.routes.llms(), site.markdown.llms());
+
 write(site.routes.sitemap(), site.renderer.sitemap(new Date().toISOString().slice(0, 10)));
 write('/robots.txt', site.renderer.robots());
 

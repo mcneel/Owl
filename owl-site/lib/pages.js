@@ -1427,6 +1427,7 @@ ${this.namespaceListHtml(this.model.sortedNamespaces().map((ns) => ns.name))}`;
       title: '',
       description,
       canonical: this.routes.home(),
+      markdown: this.baseRoutes.markdown(this.routes.home()),
       breadcrumbs: [],
       body,
       bodyClass: 'home',
@@ -1482,6 +1483,7 @@ ${this.namespaceListHtml(namespaces.map((ns) => ns.name))}
       title: `${assemblyName} assembly`,
       description,
       canonical: this.routes.assembly(assemblyName),
+      markdown: this.baseRoutes.markdown(this.routes.assembly(assemblyName)),
       breadcrumbs: [{ label: assemblyName, url: this.routes.assembly(assemblyName), icon: 'assembly' }],
       body,
       sidebar: this.namespaceMode
@@ -1570,6 +1572,7 @@ ${docs && docs.remarks ? `<section class="ns-section"><h2 class="ns-heading">Rem
       title: `${label} namespace`,
       description,
       canonical: this.routes.namespace(namespaceName),
+      markdown: this.baseRoutes.markdown(this.baseRoutes.namespace(namespaceName)),
       // Rooted in an assembly only when there is exactly one to name: a namespace can span
       // several, and a trail cannot open with all of them.
       breadcrumbs: [
@@ -1640,6 +1643,7 @@ ${
       title: `${categoryName} — ${assemblyName}`,
       description,
       canonical: this.routes.category(assemblyName, categoryName),
+      markdown: this.baseRoutes.markdown(this.routes.category(assemblyName, categoryName)),
       breadcrumbs: [
         { label: assemblyName, url: this.routes.assembly(assemblyName), icon: 'assembly' },
         // 'Overview' keeps the trail's endpoint from reading as a type named after its category.
@@ -1769,6 +1773,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       title: `${type.name}.${name} examples`,
       description,
       canonical: this.baseRoutes.example(type.slug, member.anchor),
+      markdown: this.baseRoutes.markdown(this.baseRoutes.example(type.slug, member.anchor)),
       breadcrumbs: [
         { label: assembly, url: this.routes.assembly(assembly), icon: 'assembly' },
         ...(type.namespace
@@ -1951,6 +1956,7 @@ ${this.seeAlsoHtml(type.docs)}
       // The plain url, in both modes and for every member it is shared for: the flagged url is the same type read the other way, so only
       // the one is worth indexing.
       canonical: this.baseRoutes.type(type.slug),
+      markdown: this.baseRoutes.markdown(this.baseRoutes.type(type.slug)),
       // A share names the member, so a previewer that follows og:url still lands on its preview.
       shareUrl: preview
         ? `${this.baseRoutes.type(type.slug)}?${MEMBER_PARAM}=${encodeURIComponent(member.anchor)}`
@@ -3927,4 +3933,16 @@ ${origin ? `Sitemap: ${origin}${this.routes.sitemap()}` : ''}
   }
 }
 
-module.exports = { Renderer, MEMBER_ORDER };
+module.exports = {
+  Renderer,
+  MEMBER_ORDER,
+  CALLABLE_KINDS,
+  memberDisplayName,
+  operatorSymbol,
+  lastSegment,
+  hasExamplePage,
+  exampleFileNodes,
+  examplePageCode,
+  languageLabel,
+  languageRank,
+};

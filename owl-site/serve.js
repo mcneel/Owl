@@ -205,7 +205,9 @@ const server = http.createServer((request, response) => {
 
   let result;
   try {
-    result = site.resolve(decodeURIComponent(parsed.pathname), parsed.searchParams, true);
+    const { prefersMarkdown } = require('./lib/mdpages');
+    const markdown = prefersMarkdown(request.headers.accept);
+    result = site.resolve(decodeURIComponent(parsed.pathname), parsed.searchParams, true, markdown);
   } catch (err) {
     console.error(err);
     response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -225,6 +227,8 @@ const server = http.createServer((request, response) => {
     // against, a memory-cached stylesheet can survive an edit and a restart. This is the dev
     // server; an exported site is plain files and its host sets its own policy.
     'Cache-Control': 'no-store, must-revalidate',
+    // One url answers as HTML or Markdown depending on Accept.
+    Vary: 'Accept',
   });
 
   response.end(request.method === 'HEAD' ? undefined : body);

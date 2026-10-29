@@ -942,6 +942,162 @@ describe('member previews', () => {
 });
 
 // The exported server answers what a plain file host cannot: old urls and member previews.
+describe('markdown copies', () => {
+  const { site, type, html } = make({ apiDir: docs });
+  const { prefersMarkdown } = require(path.join(repo, 'owl-site', 'lib', 'mdpages'));
+
+  /** The Markdown a url answers with, failing when it is not a 200 Markdown answer. */
+  const md = (url, preferMarkdown = false) => {
+    const result = site.resolve(url, null, false, preferMarkdown);
+    assert.equal(result.status, 200, `${url} returned ${result.status}`);
+    assert.match(result.type, /^text\/markdown/);
+    return result.body;
+  };
+  const mdOf = (url) => site.routes.markdown(url);
+
+  test('a type lists each member name once, leading to its own page', () => {
+    const page = md(mdOf(type('MemoryStore')));
+    assert.match(page, /^# MemoryStore class/);
+    assert.match(page, /```cs\n[^`]*class MemoryStore/);
+    assert.match(page, /- \[Read\]\(\/type\/samples\.memorystore\/read\.md\): /);
+    assert.doesNotMatch(page, /<div|<a /);
+  });
+
+  test('a member page holds the member in full, linking to other copies', () => {
+    const page = md(site.routes.memberMarkdown('samples.memorystore', 'read'));
+    assert.match(page, /^# MemoryStore\.Read method/);
+    assert.match(page, /\[MemoryStore\]\(\/type\/samples\.memorystore\.md\)/);
+    assert.match(page, /Reads the value stored under `key`\./);
+    assert.match(page, /\*\*Parameters:\*\*/);
+  });
+
+  test('an enum lists its values in a table and has no member pages', () => {
+    assert.match(md(mdOf(type('Mode'))), /\| Name \| Value \| Description \|\n\| --- \| --- \| --- \|\n\| \w+ \|/);
+    assert.equal(site.resolve(site.routes.memberMarkdown('samples.mode', 'memory'), null, false).status, 404);
+  });
+
+  test('a namespace lists its types under their kinds', () => {
+    assert.match(md(mdOf(site.routes.namespace('Samples.Shapes'))), /## Classes\n\n- \[Circle\]\(\/type\/samples\.shapes\.circle\.md\)/);
+  });
+
+  test("hand-written pages keep their prose, with xrefs led to the Markdown copies", () => {
+    const page = md(mdOf(site.routes.category('Samples.CSharp', 'Storage')));
+    assert.match(page, /Everything that keeps values\./);
+    assert.match(page, /\[CachedStore\]\(\/type\/samples\.cachedstore\.md\)/);
+    assert.match(page, /\[reading\]\(\/type\/samples\.cachedstore\/read\.md\)/);
+    assert.match(page, /\[string\]\(https:\/\/learn\.microsoft\.com\/dotnet\/api\/system\.string\)/);
+    assert.match(md('/index.md'), /The home page of the sample site\./);
+  });
+
+  test('every page that has a copy names it in its head', () => {
+    assert.match(html(type('MemoryStore')), /<link rel="alternate" type="text\/markdown" href="\/type\/samples\.memorystore\.md">/);
+    assert.match(html(site.routes.home()), /<link rel="alternate" type="text\/markdown" href="\/index\.md">/);
+    assert.doesNotMatch(html(site.routes.search()), /text\/markdown/);
+  });
+
+  test('llms.txt lists each assembly with its categories and namespaces', () => {
+    const result = site.resolve('/llms.txt', null, false);
+    assert.equal(result.status, 200);
+    assert.match(result.body, /^# /);
+    assert.match(result.body, /## Samples\.CSharp\n\n- \[Samples\.CSharp assembly\]\(\/assembly\/samples\.csharp\.md\)/);
+    assert.match(result.body, /- \[Storage\]\(\/category\/samples\.csharp\/storage\.md\)/);
+    assert.match(result.body, /- \[Samples\.Shapes namespace\]\(\/namespace\/samples\.shapes\.md\)/);
+  });
+
+  test('a page asked for as Markdown answers with its copy', () => {
+    assert.equal(md(type('MemoryStore'), true), md(mdOf(type('MemoryStore'))));
+    assert.match(site.resolve(site.routes.search(), null, false, true).type, /^text\/html/);
+  });
+
+  test('only a client ranking Markdown first gets it', () => {
+    assert.ok(prefersMarkdown('text/markdown'));
+    assert.ok(prefersMarkdown('text/markdown, text/html;q=0.9'));
+    assert.ok(!prefersMarkdown('text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'));
+    assert.ok(!prefersMarkdown('text/html, text/markdown;q=0.5'));
+    assert.ok(!prefersMarkdown(''));
+  });
+
+  test('names nothing for pages that have no copy', () => {
+    for (const url of ['/search.md', '/type/samples.nothing.md', '/type/samples.memorystore/nothing.md']) {
+      assert.equal(site.resolve(url, null, false).status, 404, url);
+    }
+  });
+
+  test('constructors, finalizers, indexers and operators have pages a reader can guess', () => {
+    const gadget = slugify('Samples.Members.Gadget');
+    const page = md(mdOf(type('Members.Gadget')));
+    for (const file of ['ctor', 'finalize', 'item', 'pick', 'op-addition']) {
+      assert.match(page, new RegExp(`\\(/type/${gadget.replace(/\./g, '\\.')}/${file}\\.md\\)`), file);
+    }
+
+    const ctor = md(site.routes.memberMarkdown(gadget, 'ctor'));
+    assert.match(ctor, /^# Gadget constructor/);
+    assert.match(ctor, /## Gadget\(\)\n/);
+    assert.match(ctor, /## Gadget\(int\)\n/);
+    assert.match(md(site.routes.memberMarkdown(gadget, 'op-addition')), /^# Gadget\.operator \+ operator/);
+    assert.match(md(site.routes.memberMarkdown(gadget, 'pick')), /Pick<T>/);
+  });
+
+  test('an explicit interface implementation gets a page of its own', () => {
+    const page = md(mdOf(type('Members.Gadget')));
+    assert.match(page, /\[IDisposable\.Dispose\]\(\/type\/samples\.members\.gadget\/system-idisposable-dispose\.md\)/);
+    assert.equal(site.resolve('/type/samples.members.gadget/system-idisposable-dispose.md', null, false).status, 200);
+  });
+
+  test('a member with examples links to their page, which holds the code', () => {
+    const tagged = slugify('Samples.Docs.Tagged');
+    assert.match(md(site.routes.memberMarkdown(tagged, 'find')), /\*\*Example:\*\* \[Find examples\]\(\/example\/samples\.docs\.tagged\/find-1-system\.string\.md\)/);
+
+    const page = md(site.routes.markdown(site.routes.example(tagged, 'find-1-system.string')));
+    assert.match(page, /^# Tagged\.Find<T> examples/);
+    assert.match(page, /## C#\n\n```cs\n/);
+    assert.match(md(site.routes.markdown(site.routes.example(tagged, 'noexample'))), /could not be read from Examples\/Nowhere\.cs/);
+  });
+
+  test('a type names what it inherits, each leading to where it is documented', () => {
+    const page = md(mdOf(type('Shapes.Circle')));
+    assert.match(page, /## Inherited Members\n\n- From \[Shape\]\(\/type\/samples\.shapes\.shape\.md\): /);
+    assert.match(page, /\[Describe\]\(\/type\/samples\.shapes\.shape\/describe\.md\)/);
+    assert.doesNotMatch(page, /\[Area\]\(\/type\/samples\.shapes\.shape\/area\.md\)/);
+  });
+
+  test('with --site-url the copies and llms.txt link absolutely', () => {
+    const { site: withUrl } = make({ siteUrl: 'https://example.com' });
+    const page = withUrl.resolve(withUrl.routes.markdown(type('MemoryStore')), null, false).body;
+    assert.match(page, /\(https:\/\/example\.com\/type\/samples\.memorystore\/read\.md\)/);
+    assert.match(withUrl.resolve('/llms.txt', null, false).body, /\(https:\/\/example\.com\/namespace\/samples\.md\)/);
+    assert.match(withUrl.resolve(type('MemoryStore'), null, false).body,
+      /<link rel="alternate" type="text\/markdown" href="https:\/\/example\.com\/type\/samples\.memorystore\.md">/);
+  });
+
+  test('under --base the copies live under it too', () => {
+    const { site: based } = make({ base: '/api/samples' });
+    assert.equal(based.routes.markdown(based.routes.home()), '/api/samples/index.md');
+    assert.match(based.resolve('/api/samples/type/samples.memorystore.md', null, false).body,
+      /\(\/api\/samples\/type\/samples\.memorystore\/read\.md\)/);
+    assert.equal(based.resolve('/api/samples/index.md', null, false).status, 200);
+    assert.equal(based.resolve('/api/samples/llms.txt', null, false).status, 200);
+  });
+
+  test('a site with no hand-written pages lists namespaces and no categories', () => {
+    const { site: dump } = make();
+    const llms = dump.resolve('/llms.txt', null, false).body;
+    assert.match(llms, /- \[Samples\.Shapes namespace\]/);
+    assert.doesNotMatch(llms, /\/category\//);
+    assert.match(dump.resolve('/index.md', null, false).body, /## Assemblies|## Namespaces/);
+    assert.equal(dump.resolve('/category/samples.csharp/storage.md', null, false).status, 404);
+  });
+
+  test('the export writes a copy for every page it writes', () => {
+    const urls = site.markdown.urls();
+    assert.ok(urls.includes('/index.md'));
+    assert.ok(urls.includes('/type/samples.memorystore/read.md'));
+    for (const url of urls) {
+      assert.equal(site.resolve(url, null, false).status, 200, url);
+    }
+  });
+});
+
 describe('exported server', () => {
   let server;
   let root;
@@ -1055,6 +1211,27 @@ describe('exported server', () => {
       const res = await fetch(root + url, { redirect: 'manual' });
       assert.equal(res.headers.get('cache-control'), cache, url);
     }
+  });
+
+  test('answers a page with its Markdown copy when that is what was asked for', async () => {
+    const url = `${root}/api/samples/type/samples.memorystore/`;
+    const md = await fetch(url, { headers: { Accept: 'text/markdown' } });
+    assert.match(md.headers.get('content-type'), /^text\/markdown/);
+    assert.equal(md.headers.get('vary'), 'Accept');
+    assert.match(await md.text(), /^# MemoryStore class/);
+
+    const page = await fetch(url, { headers: { Accept: 'text/html,*/*;q=0.8' } });
+    assert.match(page.headers.get('content-type'), /^text\/html/);
+    assert.equal(page.headers.get('vary'), 'Accept');
+  });
+
+  test('serves the Markdown copies and llms.txt as files', async () => {
+    const copy = await fetch(`${root}/api/samples/type/samples.memorystore/read.md`);
+    assert.equal(copy.status, 200);
+    assert.match(copy.headers.get('content-type'), /^text\/markdown/);
+    assert.match(await copy.text(), /\(\/api\/samples\/type\/samples\.memorystore\.md\)/);
+    assert.equal((await fetch(`${root}/api/samples/llms.txt`)).status, 200);
+    assert.equal((await fetch(`${root}/api/samples/index.md`)).status, 200);
   });
 
   test('does not ask for a missing page to be cached', async () => {

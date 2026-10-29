@@ -219,6 +219,24 @@ class Routes {
     return `${this.base}/sitemap.xml`;
   }
 
+  llms() {
+    return `${this.base}/llms.txt`;
+  }
+
+  /** The Markdown copy of a page: '/type/x/' is '/type/x.md', and the root is '/index.md'. */
+  markdown(url) {
+    const path = String(url).replace(/[?#].*$/, '');
+    if (path === this.home()) {
+      return `${this.base}/index.md`;
+    }
+    return path.replace(/\/$/, '') + '.md';
+  }
+
+  /** The Markdown page holding every overload of one member name. See memberFile. */
+  memberMarkdown(typeSlug, file) {
+    return `${this.base}/type/${typeSlug}/${file}.md`;
+  }
+
   /**
    * Resolves an index entry (as emitted in index.json) to a url.
    * Members carry an anchor; types do not. Shared, a member resolves to its sharedMember url.
@@ -242,6 +260,14 @@ class Routes {
     if (path === '/references' || path === '/references/') return { kind: 'references' };
     if (path === '/sitemap.xml') return { kind: 'sitemap' };
     if (path === '/robots.txt') return { kind: 'robots' };
+    if (path === '/llms.txt') {
+      return { kind: 'llms' };
+    }
+
+    // Ahead of docify, whose one-segment catch-all would otherwise take 'x.md' for a type name.
+    if (path.endsWith('.md')) {
+      return matchMarkdown(this, path.slice(0, -3));
+    }
 
     const parts = path.split('/').filter(Boolean);
 
@@ -296,6 +322,49 @@ class Routes {
   }
 }
 
+/** Kinds of page that have a Markdown copy. */
+const MARKDOWN_KINDS = new Set(['home', 'assembly', 'namespace', 'category', 'type', 'example']);
+
+/** The route a '.md' path (extension already off, base still on) names, marked markdown, or null. */
+function matchMarkdown(routes, stem) {
+  const relative = routes.base && stem.startsWith(routes.base) ? stem.slice(routes.base.length) : stem;
+  if (relative === '/index') {
+    return { kind: 'home', markdown: true };
+  }
+
+  const parts = relative.split('/').filter(Boolean);
+  if (parts[0] === 'type' && parts.length === 3) {
+    return { kind: 'member', slug: parts[1], file: parts[2], markdown: true };
+  }
+
+  const route = routes.match(stem + '/');
+  if (!route || route.mode || !MARKDOWN_KINDS.has(route.kind) || route.kind === 'home') {
+    return null;
+  }
+  return { ...route, markdown: true };
+}
+
+/**
+ * The file name a member's Markdown page goes by, shared by all its overloads: 'offset' for
+ * Curve.Offset. Readable enough to guess, which is the point of it for an agent.
+ */
+function memberFile(member) {
+  switch (member.kind) {
+    case 'constructor':
+      return 'ctor';
+    case 'destructor':
+      return 'finalize';
+    case 'indexer':
+      if (!member.explicitInterface) {
+        return 'item';
+      }
+      break;
+    default:
+      break;
+  }
+  return String(member.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 /** A path segment decoded, or as it came when it is not valid percent-encoding. */
 function safeDecode(segment) {
   try {
@@ -324,4 +393,14 @@ function matchSandcastle(parts) {
   return '';
 }
 
-module.exports = { Routes, slugify, normalizeBase, NAMESPACE_MODE, NS_FLAG, MEMBER_PARAM, SANDCASTLE_DIR };
+module.exports = {
+  Routes,
+  slugify,
+  normalizeBase,
+  memberFile,
+  MARKDOWN_KINDS,
+  NAMESPACE_MODE,
+  NS_FLAG,
+  MEMBER_PARAM,
+  SANDCASTLE_DIR,
+};

@@ -398,9 +398,120 @@ function renderList(node, context) {
   return out + `</${tag}>`;
 }
 
+/**
+ * Renders doc nodes as Markdown. context.refUrl(node) gives a cref's link, or '' to leave it text;
+ * context.inline keeps the result on one line, for list entries.
+ */
+function toMarkdown(nodes, context) {
+  if (!nodes || nodes.length === 0) {
+    return '';
+  }
+
+  let out = '';
+  for (const node of nodes) {
+    out += nodeMarkdown(node, context);
+  }
+  if (context.inline) {
+    return out.replace(/\s+/g, ' ').trim();
+  }
+  return out.replace(/[ \t]+\n\n/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Inline code, fenced with enough backticks to hold any it contains. */
+function codeSpan(text) {
+  const runs = String(text).match(/`+/g) || [];
+  const fence = '`'.repeat(Math.max(0, ...runs.map((r) => r.length)) + 1);
+  const pad = /^`|`$/.test(text) ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
+/** A fenced block, fenced longer than any run of backticks inside it. */
+function codeBlock(code, lang) {
+  const runs = String(code).match(/`{3,}/g) || [];
+  const fence = '`'.repeat(Math.max(2, ...runs.map((r) => r.length)) + 1);
+  return `\n\n${fence}${lang}\n${String(code).replace(/\s+$/, '')}\n${fence}\n\n`;
+}
+
+function nodeMarkdown(node, context) {
+  switch (node.t) {
+    case 'text':
+      return node.v || '';
+
+    case 'cref': {
+      const label = node.label || node.v || node.id || '';
+      const url = context.refUrl ? context.refUrl(node) : '';
+      return url ? `[${label}](${url})` : codeSpan(label);
+    }
+
+    case 'paramref':
+    case 'typeparamref':
+      return codeSpan(node.name || '');
+
+    case 'langword':
+    case 'c':
+      return codeSpan(node.v || '');
+
+    case 'code':
+      if (context.inline) {
+        return codeSpan((node.v || '').replace(/\s+/g, ' ').trim());
+      }
+      return codeBlock(node.v || '', codeLanguage(node));
+
+    case 'para':
+      if (context.inline) {
+        return ' ' + toMarkdown(node.children, context);
+      }
+      return `\n\n${toMarkdown(node.children, context)}\n\n`;
+
+    case 'br':
+      return context.inline ? ' ' : '  \n';
+
+    case 'note': {
+      const kind = (node.kind || 'note').toLowerCase();
+      const text = toMarkdown(node.children, { ...context, inline: true });
+      return context.inline ? text : `\n\n> **${kind.charAt(0).toUpperCase() + kind.slice(1)}:** ${text}\n\n`;
+    }
+
+    case 'link': {
+      const href = node.href || '';
+      const label = node.v || href;
+      return /^https?:/i.test(href) ? `[${label}](${href})` : label;
+    }
+
+    case 'list':
+      return listMarkdown(node, context);
+
+    default:
+      return (node.v || '') + toMarkdown(node.children, context);
+  }
+}
+
+function listMarkdown(node, context) {
+  const items = node.items || [];
+  if (items.length === 0) {
+    return '';
+  }
+
+  const line = { ...context, inline: true };
+  if (context.inline) {
+    return items.map((i) => `${toMarkdown(i.term, line)} ${toMarkdown(i.description, line)}`.trim()).join('; ');
+  }
+
+  const numbered = (node.style || '').toLowerCase() === 'number';
+  const rows = items.map((item, i) => {
+    const term = toMarkdown(item.term, line);
+    const text = toMarkdown(item.description, line);
+    return `${numbered ? `${i + 1}.` : '-'} ${term ? `**${term}**: ` : ''}${text}`;
+  });
+  return `\n\n${rows.join('\n')}\n\n`;
+}
+
 module.exports = {
   render,
   toText,
+  toMarkdown,
+  codeSpan,
+  codeBlock,
   learnUrl,
   crefUrl,
   refHtml,

@@ -372,4 +372,4 @@ function firstParagraph(markdown) {
     .trim();
 }
 
-module.exports = { render, firstParagraph, inline };
+module.exports = { render, firstParagraph, inline, XREF };

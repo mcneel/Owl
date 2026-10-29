@@ -50,6 +50,7 @@ function fullTitle(title, siteName) {
  *   currentAssembly  which of them this page belongs to, or '' for the whole API
  *   assemblyUrl  where choosing an assembly goes, when it is not that assembly's page
  *   versions     versions for the header's API version picker, newest first; none draws no picker
+ *   markdown     root-relative url of this page's Markdown copy, or '' for a page with none
  */
 function page(options) {
   const {
@@ -78,6 +79,7 @@ function page(options) {
     currentAssembly = '',
     assemblyUrl = null,
     versions = [],
+    markdown = '',
   } = options;
 
   // Search narrows to what the header's picker says; with no picker the reader sees the whole API,
@@ -131,6 +133,7 @@ ${ogUrl ? `<meta property="og:url" content="${attr(ogUrl)}">` : ''}
 <meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="${attr(routes.asset('app.css'))}">
 <link rel="sitemap" type="application/xml" href="${attr(routes.sitemap())}">
+${markdown ? `<link rel="alternate" type="text/markdown" href="${attr(absolute(markdown))}">` : ''}
 ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</script>` : ''}
 <script>
 /* Applied before first paint, so the appearance the site opens as does not flash the other one.
