@@ -54,6 +54,55 @@ public sealed class DocCommentTests(SampleModel model)
   }
 
   [Fact]
+  public void MarkdownListsBecomeLists()
+  {
+    JsonElement docs = model.Member("T:Samples.Docs.Tagged", "M:Samples.Docs.Tagged.Listed(System.Int32)").Docs();
+    JsonElement[] summary = [.. docs.GetProperty("summary").EnumerateArray()];
+
+    Assert.Equal(["text", "list", "text"], summary.Select(n => n.Str("t")));
+    Assert.Equal("Reads from", summary[0].Str("v"));
+    Assert.Equal("Then stops.", summary[2].Str("v"));
+
+    JsonElement[] items = summary[1].Arr("items");
+    Assert.Equal("bullet", summary[1].Str("style"));
+    Assert.Equal(2, items.Length);
+    Assert.Equal("T:Samples.IStore", Node(items[0].GetProperty("description"), "cref").Str("id"));
+    Assert.Equal("the cache, when warm.", items[1].GetProperty("description")[0].Str("v"));
+
+    JsonElement steps = Node(docs.GetProperty("params").GetProperty("order"), "list");
+    Assert.Equal("number", steps.Str("style"));
+    Assert.Equal(2, steps.Arr("items").Length);
+  }
+
+  [Fact]
+  public void NumberedListStartsAtOne()
+  {
+    JsonElement docs = model.Member("T:Samples.Docs.Tagged", "M:Samples.Docs.Tagged.Listed(System.Int32)").Docs();
+    Assert.Equal("First shipped in 2010. Still here.", Assert.Single(docs.GetProperty("remarks").EnumerateArray()).Str("v"));
+  }
+
+  [Fact]
+  public void DeeperMarkersNest()
+  {
+    JsonElement summary = model.Member("T:Samples.Docs.Tagged", "M:Samples.Docs.Tagged.Nested").Docs().GetProperty("summary");
+    JsonElement[] items = Node(summary, "list").Arr("items");
+
+    Assert.Equal(2, items.Length);
+    Assert.Equal("Fast", items[0].GetProperty("description")[0].Str("v"));
+    Assert.Equal(2, Node(items[0].GetProperty("description"), "list").Arr("items").Length);
+    Assert.Equal("Safe", items[1].GetProperty("description")[0].Str("v"));
+  }
+
+  [Fact]
+  public void BackticksBecomeInlineCode()
+  {
+    JsonElement summary = model.Member("T:Samples.Docs.Tagged", "M:Samples.Docs.Tagged.Ticked").Docs().GetProperty("summary");
+    Assert.Equal(["text", "c", "text"], summary.EnumerateArray().Select(n => n.Str("t")));
+    Assert.Equal("Find(\"a\")", Node(summary, "c").Str("v"));
+    Assert.Equal(" first, but a lone ` stays.", summary[2].Str("v"));
+  }
+
+  [Fact]
   public void SeeAlso()
   {
     Assert.Equal("T:Samples.MemoryStore", Tagged.Arr("seeAlso")[0].Str("id"));

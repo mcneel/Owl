@@ -929,6 +929,9 @@ sealed class DocCommentParser
   {
     if (!keepSpaces)
     {
+      // Before collapsing, since collapsing is what erases the line starts a list is written with.
+      nodes = InlineCode(MarkdownLists(nodes));
+
       for (int i = 0; i < nodes.Count; i++)
       {
         if (nodes[i].Kind != "text")
@@ -936,7 +939,12 @@ sealed class DocCommentParser
           continue;
         }
 
-        nodes[i].Value = Collapse(nodes[i].Value ?? "", keepEdges: true);
+        // A list draws as its own block, so the space either side of it is only noise.
+        bool beforeList = i + 1 < nodes.Count && nodes[i + 1].Kind == "list";
+        bool afterList = i > 0 && nodes[i - 1].Kind == "list";
+        string value = Collapse(nodes[i].Value ?? "", keepEdges: true);
+        value = beforeList ? value.TrimEnd() : value;
+        nodes[i].Value = afterList ? value.TrimStart() : value;
       }
 
       if (nodes.Count > 0 && nodes[0].Kind == "text")
@@ -953,6 +961,212 @@ sealed class DocCommentParser
     }
 
     return nodes;
+  }
+
+  /// <summary>
+  /// Turns lines written as Markdown list items ("- ", "* ", "+ ", or "1. " onwards) into list nodes.
+  /// A line indented past its item's marker continues that item; anything else ends the list.
+  /// </summary>
+  static List<DocNode> MarkdownLists(List<DocNode> nodes)
+  {
+    List<List<DocNode>> lines = Lines(nodes);
+    if (!lines.Any(l => ListMarker(l) is { Start: true }))
+    {
+      return nodes;
+    }
+
+    var output = new List<DocNode>();
+    DocNode? list = null;
+    List<DocNode>? item = null;
+    int listIndent = 0;
+    string listStyle = "";
+
+    void EndItem()
+    {
+      List<DocNode> tidied = item is null ? [] : Tidy(item, keepSpaces: false);
+      if (tidied.Count > 0)
+      {
+        list!.Items!.Add(new DocListItem { Description = tidied });
+      }
+
+      item = null;
+    }
+
+    void EndList()
+    {
+      EndItem();
+      if (list is not null && list.Items!.Count > 0)
+      {
+        output.Add(list);
+      }
+
+      list = null;
+    }
+
+    for (int i = 0; i < lines.Count; i++)
+    {
+      List<DocNode> line = lines[i];
+      Marker? marker = ListMarker(line);
+
+      if (list is not null)
+      {
+        if (IsBlank(line))
+        {
+          continue;
+        }
+
+        // A deeper marker is a nested list, which the item's own tidy picks up.
+        bool continues = Indent(line) > listIndent;
+        if (marker is not null && !continues && marker.Style == listStyle)
+        {
+          EndItem();
+          item = marker.Rest;
+          continue;
+        }
+
+        if (continues)
+        {
+          AppendText(item!, "\n");
+          AppendAll(item!, line);
+          continue;
+        }
+
+        EndList();
+      }
+
+      if (marker is { Start: true })
+      {
+        list = new DocNode { Kind = "list", Style = marker.Style, Items = [] };
+        listStyle = marker.Style;
+        listIndent = Indent(line);
+        item = marker.Rest;
+        continue;
+      }
+
+      if (i > 0)
+      {
+        AppendText(output, "\n");
+      }
+
+      AppendAll(output, line);
+    }
+
+    EndList();
+    return output;
+  }
+
+  /// <summary>Turns Markdown `backtick` spans in text into inline code nodes.</summary>
+  static List<DocNode> InlineCode(List<DocNode> nodes)
+  {
+    var output = new List<DocNode>();
+
+    foreach (DocNode node in nodes)
+    {
+      string value = node.Value ?? "";
+      if (node.Kind != "text" || !value.Contains('`'))
+      {
+        output.Add(node);
+        continue;
+      }
+
+      // A lone backtick has no partner and stays as written.
+      int last = 0;
+      foreach (System.Text.RegularExpressions.Match match in
+          System.Text.RegularExpressions.Regex.Matches(value, @"`([^`]+)`"))
+      {
+        AppendText(output, value[last..match.Index]);
+        output.Add(new DocNode { Kind = "c", Value = Collapse(match.Groups[1].Value) });
+        last = match.Index + match.Length;
+      }
+
+      AppendText(output, value[last..]);
+    }
+
+    return output;
+  }
+
+  sealed record Marker(string Style, bool Start, List<DocNode> Rest);
+
+  /// <summary>The list marker a line opens with, or null when it is ordinary text.</summary>
+  static Marker? ListMarker(List<DocNode> line)
+  {
+    if (line.Count == 0 || line[0].Kind != "text")
+    {
+      return null;
+    }
+
+    string text = (line[0].Value ?? "").TrimStart(' ', '\t');
+    var match = System.Text.RegularExpressions.Regex.Match(text, @"^(?:([-*+])|(\d{1,9})[.)])[ \t]+");
+    if (!match.Success)
+    {
+      return null;
+    }
+
+    var rest = new List<DocNode>();
+    AppendText(rest, text[match.Length..]);
+    rest.AddRange(line.Skip(1));
+
+    // A numbered list only starts at 1, so a wrapped line that happens to begin "2010. " stays prose.
+    bool numbered = match.Groups[2].Success;
+    return new Marker(numbered ? "number" : "bullet", !numbered || match.Groups[2].Value == "1", rest);
+  }
+
+  static List<List<DocNode>> Lines(List<DocNode> nodes)
+  {
+    var lines = new List<List<DocNode>>();
+    var current = new List<DocNode>();
+
+    foreach (DocNode node in nodes)
+    {
+      if (node.Kind != "text")
+      {
+        current.Add(node);
+        continue;
+      }
+
+      string[] parts = (node.Value ?? "").Split('\n');
+      for (int k = 0; k < parts.Length; k++)
+      {
+        if (k > 0)
+        {
+          lines.Add(current);
+          current = [];
+        }
+
+        AppendText(current, parts[k]);
+      }
+    }
+
+    lines.Add(current);
+    return lines;
+  }
+
+  static int Indent(List<DocNode> line)
+  {
+    if (line.Count == 0 || line[0].Kind != "text")
+    {
+      return 0;
+    }
+
+    string text = line[0].Value ?? "";
+    return text.Length - text.TrimStart(' ', '\t').Length;
+  }
+
+  static bool IsBlank(List<DocNode> line) => line.All(n => n.Kind == "text" && string.IsNullOrWhiteSpace(n.Value));
+
+  static void AppendAll(List<DocNode> output, List<DocNode> line)
+  {
+    foreach (DocNode node in line)
+    {
+      if (node.Kind == "text")
+      {
+        AppendText(output, node.Value ?? "");
+      }
+      else
+      {
+        output.Add(node);
+      }
+    }
   }
 
   static List<DocNode>? Merge(List<DocNode>? existing, List<DocNode> addition)

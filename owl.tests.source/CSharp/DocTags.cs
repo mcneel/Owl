@@ -46,5 +46,35 @@ public class Tagged
   /// <example><code source="Examples/Nowhere.cs"/></example>
   public void NoExample() { }
 
+  /// <summary>
+  /// Reads from
+  ///   - <see cref="Samples.IStore"/>, and
+  ///   - the cache,
+  ///     when warm.
+  /// Then stops.
+  /// </summary>
+  /// <param name="order">
+  /// Steps:
+  /// 1. Open.
+  /// 2. Read.
+  /// </param>
+  /// <remarks>
+  /// First shipped in
+  /// 2010. Still here.
+  /// </remarks>
+  public void Listed(int order) { }
+
+  /// <summary>
+  /// Options:
+  /// * Fast
+  ///   - skips checks
+  ///   - trusts input
+  /// * Safe
+  /// </summary>
+  public void Nested() { }
+
+  /// <summary>Call `Find("a")` first, but a lone ` stays.</summary>
+  public void Ticked() { }
+
   public void Undocumented() { }
 }
