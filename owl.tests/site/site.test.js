@@ -1040,6 +1040,23 @@ describe('exported server', () => {
     assert.equal(res.status, 404);
   });
 
+  // A CDN in front holds pages a day, since publishing clears it; browsers recheck sooner.
+  test('lets pages and redirects be cached', async () => {
+    const cache = 'public, max-age=300, s-maxage=86400';
+    const urls = ['/api/samples/type/samples.memorystore/', '/api/samples/assets/whatsnew.json',
+      '/api/samples/type/samples.memorystore/?member=read-system.string', '/api/samples/samples.memorystore',
+      '/api/samples/type/Samples.MemoryStore/', '/api/samples/type'];
+    for (const url of urls) {
+      const res = await fetch(root + url, { redirect: 'manual' });
+      assert.equal(res.headers.get('cache-control'), cache, url);
+    }
+  });
+
+  test('does not ask for a missing page to be cached', async () => {
+    const res = await fetch(`${root}/api/samples/type/Samples.Nothing/`);
+    assert.equal(res.headers.get('cache-control'), null);
+  });
+
 });
 
 describe('slugs', () => {
