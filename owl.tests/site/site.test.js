@@ -67,6 +67,13 @@ function make(options = {}) {
   return { site: made, get, html, text, type };
 }
 
+/** Writes a file into a fresh temp directory and returns its path. */
+function tempFile(name, content) {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'owl-file-test-')), name);
+  fs.writeFileSync(file, content);
+  return file;
+}
+
 function check(...args) {
   execFileSync('node', [path.join(site, 'check.js'), '--json', jsonDir, ...args], { stdio: 'pipe' });
 }
@@ -308,8 +315,12 @@ describe('with hand-written pages', () => {
     assert.match(page, /<pre><code/);
   });
 
-  test('the header uses logo.svg', () => {
-    assert.match(html(site.routes.home()), /6A3DE8/);
+  test('the header and tab link logo.svg, served from the assets', () => {
+    const page = html(site.routes.home());
+    assert.match(page, /<img class="site-logo" src="\/assets\/logo\.svg"/);
+    assert.match(page, /<link rel="icon" type="image\/svg\+xml" href="\/assets\/logo\.svg">/);
+    assert.doesNotMatch(page, /6A3DE8/);
+    assert.match(site.asset('logo.svg').body, /6A3DE8/);
   });
 
   test('an assembly page is its MAIN.md', () => {
@@ -472,6 +483,68 @@ describe('options', () => {
   test('--link sends an assembly\'s types to another site', () => {
     const { html, type } = make({ links: ['System.Runtime=/api/dotnet'] });
     assert.match(html(type('Members.Gadget')), /href="\/api\/dotnet\/type\/system\.idisposable\/"/);
+  });
+
+  test('--favicon is served from the assets and linked from the tab', () => {
+    const file = tempFile('icon.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const { html, site } = make({ apiDir: docs, favicon: file });
+    assert.match(html(site.routes.home()), /<link rel="icon" type="image\/png" href="\/assets\/favicon\.png">/);
+    assert.equal(site.asset('favicon.png').type, 'image/png');
+  });
+
+  test('--logo-dark adds a second header image, and the tab keeps the light one', () => {
+    const dark = tempFile('dark.svg', '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5" fill="#FFEEDD"/></svg>');
+    const { html, site } = make({ apiDir: docs, logoDark: dark });
+    const page = html(site.routes.home());
+    assert.match(page, /<img class="site-logo site-logo-light" src="\/assets\/logo\.svg"/);
+    assert.match(page, /<img class="site-logo site-logo-dark" src="\/assets\/logo-dark\.svg"/);
+    assert.match(page, /<link rel="icon" type="image\/svg\+xml" href="\/assets\/logo\.svg">/);
+    assert.match(site.asset('logo-dark.svg').body, /FFEEDD/);
+  });
+
+  test('--logo is served without its scripts and event handlers', () => {
+    const logo = tempFile(
+      'logo.svg',
+      '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><circle r="5"/></svg>'
+    );
+    const { site } = make({ logo });
+    const body = site.asset('logo.svg').body;
+    assert.match(body, /<circle r="5"\/>/);
+    assert.doesNotMatch(body, /alert|onload|<script/);
+  });
+
+  test('--logo that is not an svg is reported and left out', () => {
+    const { html, site } = make({ logo: tempFile('logo.svg', 'not a drawing') });
+    assert.ok(site.model.warnings.some((w) => /not an <svg> document/.test(w)));
+    assert.doesNotMatch(html(site.routes.home()), /site-logo|rel="icon"/);
+    assert.equal(site.asset('logo.svg').status, 404);
+  });
+
+  test('no logo and no --favicon, no tab icon', () => {
+    const { html, site } = make();
+    assert.doesNotMatch(html(site.routes.home()), /rel="icon"/);
+  });
+
+  test('--favicon as svg is served without its scripts', () => {
+    const favicon = tempFile('tab.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>');
+    const { html, site } = make({ favicon });
+    assert.match(html(site.routes.home()), /<link rel="icon" type="image\/svg\+xml" href="\/assets\/favicon\.svg">/);
+    assert.doesNotMatch(site.asset('favicon.svg').body, /script/);
+  });
+
+  test('--favicon of another kind is reported, and the tab falls back to the logo', () => {
+    const { html, site } = make({ apiDir: docs, favicon: tempFile('tab.gif', 'GIF89a') });
+    assert.ok(site.model.warnings.some((w) => /must be \.svg, \.png or \.ico/.test(w)));
+    assert.match(html(site.routes.home()), /<link rel="icon" type="image\/svg\+xml" href="\/assets\/logo\.svg">/);
+  });
+
+  test('an export carries the icons, and checks clean', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-icons-test-'));
+    const favicon = tempFile('tab.ico', Buffer.from([0, 0, 1, 0]));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', jsonDir, '--docs', docs, '--out', out, '--favicon', favicon, '--quiet'], { stdio: 'pipe' });
+    assert.ok(fs.existsSync(path.join(out, 'assets', 'logo.svg')));
+    assert.deepEqual(fs.readFileSync(path.join(out, 'assets', 'favicon.ico')), fs.readFileSync(favicon));
+    execFileSync('node', [path.join(site, 'check.js'), '--dist', out], { stdio: 'pipe' });
   });
 
   test('--link must be <assembly>=<url>', () => {

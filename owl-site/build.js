@@ -42,6 +42,7 @@ function parseArgs(argv) {
     links: [],
     logo: '',
     logoDark: '',
+    favicon: '',
     apiVersions: '',
     d2: '',
     skipUndocumented: false,
@@ -85,6 +86,9 @@ function parseArgs(argv) {
         break;
       case '--logo-dark':
         options.logoDark = path.resolve(argv[++i]);
+        break;
+      case '--favicon':
+        options.favicon = path.resolve(argv[++i]);
         break;
       case '--d2':
         options.d2 = argv[++i];
@@ -278,7 +282,10 @@ const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
 
 const whatsNew = site.versions.length > 0 ? ['whatsnew.json'] : [];
 
-for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...trees, ...whatsNew]) {
+const logos = [site.renderer.logo && 'logo.svg', site.renderer.logoDark && 'logo-dark.svg'].filter(Boolean);
+const favicon = site.renderer.favicon ? [site.renderer.favicon.name] : [];
+
+for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...trees, ...whatsNew, ...logos, ...favicon]) {
   const result = site.asset(asset);
   write(site.routes.asset(asset), result.body);
   bytes += Buffer.byteLength(result.body, 'utf8');

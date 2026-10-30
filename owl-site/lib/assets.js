@@ -190,10 +190,8 @@ header h1, header .site-title { font-size: 1.05rem; font-weight: 500; flex: 1; m
 header .site-title a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--nav-fg); text-decoration: none; }
 header .site-title a:hover { background: var(--nav-hover); color: var(--nav-fg); }
 header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Sized here rather than trusted from the file, so any logo.svg lands at the same height. An SVG
-   drawn with currentColor inherits the header colour, including the hover. */
-.site-logo { display: inline-flex; align-items: center; flex-shrink: 0; }
-.site-logo svg { display: block; width: 1.4rem; height: 1.4rem; }
+/* Sized here rather than trusted from the file, so any logo.svg lands at the same height. */
+.site-logo { display: block; flex-shrink: 0; width: 1.4rem; height: 1.4rem; }
 /* Both variants ship in the markup when a dark one was given; only one is ever laid out, so the
    hidden one costs no gap in the flex row. */
 :root[data-theme="dark"] .site-logo-light, :root[data-theme="light"] .site-logo-dark { display: none; }

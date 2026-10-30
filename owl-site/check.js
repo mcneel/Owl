@@ -71,6 +71,10 @@ const treeAssets = new Map();
 // url -> the Markdown copy served there, and llms.txt, whose links are checked like a page's.
 const markdownPages = new Map();
 
+// The header and tab icons the site has, which pages link to like any other asset.
+const iconUrls = new Set();
+const ICON_FILES = /^(logo|logo-dark)\.svg$|^favicon\.(svg|png|ico)$/;
+
 function fail(message) {
   failures.push(message);
 }
@@ -105,6 +109,8 @@ function collectPages() {
         else if (/^tree-.+\.json$/.test(entry.name)) {
           const rel = path.relative(distDir, full).split(path.sep).join('/');
           readTreeAsset('/' + rel, fs.readFileSync(full, 'utf8'));
+        } else if (ICON_FILES.test(entry.name)) {
+          iconUrls.add('/' + path.relative(distDir, full).split(path.sep).join('/'));
         }
       }
     };
@@ -120,6 +126,11 @@ function collectPages() {
     const result = site.asset(`tree-${key}.json`);
     if (result.status !== 200) fail(`${url} returned ${result.status}`);
     else readTreeAsset(url, result.body);
+  }
+
+  const icons = ['logo.svg', 'logo-dark.svg', site.renderer.favicon && site.renderer.favicon.name];
+  for (const name of icons.filter(Boolean)) {
+    if (site.asset(name).status === 200) iconUrls.add(site.routes.asset(name));
   }
 
   // The namespace-mode stubs too: links written against the old url shape still point at them,
@@ -170,6 +181,7 @@ for (const extra of ['/assets/app.css', '/assets/app.js', '/assets/search.json',
 }
 
 for (const url of treeAssets.keys()) knownUrls.add(url);
+for (const url of iconUrls) knownUrls.add(url);
 for (const url of markdownPages.keys()) {
   knownUrls.add(url);
 }

@@ -94,6 +94,7 @@ static void PrintUsage()
       --site-url <url>      Origin for canonical urls and the sitemap
       --logo <file>         Header icon, overriding <docs>/logo.svg
       --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
+      --favicon <file>      Browser tab icon (.svg, .png or .ico); without one, the logo
       --source-refs <path>  Root for "declared in" references; without it there are none
       --api-versions <list> Versions the header's picker offers, newest first, comma separated;
                             without it there is no picker and <since> filters nothing

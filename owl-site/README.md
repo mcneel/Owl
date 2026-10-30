@@ -22,6 +22,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--name <text>` | serve, build | Site name, overriding the one in the model. |
 | `--logo <file>` | serve, build | Header icon, overriding `<docs>/logo.svg`. |
 | `--logo-dark <file>` | serve, build | Header icon for the dark theme, overriding `<docs>/logo-dark.svg`. |
+| `--favicon <file>` | serve, build | Browser tab icon, as `.svg`, `.png` or `.ico`. Without it the tab shows the logo. |
 | `--port <n>` | serve | Port to listen on, default 8080. |
 | `--out <dir>` | build | Where to write the site. Required. |
 | `--base <path>` | serve, build | Path prefix the site is served under. |
@@ -46,7 +47,7 @@ mistake, and stops the run rather than quietly producing a site with no diagrams
 editing a `MAIN.md`, regenerating the model or adjusting a renderer shows up on the next request.
 The `lib/` watch drops those modules from the require cache before rebuilding, which is what makes a
 change to the stylesheet — a string inside `lib/assets.js` — appear without restarting the process.
-A file named by `--logo` or `--logo-dark` is watched too, since it sits outside those directories.
+A file named by `--logo`, `--logo-dark` or `--favicon` is watched too, since it sits outside those directories.
 
 `--skip-undocumented` renders only what somebody has written a `<summary>` for, which is worth
 having while coverage is still low: the alternative is a site whose pages are mostly signatures with
@@ -97,15 +98,17 @@ picker at all and every API is shown, which is what a library that has never tag
 Wherever a `<since>` is set it also shows as a `Since v8.0` chip at the right of that type's or
 member's card — on a site with no picker too, since when an API arrived is worth reading either way.
 
-A `logo.svg` at the root of the docs directory is inlined into the header, before the site name.
-Draw it with `currentColor` and it follows the theme, and the link hover, on its own; give it its own
-colours and it keeps them. It is sized by the stylesheet, so the file's own `width` and `height` do
-not have to be anything in particular.
+A `logo.svg` at the root of the docs directory is copied into the site and shown in the header,
+before the site name. It is sized by the stylesheet, so the file's own `width` and `height` do not
+have to be anything in particular.
 
-A `logo-dark.svg` beside it is optional, and only worth adding for a mark that cannot be made to
-read on both backgrounds. Without one, `logo.svg` is used under both themes. With one, both are
-inlined and the stylesheet shows whichever matches, so the right mark is painted on the first frame
-rather than swapped in afterwards.
+A `logo-dark.svg` beside it is optional, for a mark that does not read on the dark background.
+Without one, `logo.svg` is used under both themes. With one, the stylesheet shows whichever matches,
+so the right mark is painted on the first frame rather than swapped in afterwards.
+
+The browser tab shows the logo too, unless `--favicon` names another file. The tab icon follows
+the browser's own light or dark setting, never the site's toggle, so with both logos it shows
+`logo.svg`. Older Safari ignores an `.svg` tab icon; give a `.png` if that matters.
 
 ## Diagrams
 

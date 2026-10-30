@@ -37,6 +37,7 @@ function parseArgs(argv) {
     links: [],
     logo: '',
     logoDark: '',
+    favicon: '',
     apiVersions: '',
     d2: '',
     skipUndocumented: false,
@@ -85,6 +86,9 @@ function parseArgs(argv) {
         break;
       case '--logo-dark':
         options.logoDark = path.resolve(argv[++i]);
+        break;
+      case '--favicon':
+        options.favicon = path.resolve(argv[++i]);
         break;
       case '--d2':
         options.d2 = argv[++i];
@@ -193,6 +197,7 @@ watch(ICON_DIR);
 // Named on the command line, so they sit outside the watched directories.
 watch(options.logo);
 watch(options.logoDark);
+watch(options.favicon);
 
 const server = http.createServer((request, response) => {
   let parsed;

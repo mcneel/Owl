@@ -109,6 +109,7 @@ sealed class Command
         case "--site-url":
         case "--logo":
         case "--logo-dark":
+        case "--favicon":
         case "--source-refs":
         case "--api-versions":
         case "--link":

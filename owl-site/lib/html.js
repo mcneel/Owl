@@ -142,33 +142,26 @@ function markMarkup(html, query, lead = '') {
 }
 
 /**
- * Prepares an authored SVG for inlining in a page, or returns '' if it is not one.
+ * Checks an authored SVG and returns it ready to serve as a file, or '' if it is not one.
  *
- * The file goes in raw rather than escaped, which is the point: an inlined logo drawn with
- * currentColor follows the theme, and one drawn with its own colours still costs no extra request.
- * What is removed is what cannot survive being pasted mid-document - the XML prolog and a doctype -
- * and what has no business in a logo: scripts and event handlers.
+ * Scripts and event handlers are removed: an <img> would not run them, but the file is also
+ * reachable at its own url on the site's origin, where it would.
  */
-function inlineSvg(source) {
+function cleanSvg(source) {
   if (!source) return '';
 
-  let svg = String(source)
-    .replace(/<\?xml[\s\S]*?\?>/gi, '')
-    .replace(/<!DOCTYPE[\s\S]*?>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
+  const svg = String(source)
     .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .trim();
 
-  const open = svg.match(/^<svg\b[^>]*>/i);
-  if (!open) return '';
-
-  // Decorative: the site name sits beside it as real text.
-  if (!/\saria-hidden\s*=/i.test(open[0])) {
-    svg = svg.replace(/^<svg\b/i, '<svg aria-hidden="true" focusable="false"');
-  }
-
-  return svg;
+  // The prolog, a doctype and comments may come before the root, and nothing else may.
+  const body = svg
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .replace(/<!DOCTYPE[\s\S]*?>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
+  return /^<svg\b/i.test(body) ? svg : '';
 }
 
 /**
@@ -184,4 +177,4 @@ function truncate(text, limit = 155) {
   return (lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.]$/, '') + '…';
 }
 
-module.exports = { escape, attr, json, classes, truncate, inlineSvg, markMatch, markMarkup };
+module.exports = { escape, attr, json, classes, truncate, cleanSvg, markMatch, markMarkup };

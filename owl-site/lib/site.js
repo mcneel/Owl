@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 
 const { Model } = require('./model');
 const { Routes, slugify, MEMBER_PARAM, MARKDOWN_KINDS } = require('./routes');
@@ -11,7 +12,14 @@ const { Sandcastle, stub } = require('./sandcastle');
 const { Docify, withQuery } = require('./docify');
 const { Links } = require('./links');
 const { CSS, JS } = require('./assets');
-const { inlineSvg } = require('./html');
+const { cleanSvg } = require('./html');
+
+/** What a favicon may be, by extension; anything else is not one every browser shows. */
+const FAVICON_TYPES = {
+  '.svg': 'image/svg+xml; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
 
 /**
  * Wires the model, routes and renderer together, and resolves a request path to a response.
@@ -31,6 +39,7 @@ const { inlineSvg } = require('./html');
  *             only references; without them those types stay text. See lib/links.js
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
+ *   favicon   svg, png or ico file for the browser tab; without it the logo serves
  *   apiVersions  comma-separated versions the header's picker offers, newest first; without them
  *             there is no picker and every API is shown whatever its <since> says
  *   skipUndocumented  leave out anything with no <summary>
@@ -60,6 +69,7 @@ class Site {
     this.links = new Links(options.links || []);
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
+    this.faviconPath = options.favicon || '';
     this.skipUndocumented = Boolean(options.skipUndocumented);
 
     // Split here for the same reason --link is: the list is a mistake in the command line or it is
@@ -139,6 +149,7 @@ class Site {
       links: this.links,
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
+      favicon: this.readFavicon(this.faviconPath),
       versions: this.versions,
       diagrams,
       // Where a page says something went wrong while it was being made: an equation that would not
@@ -158,7 +169,7 @@ class Site {
 
     let svg;
     try {
-      svg = inlineSvg(fs.readFileSync(file, 'utf8'));
+      svg = cleanSvg(fs.readFileSync(file, 'utf8'));
     } catch (err) {
       this.model.warnings.push(`could not read ${file}: ${err.message}`);
       return '';
@@ -166,6 +177,39 @@ class Site {
 
     if (!svg) this.model.warnings.push(`ignoring ${file}: not an <svg> document`);
     return svg;
+  }
+
+  /**
+   * Reads the file named by --favicon as { name, type, body }, or null. Re-read on every reload, as
+   * the logo is.
+   */
+  readFavicon(file) {
+    if (!file) return null;
+
+    const ext = path.extname(file).toLowerCase();
+    const type = FAVICON_TYPES[ext];
+    if (!type) {
+      this.model.warnings.push(`ignoring ${file}: a favicon must be .svg, .png or .ico`);
+      return null;
+    }
+
+    let body;
+    try {
+      body = fs.readFileSync(file);
+    } catch (err) {
+      this.model.warnings.push(`could not read ${file}: ${err.message}`);
+      return null;
+    }
+
+    if (ext === '.svg') {
+      body = cleanSvg(body.toString('utf8'));
+      if (!body) {
+        this.model.warnings.push(`ignoring ${file}: not an <svg> document`);
+        return null;
+      }
+    }
+
+    return { name: `favicon${ext}`, type, body };
   }
 
   /** Slug lookups need the original names, which slugs are lossy about. */
@@ -340,11 +384,21 @@ class Site {
   }
 
   asset(name) {
+    const icon = this.renderer.favicon;
+    if (icon && name === icon.name) return { status: 200, type: icon.type, body: icon.body };
+
     switch (name) {
       case 'app.css':
         return { status: 200, type: 'text/css; charset=utf-8', body: CSS };
       case 'app.js':
         return { status: 200, type: 'text/javascript; charset=utf-8', body: JS };
+      case 'logo.svg':
+      case 'logo-dark.svg': {
+        const svg = name === 'logo.svg' ? this.renderer.logo : this.renderer.logoDark;
+        return svg
+          ? { status: 200, type: 'image/svg+xml; charset=utf-8', body: svg }
+          : { status: 404, type: 'text/plain; charset=utf-8', body: 'Not found' };
+      }
       case 'search.json':
         return {
           status: 200,
