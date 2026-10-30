@@ -181,6 +181,7 @@ Lists undocumented API, and fails on broken `<see cref="..."/>` links and broken
 | build | `--out <dir>` | Where to write the site |
 | serve, build | `--docs <dir>` | Folder of your own pages |
 | serve, build | `--logo <file>` | Header icon |
+| serve, build | `--favicon <file>` | Browser tab icon |
 | serve, build | `--skip-undocumented` | Hide anything without a summary |
 
 Run `owl --help` to see all options.

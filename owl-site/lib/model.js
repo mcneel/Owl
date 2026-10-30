@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { inlineSvg } = require('./html');
+const { cleanSvg } = require('./html');
 
 /**
  * Loads the generated model and the authored markdown, and builds the lookups the renderers need.
@@ -21,9 +21,7 @@ const MAIN_DOC = 'main.md';
 /**
  * Filenames, case-insensitive, of the icon shown beside the site name in the header.
  *
- * The dark variant is optional and only needed by a mark that cannot be made to work on both
- * backgrounds; one drawn with currentColor, or with colours that read either way, needs only
- * logo.svg and is used under both themes.
+ * The dark variant is optional; without it logo.svg is used under both themes.
  */
 const LOGO_FILE = 'logo.svg';
 const LOGO_DARK_FILE = 'logo-dark.svg';
@@ -83,7 +81,7 @@ function loadAuthoredDocs(apiDir, warnings) {
         const source = read(full);
 
         if (source !== null) {
-          const svg = inlineSvg(source);
+          const svg = cleanSvg(source);
           if (!svg) warnings.push(`ignoring ${full}: not an <svg> document`);
           else if (lower === LOGO_FILE) siteLogo = svg;
           else siteLogoDark = svg;
@@ -235,10 +233,10 @@ class Model {
     /** MAIN.md, or null. Drives the site landing page. */
     this.siteMain = authored.siteMain;
 
-    /** logo.svg, ready to inline, or ''. Shown beside the site name in the header. */
+    /** logo.svg's source, or ''. Shown beside the site name in the header. */
     this.siteLogo = authored.siteLogo;
 
-    /** logo-dark.svg, ready to inline, or ''. Optional; without it siteLogo serves both themes. */
+    /** logo-dark.svg's source, or ''. Optional; without it siteLogo serves both themes. */
     this.siteLogoDark = authored.siteLogoDark;
 
     /** Assembly name (lowercased) -> <Assembly>/MAIN.md. */

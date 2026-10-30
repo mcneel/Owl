@@ -610,6 +610,8 @@ class Renderer {
     // The dark variant is optional; the layout falls back to the one logo for both themes.
     this.logo = options.logo || model.siteLogo || '';
     this.logoDark = options.logoDark || model.siteLogoDark || '';
+    // { name, type, body } from --favicon, or null; without one the tab shows the logo.
+    this.favicon = options.favicon || null;
 
     // The versions the header offers, from --api-versions. Empty unless it named some, which is
     // what leaves a site that has never said what version it is without a picker to answer with.
@@ -690,12 +692,22 @@ class Renderer {
     return this.namespaceMode || Boolean(this.routes.mode);
   }
 
+  /** The tab icon as { href, type }, or null: --favicon, else the logo, else nothing. */
+  faviconLink() {
+    if (this.favicon) {
+      return { href: this.routes.asset(this.favicon.name), type: this.favicon.type.split(';')[0] };
+    }
+    const logo = this.logo ? 'logo.svg' : this.logoDark ? 'logo-dark.svg' : '';
+    return logo ? { href: this.routes.asset(logo), type: 'image/svg+xml' } : null;
+  }
+
   /** Wraps the layout so the site name, routes and origin are not repeated by every page. */
   shell(options) {
     return page({
       siteName: this.siteName,
-      logo: this.logo,
-      logoDark: this.logoDark,
+      logo: this.logo ? this.routes.asset('logo.svg') : '',
+      logoDark: this.logoDark ? this.routes.asset('logo-dark.svg') : '',
+      favicon: this.faviconLink(),
       routes: this.routes,
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),

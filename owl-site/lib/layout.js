@@ -24,8 +24,9 @@ function fullTitle(title, siteName) {
  * @param {object} options
  *   title        page title, without the site suffix
  *   siteName     site name, used as the title suffix and in the header
- *   logo         inlined SVG shown before the site name, or ''
- *   logoDark     inlined SVG for the dark theme; optional, logo covers both without it
+ *   logo         url of the SVG shown before the site name, or ''
+ *   logoDark     url of the SVG for the dark theme; optional, logo covers both without it
+ *   favicon      { href, type } of the browser tab icon, or null
  *   description  meta description, plain text
  *   canonical    root-relative url of this page
  *   breadcrumbs  [{label, url, icon?}] innermost last; icon names a sprite icon worn before the label
@@ -58,6 +59,7 @@ function page(options) {
     siteName = DEFAULT_SITE_NAME,
     logo = '',
     logoDark = '',
+    favicon = null,
     description = '',
     canonical,
     shareUrl = '',
@@ -132,6 +134,7 @@ ${ogUrl ? `<meta property="og:url" content="${attr(ogUrl)}">` : ''}
 <meta property="og:ignore_canonical" content="true">
 <meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="${attr(routes.asset('app.css'))}">
+${favicon ? `<link rel="icon" type="${attr(favicon.type)}" href="${attr(favicon.href)}">` : ''}
 <link rel="sitemap" type="application/xml" href="${attr(routes.sitemap())}">
 ${markdown ? `<link rel="alternate" type="text/markdown" href="${attr(absolute(markdown))}">` : ''}
 ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</script>` : ''}
@@ -277,21 +280,15 @@ function sidebarToggle(sidebar) {
 }
 
 /**
- * The header mark, written out raw: both arrive already run through inlineSvg, which is what makes
- * them the one thing on the page that is not escaped.
- *
- * A dark variant is optional. With one svg it is used under both themes; with two, both are in the
- * markup and CSS shows whichever matches the theme attribute. Choosing in CSS rather than in
- * JavaScript means the right mark is painted the first time, with no swap on load.
+ * The header mark. With two variants both are in the markup and CSS shows whichever matches the
+ * theme attribute, so the right one is painted the first time, with no swap on load.
  */
 function siteLogo(logo, logoDark) {
   if (!logo && !logoDark) return '';
-  if (!logo || !logoDark) return `<span class="site-logo">${logo || logoDark}</span>`;
-
-  return (
-    `<span class="site-logo site-logo-light">${logo}</span>` +
-    `<span class="site-logo site-logo-dark">${logoDark}</span>`
-  );
+  // Decorative: the site name sits beside it as real text.
+  const img = (src, extra) => `<img class="site-logo${extra}" src="${attr(src)}" alt="">`;
+  if (!logo || !logoDark) return img(logo || logoDark, '');
+  return img(logo, ' site-logo-light') + img(logoDark, ' site-logo-dark');
 }
 
 /**
