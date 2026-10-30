@@ -172,6 +172,17 @@ describe('type pages', () => {
     assert.doesNotMatch(text(type('Owned`1').replace('`', '-')), /\[Obsolete/);
   });
 
+  test('declarations scroll inside a box that can mark their hidden ends', () => {
+    // The page script reads the scroller as the box's first child; anything else between breaks the markers.
+    for (const page of [type('Members.Gadget'), type('Point'), type('Members.Handler')]) {
+      const body = html(page);
+      const boxes = body.match(/<div class="declaration">/g) || [];
+      const wrapped = body.match(/<div class="declaration"><div class="decl-scroll">/g) || [];
+      assert.ok(boxes.length > 0, `${page} has no declaration`);
+      assert.equal(wrapped.length, boxes.length, `${page} has a declaration without its scroller`);
+    }
+  });
+
   test('obsolete members are marked', () => {
     assert.match(text(type('Owned`1').replace('`', '-')), /Obsolete/);
   });

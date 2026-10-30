@@ -97,6 +97,8 @@ const CSS = `
   --kind:        var(--oc-gray-4);
   --kind-ink:    var(--oc-gray-9);
   --flash:       #2196f3;
+  --decl-dots:   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6' fill='%23a3a3a3'%3E%3Ccircle cx='3' cy='3' r='2.2'/%3E%3Ccircle cx='12' cy='3' r='2.2'/%3E%3Ccircle cx='21' cy='3' r='2.2'/%3E%3C/svg%3E");
+  --decl-dots-hover: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6' fill='%232196f3'%3E%3Ccircle cx='3' cy='3' r='2.2'/%3E%3Ccircle cx='12' cy='3' r='2.2'/%3E%3Ccircle cx='21' cy='3' r='2.2'/%3E%3C/svg%3E");
   --scrollbar:   #404040;
   --tok-keyword: #c4a7fd;
   --tok-string:  #7ee2b0;
@@ -133,6 +135,8 @@ const CSS = `
   --kind:        var(--oc-gray-7);
   --kind-ink:    var(--oc-white);
   --flash:       #0ea5e9;
+  --decl-dots:   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6' fill='%23737373'%3E%3Ccircle cx='3' cy='3' r='2.2'/%3E%3Ccircle cx='12' cy='3' r='2.2'/%3E%3Ccircle cx='21' cy='3' r='2.2'/%3E%3C/svg%3E");
+  --decl-dots-hover: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6' fill='%230ea5e9'%3E%3Ccircle cx='3' cy='3' r='2.2'/%3E%3Ccircle cx='12' cy='3' r='2.2'/%3E%3Ccircle cx='21' cy='3' r='2.2'/%3E%3C/svg%3E");
   --scrollbar:   #d4d4d4;
   --tok-keyword: #7c3aed;
   --tok-string:  #0a7c52;
@@ -965,8 +969,16 @@ a.see-ref:hover { text-decoration: underline; }
 /* A long signature still scrolls sideways, but nothing is drawn to say so: the block is one or two
    lines tall, and a bar under it is a third of its height spent on furniture. Wheel, trackpad,
    touch and a keyboard all still reach the rest of it. */
-.declaration { font-family: monospace; font-size: 0.82rem; color: var(--text2); margin-top: 1rem; margin-bottom: 0.75rem; overflow-x: auto; white-space: pre; scrollbar-width: none; -ms-overflow-style: none; }
-.declaration::-webkit-scrollbar { display: none; }
+.declaration { position: relative; font-family: monospace; font-size: 0.82rem; color: var(--text2); margin-top: 1rem; margin-bottom: 0.75rem; }
+.decl-scroll { overflow-x: auto; white-space: pre; scrollbar-width: none; -ms-overflow-style: none; }
+.decl-scroll::-webkit-scrollbar { display: none; }
+/* Instead, three dots on whichever edge has more past it. It sits over the text, so it is painted in
+   what the block sits on: --decl-bg. */
+.declaration.clip-left::before, .declaration.clip-right::after { content: ''; position: absolute; top: 0; bottom: 0; width: var(--decl-marker-width, 2rem); background: var(--decl-dots) center / var(--decl-dots-size, 1.5rem 0.33rem) no-repeat, var(--decl-bg, var(--card-bg)); cursor: pointer; }
+.declaration.clip-left:hover::before, .declaration.clip-right:hover::after { background-image: var(--decl-dots-hover); }
+.declaration.clip-left::before { left: 0; }
+.declaration.clip-right::after { right: 0; }
+.member.obsolete { --decl-bg: var(--card-inherited); }
 .member .declaration { font-size: 0.78rem; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
@@ -1807,6 +1819,8 @@ const JS = `
     var card = e.target.closest && e.target.closest('.member.inherited');
     if (!card) return;
     if (e.target.closest('a, button')) return;
+    // A '…' on its declaration, which scrolls the signature rather than leaving.
+    if (e.target.classList.contains('declaration')) return;
 
     var sel = window.getSelection && window.getSelection();
     if (sel && !sel.isCollapsed) return;
@@ -2809,6 +2823,59 @@ const JS = `
       new ResizeObserver(syncTitleFade).observe(pageTitle);
     } else {
       window.addEventListener('resize', syncTitleFade);
+    }
+  }
+
+  // ---- Declarations: a signature wider than its box ----
+  // Marks each edge that has more of the signature past it, so a hidden scroll says it is there.
+  var declarations = document.querySelectorAll('.declaration');
+
+  var syncDeclaration = function (box) {
+    var scroller = box.firstElementChild;
+    var left = scroller.scrollLeft > 1;
+    var right = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+    box.classList.toggle('clip-left', left);
+    box.classList.toggle('clip-right', right);
+  };
+
+  var syncDeclarations = function () {
+    for (var i = 0; i < declarations.length; i++) syncDeclaration(declarations[i]);
+  };
+
+  if (declarations.length) {
+    for (var d = 0; d < declarations.length; d++) {
+      (function (box) {
+        box.firstElementChild.addEventListener('scroll', function () { syncDeclaration(box); });
+      })(declarations[d]);
+    }
+
+    // A click on a '…' lands on the box itself, so which one is told apart by where it fell.
+    document.addEventListener('click', function (e) {
+      var box = e.target.classList && e.target.classList.contains('declaration') ? e.target : null;
+      if (!box) return;
+      var scroller = box.firstElementChild;
+      var rect = box.getBoundingClientRect();
+      var marker = parseFloat(getComputedStyle(box, '::after').width) || 32;
+      var step = scroller.clientWidth * 0.8;
+      if (box.classList.contains('clip-right') && e.clientX >= rect.right - marker) {
+        scroller.scrollBy({ left: step, behavior: 'smooth' });
+      } else if (box.classList.contains('clip-left') && e.clientX <= rect.left + marker) {
+        scroller.scrollBy({ left: -step, behavior: 'smooth' });
+      }
+    });
+
+    syncDeclarations();
+    // The font lands after this runs, so the signatures are not their final width yet.
+    window.addEventListener('load', syncDeclarations);
+
+    // Each box, not the window: dragging the sidebar narrows the column and fires no resize.
+    if (window.ResizeObserver) {
+      var declObserver = new ResizeObserver(function (entries) {
+        for (var j = 0; j < entries.length; j++) syncDeclaration(entries[j].target);
+      });
+      for (var k = 0; k < declarations.length; k++) declObserver.observe(declarations[k]);
+    } else {
+      window.addEventListener('resize', syncDeclarations);
     }
   }
 

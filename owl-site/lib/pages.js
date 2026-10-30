@@ -1174,7 +1174,7 @@ class Renderer {
     });
 
     lines.push(this.signatureHtml(code, assemblyName, ownName));
-    return `<div class="declaration">${lines.join('\n')}</div>`;
+    return `<div class="declaration"><div class="decl-scroll">${lines.join('\n')}</div></div>`;
   }
 
   /**
@@ -2312,7 +2312,7 @@ ${this.seeAlsoHtml(type.docs)}
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
       '<div class="section"><span class="section-label">Signature:</span>' +
-      `<div class="declaration">${this.signatureHtml(type.signature, assemblyName)}</div>` +
+      `<div class="declaration"><div class="decl-scroll">${this.signatureHtml(type.signature, assemblyName)}</div></div>` +
       this.parametersHtml(type.parameters) +
       '</div>'
     );
