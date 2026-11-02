@@ -955,7 +955,6 @@ a.see-ref:hover { text-decoration: underline; }
 /* A type from a package that is neither documented here nor part of the framework: nowhere to send
    a reader, so it is greyed to the back of the three - a name being reported, not offered. */
 .see-ref-none { color: var(--text4); }
-.see-ref-external::after { content: "\\2197"; font-size: 0.85em; opacity: 0.6; }
 .param-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0 0.3rem; box-shadow: 0 -0.1rem var(--bg3), 0 0.1rem var(--bg3); border-radius: 3px; color: #0ea5e9; font-style: italic; }
 .langword-ref { font-family: monospace; font-size: 0.82rem; background: var(--bg3); padding: 0 0.3rem; box-shadow: 0 -0.1rem var(--bg3), 0 0.1rem var(--bg3); border-radius: 3px; color: var(--tok-keyword); }
 .hidden { display: none !important; }
