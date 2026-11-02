@@ -82,5 +82,11 @@ public class Tagged
   /// <summary>Call `Find("a")` first, but a lone ` stays.</summary>
   public void Ticked() { }
 
+  /// <summary>
+  /// Written out: https://example.com/units, (https://example.com/wiki/Yard_(unit)) and
+  /// http://example.com/pub/. Not ftp://example.com/pub/ nor ON::Length.
+  /// </summary>
+  public void Addressed() { }
+
   public void Undocumented() { }
 }

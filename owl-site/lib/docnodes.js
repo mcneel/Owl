@@ -105,8 +105,7 @@ function splitConstructedName(display) {
  *
  * A reference that leaves the site is marked by colour rather than by an arrow: these are dense -
  * every 'string' and 'int' in a parameter table is one - and at that size the arrow read as
- * noise. Muted, because a framework type is rarely what the reader came for. The arrow stays on
- * prose links, which are rare and where it earns its place.
+ * noise. Muted, because a framework type is rarely what the reader came for.
  *
  * The dead mark could not stay a bare span: it kept the link colour, which promised a page to
  * anyone reading an Implements row.
@@ -171,7 +170,7 @@ function render(nodes, context) {
 function renderNode(node, context) {
   switch (node.t) {
     case 'text':
-      return escape(node.v || '');
+      return linkify(node.v || '');
 
     case 'cref':
       return renderCref(node, context);
@@ -224,8 +223,7 @@ function renderNode(node, context) {
     case 'link': {
       const href = node.href || '';
       const label = node.v || href;
-      if (!/^https?:/i.test(href)) return escape(label);
-      return `<a class="see-ref see-ref-external" href="${attr(href)}" rel="noopener" target="_blank">${escape(label)}</a>`;
+      return /^https?:/i.test(href) ? webLink(href, escape(label)) : escape(label);
     }
 
     case 'list':
@@ -246,6 +244,51 @@ function shortMemberLabel(label) {
   const head = paren < 0 ? label : label.slice(0, paren);
   const dot = head.lastIndexOf('.');
   return dot < 0 ? label : head.slice(dot + 1) + (paren < 0 ? '' : label.slice(paren));
+}
+
+/** A web address in prose. Web only: other schemes are too many to vet, and some run code. */
+const ADDRESS = /\bhttps?:\/\/[^\s<>"]+/gi;
+
+function webLink(href, html) {
+  return `<a class="see-ref see-ref-external" href="${attr(href)}" rel="noopener" target="_blank">${html}</a>`;
+}
+
+/**
+ * The address without the punctuation the sentence put after it: a closing full stop or comma, or
+ * a bracket the address never opened, so a Wikipedia '..._(unit)' keeps its own.
+ */
+function trimAddress(address) {
+  let end = address.length;
+  for (;;) {
+    const c = address[end - 1];
+    if (/[.,;:!?'"*]/.test(c)) {
+      end--;
+      continue;
+    }
+    const open = { ')': '(', ']': '[', '}': '{' }[c];
+    if (open) {
+      const head = address.slice(0, end);
+      if (head.split(open).length < head.split(c).length) {
+        end--;
+        continue;
+      }
+    }
+    return address.slice(0, end);
+  }
+}
+
+/** Escaped prose with each web address written in it made a link. */
+function linkify(text) {
+  let out = '';
+  let last = 0;
+  for (const match of text.matchAll(ADDRESS)) {
+    const address = trimAddress(match[0]);
+    // A bare 'http://' is a word about addresses, not one.
+    if (/^https?:\/\/$/i.test(address)) continue;
+    out += escape(text.slice(last, match.index)) + webLink(address, escape(address));
+    last = match.index + address.length;
+  }
+  return out + escape(text.slice(last));
 }
 
 function renderCref(node, context) {

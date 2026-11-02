@@ -218,6 +218,15 @@ describe('doc comments', () => {
     assert.match(page, /langword-ref">null</);
   });
 
+  test('addresses written in prose become links, without the sentence around them', () => {
+    const page = tagged();
+    for (const href of ['https://example.com/units', 'https://example.com/wiki/Yard_(unit)', 'http://example.com/pub/']) {
+      assert.match(page, new RegExp(`href="${href.replace(/[.()/]/g, '\\$&')}"[^>]*>${href.replace(/[.()/]/g, '\\$&')}</a>`));
+    }
+    assert.doesNotMatch(page, /href="ftp:/);
+    assert.match(text(type('Docs.Tagged')), /Yard_\(unit\)\) and/);
+  });
+
   test('paragraphs, lists, tables and notes', () => {
     const page = tagged();
     assert.match(page, /<ul/);
