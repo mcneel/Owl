@@ -248,6 +248,12 @@ describe('doc comments', () => {
     assert.match(tagged(), /href="https:\/\/example\.com\/sizes"[^>]*>Sizes</);
   });
 
+  test('a type\'s seealso shows in its head, above the kinds row', () => {
+    const page = tagged();
+    const head = page.slice(page.indexOf('class="page-head'), page.indexOf('class="filter-bar'));
+    assert.match(head, /See Also:<\/span> <a[^>]*href="\/type\/samples\.memorystore\/"/);
+  });
+
   test('inheritdoc shows the base member\'s docs', () => {
     assert.match(text(type('Shapes.Circle')), /The shape's area\./);
   });
