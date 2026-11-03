@@ -1881,6 +1881,8 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
       type.docs && type.docs.example
         ? `<div class="section"><span class="section-label">Example:</span>${docnodes.render(type.docs.example, this.docContext)}</div>`
         : '',
+      // Last, so it sits just above the kinds row: under the member list it was lost on long types.
+      this.seeAlsoHtml(type.docs),
     ]
       .filter(Boolean)
       .join('');
@@ -1940,7 +1942,6 @@ ${
     ? this.enumValuesHtml(members)
     : this.membersHtml(members, assembly, type.slug, inherited, type.kind)
 }
-${this.seeAlsoHtml(type.docs)}
 </article>
 `;
 
@@ -2333,7 +2334,7 @@ ${this.seeAlsoHtml(type.docs)}
   seeAlsoHtml(docs) {
     const links = this.seeAlsoLinks(docs);
     if (!links) return '';
-    return `<section class="ns-section"><h2 class="ns-heading">See Also</h2><div class="section">${links}</div></section>`;
+    return `<div class="section"><span class="section-label">See Also:</span> ${links}</div>`;
   }
 
   /** A doc's &lt;seealso&gt; targets as links, or '' when it has none. */
@@ -2688,9 +2689,9 @@ ${this.seeAlsoHtml(type.docs)}
       }
     }
 
-    const seeAlso = this.seeAlsoLinks(member.docs);
+    const seeAlso = this.seeAlsoHtml(member.docs);
     if (seeAlso) {
-      detail.push(`<div class="section"><span class="section-label">See Also:</span> ${seeAlso}</div>`);
+      detail.push(seeAlso);
     }
 
     const summary = this.summaryHtml(member.docs);
