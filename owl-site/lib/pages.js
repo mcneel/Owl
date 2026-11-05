@@ -612,6 +612,9 @@ class Renderer {
     this.logoDark = options.logoDark || model.siteLogoDark || '';
     // { name, type, body } from --favicon, or null; without one the tab shows the logo.
     this.favicon = options.favicon || null;
+    // Html of the site these docs live inside, written as given: it is the site owner's own markup.
+    this.siteHeader = options.siteHeader || '';
+    this.siteFooter = options.siteFooter || '';
 
     // The versions the header offers, from --api-versions. Empty unless it named some, which is
     // what leaves a site that has never said what version it is without a picker to answer with.
@@ -708,6 +711,8 @@ class Renderer {
       logo: this.logo ? this.routes.asset('logo.svg') : '',
       logoDark: this.logoDark ? this.routes.asset('logo-dark.svg') : '',
       favicon: this.faviconLink(),
+      siteHeader: this.siteHeader,
+      siteFooter: this.siteFooter,
       routes: this.routes,
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),

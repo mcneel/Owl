@@ -185,11 +185,11 @@ body.home { background: var(--bg-home); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--flash); outline-offset: 2px; }
 
 /* ---- Header ---- */
-header { background: var(--nav-bg); color: var(--nav-fg); padding: 0.6rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; z-index: 20; }
-header h1, header .site-title { font-size: 1.05rem; font-weight: 500; flex: 1; min-width: 0; }
-header .site-title a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--nav-fg); text-decoration: none; }
-header .site-title a:hover { background: var(--nav-hover); color: var(--nav-fg); }
-header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body > header { background: var(--nav-bg); color: var(--nav-fg); padding: 0.6rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; z-index: 20; }
+body > header h1, body > header .site-title { font-size: 1.05rem; font-weight: 500; flex: 1; min-width: 0; }
+body > header .site-title a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--nav-fg); text-decoration: none; }
+body > header .site-title a:hover { background: var(--nav-hover); color: var(--nav-fg); }
+body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Sized here rather than trusted from the file, so any logo.svg lands at the same height. */
 .site-logo { display: block; flex-shrink: 0; width: 1.4rem; height: 1.4rem; }
 /* Both variants ship in the markup when a dark one was given; only one is ever laid out, so the
@@ -358,6 +358,10 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 
 /* ---- Layout ---- */
 .layout { display: flex; flex: 1; overflow: hidden; }
+/* Markup of the site the docs live inside, from --site-header and --site-footer. The header keeps
+   its height in the page's column; the footer runs to the content's edges, under its padding. */
+.site-chrome-header { flex-shrink: 0; }
+.site-chrome-footer { margin: 2rem calc(-1 * var(--gutter)) -1.5rem; }
 
 /* ---- Sidebar ---- */
 /* Scrolls, but never draws a bar: the tree is a narrow column and a gutter inside it costs more
@@ -370,7 +374,8 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 :root[data-sidebar="hidden"] .sidebar,
 :root[data-sidebar="hidden"] .resize-handle { display: none; }
 /* ?plain=true: the page alone, for a host that embeds it and brings its own navigation. */
-:root[data-plain] header,
+:root[data-plain] body > header,
+:root[data-plain] .site-chrome,
 :root[data-plain] .skip-link,
 :root[data-plain] .sidebar,
 :root[data-plain] .resize-handle,
@@ -1146,7 +1151,7 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
 
   /* Search folds to its magnifier and opens across the header when tapped, giving the title back
      its room. It stays open while its results are up, so a tap on one does not move it away. */
-  header { position: relative; }
+  body > header { position: relative; }
   #search { width: 30px; padding: 0; color: transparent; }
   #search::placeholder { color: transparent; }
   .nav-search-icon, header form[role="search"].index-loading::after { right: calc((30px - 1.05rem) / 2); }

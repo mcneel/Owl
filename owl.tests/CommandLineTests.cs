@@ -137,6 +137,27 @@ public sealed class CommandLineTests(SampleModel model)
     Assert.Contains("Sitemap: https://example.com/api/samples/sitemap.xml", File.ReadAllText(Path.Combine(dir, "robots.txt")));
   }
 
+  [Fact]
+  public void BuildPassesSiteHeaderAndFooterToTheSite()
+  {
+    string dir = TempDir();
+    string chrome = TempDir();
+    Directory.CreateDirectory(chrome);
+    string header = Path.Combine(chrome, "header.html");
+    string footer = Path.Combine(chrome, "footer.html");
+    File.WriteAllText(header, "<nav class=\"parent-nav\">Parent</nav>");
+    File.WriteAllText(footer, "<footer class=\"parent-footer\">Footer</footer>");
+
+    var (code, output) = Run(
+      "build", "--json", model.Directory, "--out", dir, "--quiet",
+      "--site-header", header, "--site-footer", footer);
+    Assert.True(code == 0, output);
+
+    string home = File.ReadAllText(Path.Combine(dir, "index.html"));
+    Assert.Contains("<nav class=\"parent-nav\">Parent</nav>", home);
+    Assert.Contains("<footer class=\"parent-footer\">Footer</footer>", home);
+  }
+
   [Theory]
   [InlineData("T_Samples_MemoryStore", "/api/samples/type/samples.memorystore/")]
   [InlineData("N_Samples_Shapes", "/api/samples/namespace/samples.shapes/")]

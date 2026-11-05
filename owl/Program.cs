@@ -95,6 +95,9 @@ static void PrintUsage()
       --logo <file>         Header icon, overriding <docs>/logo.svg
       --logo-dark <file>    Header icon for the dark theme; without one, --logo covers both
       --favicon <file>      Browser tab icon (.svg, .png or .ico); without one, the logo
+      --site-header <file>  HTML placed above the header on every page, e.g. a parent site's bar;
+                            <!-- owl:search --> and the like in it replace owl's own bar
+      --site-footer <file>  HTML placed at the end of every page's content
       --source-refs <path>  Root for "declared in" references; without it there are none
       --api-versions <list> Versions the header's picker offers, newest first, comma separated;
                             without it there is no picker and <since> filters nothing
