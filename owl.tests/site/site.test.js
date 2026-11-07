@@ -538,6 +538,14 @@ describe('options', () => {
     assert.doesNotMatch(page, /role="search"/);
   });
 
+  test('an owl:pickers mark places the pickers apart from the search box, which can then be left out', () => {
+    const header = tempFile('pickers.html', '<header class="parent"><a href="/">Parent</a><!-- owl:pickers --></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header });
+    const page = html(site.routes.home());
+    assert.match(page, /<header class="parent"><a href="\/">Parent<\/a>[\s\S]*?id="asm-filter"[\s\S]*?<\/header>/);
+    assert.doesNotMatch(page, /role="search"/);
+  });
+
   test('a --site-header that cannot be read is reported and left out', () => {
     const missing = path.join(os.tmpdir(), 'owl-no-such-dir', 'header.html');
     const { html, site } = make({ apiDir: docs, siteHeader: missing });

@@ -28,8 +28,8 @@ function fullTitle(title, siteName) {
  *   logoDark     url of the SVG for the dark theme; optional, logo covers both without it
  *   favicon      { href, type } of the browser tab icon, or null
  *   siteHeader   html placed above the header, for a site the docs live inside, or ''. Marking spots
- *                with <!-- owl:sidebar-toggle -->, <!-- owl:search --> or <!-- owl:theme --> puts those
- *                controls there instead, and owl's own bar is left out
+ *                with <!-- owl:sidebar-toggle -->, <!-- owl:search -->, <!-- owl:pickers --> or
+ *                <!-- owl:theme --> puts those controls there instead, and owl's own bar is left out
  *   siteFooter   html placed at the end of the content, or ''
  *   description  meta description, plain text
  *   canonical    root-relative url of this page
@@ -119,6 +119,13 @@ function page(options) {
   const structuredData =
     graph.length > 0 ? { '@context': 'https://schema.org', '@graph': graph } : null;
 
+  // Ride with the search box unless the site header gives them a place of their own.
+  const pickers = `  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
+  ${versionSelector(versions)}
+  ${whatsNewLink(versions, routes)}
+`;
+  const ownPickers = /<!--\s*owl:pickers\s*-->/.test(siteHeader);
+
   // Written once and placed either in owl's own bar or where the site header marks them.
   const controls = {
     sidebarToggle: sidebarToggle(sidebar),
@@ -161,10 +168,8 @@ function page(options) {
     <!-- Filled as you type, on every page but the search page, which shows the full list itself. -->
     <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
   </form>
-  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
-  ${versionSelector(versions)}
-  ${whatsNewLink(versions, routes)}
-`,
+${ownPickers ? '' : pickers}`,
+    pickers,
     theme: themeSwitch(),
   };
   const integrated = CONTROL_MARK.test(siteHeader);
@@ -290,11 +295,11 @@ ${
 }
 
 /** Marks a site header places owl's controls with, e.g. <!-- owl:search -->. */
-const CONTROL_MARK = /<!--\s*owl:(sidebar-toggle|search|theme)\s*-->/;
+const CONTROL_MARK = /<!--\s*owl:(sidebar-toggle|search|pickers|theme)\s*-->/;
 
 /** The site header with each mark replaced by its control; any control left unmarked is left out. */
 function fillControls(html, controls) {
-  const names = { 'sidebar-toggle': 'sidebarToggle', search: 'search', theme: 'theme' };
+  const names = { 'sidebar-toggle': 'sidebarToggle', search: 'search', pickers: 'pickers', theme: 'theme' };
   return html.replace(new RegExp(CONTROL_MARK.source, 'g'), (_, name) => controls[names[name]]);
 }
 

@@ -71,8 +71,9 @@ light and dark switch simply leaves `owl:theme` unmarked.
 ```
 
 `owl:search` is the search box with the assembly and version pickers beside it, where the site has
-them. The theme is still `data-theme` on the root, so a site switch that sets it, and
-`data-theme-pref`, keeps owl's pages, diagrams included, in step.
+them. Mark `owl:pickers` to place the pickers on their own, which also lets a site with its own
+search leave `owl:search` unmarked and keep them. The theme is still `data-theme` on the root, so a
+site switch that sets it, and `data-theme-pref`, keeps owl's pages, diagrams included, in step.
 
 `--skip-undocumented` renders only what somebody has written a `<summary>` for, which is worth
 having while coverage is still low: the alternative is a site whose pages are mostly signatures with
