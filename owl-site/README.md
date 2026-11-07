@@ -31,6 +31,8 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--api-versions <list>` | serve, build | Versions the header's picker offers, newest first. Without it there is no picker. |
 | `--link <asm>=<url>` | serve, build, check | Site documenting a referenced assembly. Repeatable; `<asm>` may end in `*` to cover a family. `check` takes it so those links are counted as leaving rather than as broken. |
 | `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
+| `--site-header <file>` | serve, build | HTML placed above the header on every page. |
+| `--site-footer <file>` | serve, build | HTML placed at the end of every page's content. |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
 | `--quiet` | build | Only print the summary, not per-page progress. |
 | `--dist <dir>` | check | Check an already-exported directory instead of rendering. |
@@ -48,6 +50,30 @@ editing a `MAIN.md`, regenerating the model or adjusting a renderer shows up on 
 The `lib/` watch drops those modules from the require cache before rebuilding, which is what makes a
 change to the stylesheet — a string inside `lib/assets.js` — appear without restarting the process.
 A file named by `--logo`, `--logo-dark` or `--favicon` is watched too, since it sits outside those directories.
+
+`--site-header` and `--site-footer` are for docs published inside a larger site, so a reader can
+get back to it: its own nav bar above owl's, and its footer under each page. Both are written as
+given and bring their own styles; owl's stylesheet resets margins and padding on every element, so
+those styles should set what they rely on. A plain page (`?plain`) leaves them out.
+
+A site header can also take the place of owl's own bar. Mark where its controls go and owl puts
+them there and draws no bar of its own; a control with no mark is left out, so a site with its own
+light and dark switch simply leaves `owl:theme` unmarked.
+
+```html
+<header class="site-header">
+  <!-- owl:sidebar-toggle -->
+  <a href="/">My Site</a>
+  <nav>...</nav>
+  <!-- owl:search -->
+  <!-- owl:theme -->
+</header>
+```
+
+`owl:search` is the search box with the assembly and version pickers beside it, where the site has
+them. Mark `owl:pickers` to place the pickers on their own, which also lets a site with its own
+search leave `owl:search` unmarked and keep them. The theme is still `data-theme` on the root, so a
+site switch that sets it, and `data-theme-pref`, keeps owl's pages, diagrams included, in step.
 
 `--skip-undocumented` renders only what somebody has written a `<summary>` for, which is worth
 having while coverage is still low: the alternative is a site whose pages are mostly signatures with
