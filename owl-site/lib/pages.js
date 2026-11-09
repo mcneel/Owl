@@ -3705,8 +3705,8 @@ ${
 
   /**
    * The page listing what a version added and made obsolete, filled in the browser from
-   * whatsnew.json. One shell answers every spec - see Routes.whatsNew - because the comparison is
-   * worked out from the url, which lets a server answer pairs the export never wrote.
+   * whatsnew.json. One shell answers every version and every ?compare pair - see Routes.whatsNew -
+   * because the comparison is worked out from the url, which lets a server answer versions the export never wrote.
    */
   whatsNew(spec = '') {
     const root = this.routes.whatsNew();
@@ -3753,7 +3753,7 @@ ${
     if (this.versions.length < 2) return '';
     return (
       `<p class="whatsnew-note">Tip: Compare any two versions with a URL like <code>${escape(this.routes.whatsNew())}` +
-      'X.x...X.x/</code>: it lists what came after the first, up to and including the second.</p>'
+      '?compare=X.x...X.x</code>: it lists what came after the first, up to and including the second.</p>'
     );
   }
 

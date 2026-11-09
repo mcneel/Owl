@@ -186,11 +186,16 @@ class Routes {
   }
 
   /**
-   * What changed in a version: '9' is 9 up to the next version listed, and '6.0...9.0' exactly what
-   * came after 6.0 up to and including 9.0, older first. Without a spec, the newest listed version.
+   * What changed in a version: '9' is 9 up to the next version listed. Without one, the newest
+   * listed version.
    */
-  whatsNew(spec = '') {
-    return `${this.base}/whatsnew/${spec ? `${encodeURIComponent(spec)}/` : ''}`;
+  whatsNew(version = '') {
+    return `${this.base}/whatsnew/${version ? `${encodeURIComponent(version)}/` : ''}`;
+  }
+
+  /** Exactly what came after the older version up to and including the newer: whatsNewCompare('6.0...9.0'). */
+  whatsNewCompare(pair) {
+    return `${this.whatsNew()}?compare=${encodeURIComponent(pair)}`;
   }
 
   /**

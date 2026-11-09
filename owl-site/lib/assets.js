@@ -1314,6 +1314,7 @@ const JS = `
   // what 8.1 and 8.5 added. Untagged means it predates every version on the list, which is why the
   // absence of the attribute shows it.
   var VERSION_PARAM = 'version';
+  var COMPARE_PARAM = 'compare';
   var versionSelect = document.getElementById('version-filter');
   // A site offering one version writes it as a label rather than a menu. There is nothing to
   // choose, but the page is still filtered to it, so the version is read off the label instead.
@@ -1369,9 +1370,9 @@ const JS = `
   }
 
   // ---- What's New ----
-  // The url names the comparison: '9' is the run the version filter gives 9, '6...9' exactly what
-  // came after 6 up to and including 9, nothing the newest. Read here rather than written into the page,
-  // so that a server can answer any pair with the one shell. See whatsNew in lib/pages.js.
+  // The path names a version: '9' is the run the version filter gives 9, nothing the newest.
+  // ?compare=6...9 is exactly what came after 6 up to and including 9. Read here rather than written
+  // into the page, so that one file answers every pair, even on a plain file host. See whatsNew in lib/pages.js.
   var whatsNew = document.getElementById('whatsnew');
   var whatsNewLink = document.getElementById('whatsnew-link');
 
@@ -1387,6 +1388,10 @@ const JS = `
       ? location.pathname.slice(root.length).replace(/[/]+$/, '')
       : '';
     try { spec = decodeURIComponent(spec); } catch (e) {}
+    // Only ?compare names a pair; the servers send a pair in the path there.
+    if (spec.indexOf('...') !== -1) spec = '';
+    var compare = urlParams().get(COMPARE_PARAM);
+    if (compare && compare.split('...').length === 2) spec = compare;
     if (!spec) spec = listedVersions[0] || '';
 
     var ends = spec.split('...');
@@ -2545,7 +2550,10 @@ const JS = `
       syncWhatsNewLink();
       // Here the version is the page, so picking another goes to its page, filtered the same way.
       if (whatsNew) {
-        location.href = whatsNewLink.href + location.search;
+        var params = urlParams();
+        params.delete(COMPARE_PARAM);
+        var query = params.toString();
+        location.href = whatsNewLink.href + (query ? '?' + query : '');
         return;
       }
       applyFilter();

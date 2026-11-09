@@ -321,6 +321,12 @@ class Site {
       case 'whatsnew': {
         // Versions are what the page compares, so a site that names none has no such page.
         if (this.versions.length === 0 || !validWhatsNew(route.spec)) return this.notFound(pathname);
+        // A pair in the path is the old form of ?compare, kept so links to it still land.
+        if (route.spec.includes('...')) {
+          const rest = new URLSearchParams(query || '');
+          rest.delete('compare');
+          return this.redirect(withQuery(this.routes.whatsNewCompare(route.spec), rest));
+        }
         return this.html(this.renderer.whatsNew(route.spec));
       }
 
