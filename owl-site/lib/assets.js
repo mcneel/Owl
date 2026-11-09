@@ -293,11 +293,19 @@ form.nav-search.index-loading::after { content: ''; position: absolute; right: 0
 /* No breadcrumbs above it, so the head brings its own room at the top. */
 .whatsnew-head .page-head-brief { padding-top: 1.1rem; }
 /* Shown once the list has arrived, since until then there is nothing for it to filter. */
-.whatsnew-filter { display: none; margin-top: 0.75rem; }
+.whatsnew-filter { display: none; flex: 1; min-width: 0; padding-bottom: 0; }
+/* Filter and compare share a line; on a phone the menu drops under the filter. */
+.whatsnew-tools { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+@media (max-width: 640px) {
+  .whatsnew-tools { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .whatsnew-tools .whatsnew-compare { margin-left: 0; }
+}
 /* The header search's height, across the whole head. */
 .whatsnew-filter .derived-filter { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 0.85rem; }
 .whatsnew-filter.ready { display: block; }
-.whatsnew-note { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--text3); }
+.whatsnew-compare { display: flex; align-items: center; gap: 0.45rem; margin-left: auto; white-space: nowrap; font-size: 0.85rem; color: var(--text2); }
+.whatsnew-compare[hidden] { display: none; }
+#whatsnew-compare { height: 30px; padding: 0 0.5rem; font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg3); border: none; border-radius: 4px; cursor: pointer; }
 .whatsnew-list, .whatsnew-members { list-style: none; margin: 0; padding: 0; }
 .whatsnew-type { padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
 .whatsnew-members { margin: 0.3rem 0 0 1.6rem; }
@@ -1621,7 +1629,47 @@ const JS = `
     });
   }
 
+  // Returns the menu's label to reveal once the page has something to show, or null when there is no menu.
+  // '--' is this version's own page; an older version is a ?compare pair ending at this version.
+  function setUpCompare() {
+    var menu = document.getElementById('whatsnew-compare');
+    if (!menu) return null;
+    var newer = whatsNewAt.newer;
+    var older = listedVersions.filter(function (v) { return compareVersions(v, newer) < 0; });
+    // A typed pair may start at a version the menu does not list.
+    var from = whatsNewAt.named ? whatsNewAt.older : '';
+    if (from && compareVersions(from, newer) < 0 && older.indexOf(from) === -1) {
+      older.push(from);
+      older.sort(function (a, b) { return compareVersions(b, a); });
+    }
+    if (older.length === 0) return null;
+
+    menu.innerHTML = '<option value="">--</option>' + older.map(function (v) {
+      return '<option value="' + escapeHtml(v) + '">' + escapeHtml(versionText(v)) + '</option>';
+    }).join('');
+    menu.value = older.indexOf(from) !== -1 ? from : '';
+
+    menu.addEventListener('change', function () {
+      var root = whatsNew.getAttribute('data-root') || '';
+      var params = new URLSearchParams();
+      var path = root + encodeURIComponent(newer) + '/';
+      if (menu.value) {
+        path = root;
+        params.set(COMPARE_PARAM, menu.value + '...' + newer);
+      }
+      urlParams().forEach(function (value, key) {
+        if (key !== COMPARE_PARAM) params.set(key, value);
+      });
+      var query = params.toString();
+      location.href = path + (query ? '?' + query : '');
+    });
+    return menu.parentNode;
+  }
+
   if (whatsNewAt) {
+    var compareMenu = setUpCompare();
+    // Held back while the list loads, so the head does not offer a choice before showing anything.
+    var showCompare = function () { if (compareMenu) compareMenu.hidden = false; };
     var heading = whatsNewAt.named
       ? "What's New from " + versionText(whatsNewAt.older) + ' to ' + versionText(whatsNewAt.newer)
       : "What's New in " + versionText(whatsNewAt.newer);
@@ -1632,6 +1680,7 @@ const JS = `
     if (whatsNewAt.named && compareVersions(whatsNewAt.older, whatsNewAt.newer) >= 0) {
       whatsNewStatus.textContent =
         'Put the older version first: ' + whatsNewAt.newer + '...' + whatsNewAt.older + '.';
+      showCompare();
     } else if (!whatsNewAt.older) {
       whatsNewStatus.textContent = versionText(whatsNewAt.newer) + ' is the first public version of this API.';
     } else {
@@ -1642,7 +1691,8 @@ const JS = `
         })
         .then(drawWhatsNew, function () {
           whatsNewStatus.textContent = 'The list of changes could not be loaded.';
-        });
+        })
+        .then(showCompare);
     }
   }
 

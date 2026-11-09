@@ -712,9 +712,9 @@ describe("what's new", () => {
     assert.match(page, /id="whatsnew-obsolete" aria-pressed="true"[^>]*>Obsolete<\/button>/);
   });
 
-  test('the page shows how to compare two versions', () => {
-    assert.match(html('/whatsnew/2/'), /<code>\/whatsnew\/\?compare=X\.x\.\.\.X\.x<\/code>: it lists/);
-    assert.doesNotMatch(make({ apiVersions: '3' }).html('/whatsnew/'), /whatsnew-note/);
+  test('the page has a menu to compare with an older version', () => {
+    assert.match(html('/whatsnew/2/'), /<label class="whatsnew-compare" hidden>Compare with <select id="whatsnew-compare"/);
+    assert.doesNotMatch(make({ apiVersions: '3' }).html('/whatsnew/'), /whatsnew-compare/);
   });
 
   test('the bare url is the newest version under another name', () => {
@@ -749,8 +749,8 @@ describe("what's new in the browser", () => {
   const { JS } = require(path.join(site, 'lib', 'assets'));
   const versions = ['3', '2.1', '2'];
 
-  /** Runs the page script on a What's New page at an address, with only the elements it reads. */
-  function open(pathname, search = '') {
+  /** Runs the page script on a What's New page at an address, with only the elements it reads. With asset, the list arrives. */
+  function open(pathname, search = '', asset = null) {
     const element = (attrs = {}) => {
       const a = new Map(Object.entries(attrs));
       return {
@@ -759,6 +759,7 @@ describe("what's new in the browser", () => {
         getAttribute: (k) => (a.has(k) ? a.get(k) : null), setAttribute: (k, v) => a.set(k, v),
         hasAttribute: (k) => a.has(k), removeAttribute: (k) => a.delete(k),
         addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], appendChild() {}, closest: () => null,
+        remove() {},
       };
     };
     let onPick = null;
@@ -771,7 +772,15 @@ describe("what's new in the browser", () => {
     });
     select.value = versions[0];
     select.addEventListener = (name, handler) => { if (name === 'change') onPick = handler; };
+    let onCompare = null;
+    const compareLabel = element();
+    compareLabel.hidden = true;
+    const compare = element();
+    compare.parentNode = compareLabel;
+    compare.value = '';
+    compare.addEventListener = (name, handler) => { if (name === 'change') onCompare = handler; };
     const ids = {
+      'whatsnew-compare': compare,
       'version-filter': select,
       whatsnew: element({ 'data-root': '/whatsnew/', 'data-src': '/assets/whatsnew.json' }),
       'whatsnew-link': element({ 'data-root': '/whatsnew/' }),
@@ -783,7 +792,9 @@ describe("what's new in the browser", () => {
       URL, URLSearchParams, location, setTimeout, clearTimeout,
       // The script writes the picked version into the address; a browser would update location to match.
       history: { replaceState: (s, t, url) => { location.search = new URL(url, location.href).search; }, pushState() {} },
-      fetch: () => new Promise(() => {}),
+      // An asset of false is a list that fails to load.
+      fetch: () => (asset === false ? Promise.resolve({ ok: false, status: 500 })
+        : asset ? Promise.resolve({ ok: true, json: () => asset }) : new Promise(() => {})),
       localStorage: { getItem: () => null, setItem() {} },
       sessionStorage: { getItem: () => null, setItem() {} },
       matchMedia: () => ({ matches: false, addEventListener() {} }),
@@ -802,7 +813,18 @@ describe("what's new in the browser", () => {
       onPick();
       return location.href;
     };
-    return { title: ids['whatsnew-title'].textContent, status: ids['whatsnew-status'].textContent, pick };
+    /** Picks a version to compare with and returns where the page goes. */
+    const compareWith = (version) => {
+      compare.value = version;
+      onCompare();
+      return location.href;
+    };
+    const menu = {
+      shown: () => !compareLabel.hidden,
+      options: [...(compare.innerHTML || '').matchAll(/value="([^"]*)"/g)].map((m) => m[1]),
+      value: compare.value,
+    };
+    return { title: ids['whatsnew-title'].textContent, status: ids['whatsnew-status'].textContent, pick, menu, compareWith };
   }
 
   test('?compare names the pair', () => {
@@ -825,6 +847,51 @@ describe("what's new in the browser", () => {
   test('picking a version leaves the comparison, keeping the rest of the query', () => {
     assert.equal(open('/whatsnew/', '?compare=2...3&dark=true').pick('2.1'), '/whatsnew/2.1/?dark=true&version=2.1');
     assert.equal(open('/whatsnew/', '?compare=2...3').pick('3'), '/whatsnew/3/');
+  });
+
+  test('the compare menu lists older versions after --, starting on --', () => {
+    const { options, value } = open('/whatsnew/').menu;
+    assert.deepEqual({ options, value }, { options: ['', '2.1', '2'], value: '' });
+    assert.deepEqual(open('/whatsnew/2.1/').menu.options, ['', '2']);
+    assert.deepEqual(open('/whatsnew/2/').menu.options, []);
+  });
+
+  test('the compare menu waits for the list to load', async () => {
+    assert.equal(open('/whatsnew/').menu.shown(), false);
+    const { menu } = open('/whatsnew/', '', { types: [] });
+    await new Promise((resolve) => setTimeout(resolve));
+    assert.equal(menu.shown(), true);
+  });
+
+  test('the compare menu shows even when the list fails to load', async () => {
+    const { menu } = open('/whatsnew/', '', false);
+    await new Promise((resolve) => setTimeout(resolve));
+    assert.equal(menu.shown(), true);
+  });
+
+  test('the compare menu shows at once beside a pair the wrong way round', () => {
+    assert.equal(open('/whatsnew/', '?compare=3...2.1').menu.shown(), true);
+  });
+
+  test('a version with nothing older has no compare menu', () => {
+    assert.equal(open('/whatsnew/2/', '', { types: [] }).menu.shown(), false);
+  });
+
+  test('comparing keeps the filter and switches', () => {
+    assert.equal(
+      open('/whatsnew/2.1/', '?filter=store&obsolete=off').compareWith('2'),
+      '/whatsnew/?compare=2...2.1&filter=store&obsolete=off&version=2.1'
+    );
+  });
+
+  test('the compare menu shows the pair being compared, even one it does not list', () => {
+    assert.equal(open('/whatsnew/', '?compare=2...3').menu.value, '2');
+    assert.deepEqual(open('/whatsnew/', '?compare=1.5...3').menu.options, ['', '2.1', '2', '1.5']);
+  });
+
+  test('comparing with an older version goes to the pair, and -- goes to the plain page', () => {
+    assert.equal(open('/whatsnew/', '?dark=true').compareWith('2.1'), '/whatsnew/?compare=2.1...3&dark=true');
+    assert.equal(open('/whatsnew/', '?compare=2...3').compareWith(''), '/whatsnew/3/');
   });
 });
 

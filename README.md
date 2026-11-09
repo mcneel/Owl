@@ -115,8 +115,8 @@ what 2.1 added, but not what 3 added. Picking an older version adds it to the ad
 link to the page opens on that version; without it, a page opens on the newest.
 
 The header's What's New link lists what the picked version added and made obsolete, up to the next version
-listed. To compare any two versions, open `whatsnew/?compare=8.4...8.12`: it lists what came after 8.4, up to and
-including 8.12.
+listed. Its Compare with menu picks an older version to measure from instead, which opens
+`whatsnew/?compare=8.4...8.12`: what came after 8.4, up to and including 8.12. Any two versions can be typed there.
 
 ## Link to Your Source Code
 
