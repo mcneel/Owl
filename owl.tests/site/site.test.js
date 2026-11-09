@@ -507,6 +507,80 @@ describe('options', () => {
     assert.equal(site.asset('favicon.png').type, 'image/png');
   });
 
+  test('--site-header and --site-footer wrap every page, and a plain page drops them', () => {
+    const header = tempFile('header.html', '<header class="parent"><a href="/">Parent</a></header>\n');
+    const footer = tempFile('footer.html', '<footer class="parent">Footer</footer>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header, siteFooter: footer });
+    const page = html(site.routes.home());
+    assert.match(page, /<div class="site-chrome site-chrome-header">\n<header class="parent"><a href="\/">Parent<\/a><\/header>\n<\/div>\n<header>/);
+    assert.match(page, /<div class="site-chrome site-chrome-footer">\n<footer class="parent">Footer<\/footer>\n  <\/div>\n  <\/main>/);
+    const css = site.asset('app.css').body;
+    assert.match(css, /:root\[data-plain\] \.site-chrome,/);
+    assert.doesNotMatch(css, /(^|\n)header \{/);
+  });
+
+  test('marks in --site-header place owl\'s controls there and drop its own bar', () => {
+    const header = tempFile('marked.html', '<header class="parent"><!-- owl:sidebar-toggle --><a href="/">Parent</a><!-- owl:search --></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header });
+    const page = html(site.routes.type(slugify('Samples.Members.Gadget')));
+    assert.match(page, /<header class="parent"><button id="sidebar-toggle"[\s\S]*?<a href="\/">Parent<\/a>\s*<form action="\/search\/"/);
+    assert.doesNotMatch(page, /<header>/);
+    assert.doesNotMatch(page, /class="site-name"/);
+    assert.doesNotMatch(page, /id="theme-switch"/);
+  });
+
+  test('--sidebar-toggle sidebar docks the toggle by the tree, and leaves the header mark empty', () => {
+    const header = tempFile('docked.html', '<header class="parent"><!-- owl:sidebar-toggle --><a href="/">Parent</a></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header, sidebarToggle: 'sidebar' });
+    const page = html(site.routes.type(slugify('Samples.Members.Gadget')));
+    assert.match(page, /<header class="parent"><a href="\/">Parent<\/a><\/header>/);
+    assert.match(page, /<div class="layout">\n<button id="sidebar-toggle" class="docked"[\s\S]*?<aside class="sidebar"/);
+    assert.equal(page.match(/id="sidebar-toggle"/g).length, 1);
+  });
+
+  test('--sidebar-toggle rejects anything but header or sidebar', () => {
+    assert.throws(() => make({ apiDir: docs, sidebarToggle: 'left' }), /--sidebar-toggle left/);
+  });
+
+  test('an owl:theme mark in --site-header places the theme switch there', () => {
+    const header = tempFile('themed.html', '<header class="parent"><a href="/">Parent</a><!-- owl:theme --></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header });
+    const page = html(site.routes.home());
+    assert.match(page, /<header class="parent"><a href="\/">Parent<\/a>[\s\S]*?id="theme-switch"[\s\S]*?<\/header>/);
+    assert.doesNotMatch(page, /<header>/);
+    assert.doesNotMatch(page, /role="search"/);
+  });
+
+  test('an owl:pickers mark places the pickers apart from the search box, which can then be left out', () => {
+    const header = tempFile('pickers.html', '<header class="parent"><a href="/">Parent</a><!-- owl:pickers --></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header });
+    const page = html(site.routes.home());
+    assert.match(page, /<header class="parent"><a href="\/">Parent<\/a>[\s\S]*?id="asm-filter"[\s\S]*?<\/header>/);
+    assert.doesNotMatch(page, /role="search"/);
+  });
+
+  test('a repeated or unknown owl: mark in --site-header is reported', () => {
+    const header = tempFile('bad-marks.html', '<header><!-- owl:search --><!-- owl:search --><!-- owl:serach --></header>');
+    const { site } = make({ apiDir: docs, siteHeader: header });
+    assert.ok(site.model.warnings.some((w) => /owl:search --> appears 2 times/.test(w)));
+    assert.ok(site.model.warnings.some((w) => /unknown mark <!-- owl:serach -->/.test(w)));
+  });
+
+  test('a well-marked --site-header raises no mark warnings', () => {
+    const header = tempFile('good-marks.html', '<div><!-- owl:search --><!-- owl:theme --></div>');
+    const { site } = make({ apiDir: docs, siteHeader: header });
+    assert.ok(!site.model.warnings.some((w) => w.includes('owl:')));
+  });
+
+  test('a --site-header that cannot be read is reported and left out', () => {
+    const missing = path.join(os.tmpdir(), 'owl-no-such-dir', 'header.html');
+    const { html, site } = make({ apiDir: docs, siteHeader: missing });
+    assert.ok(site.model.warnings.some((w) => w.includes(`could not read ${missing}`)));
+    const page = html(site.routes.home());
+    assert.doesNotMatch(page, /site-chrome-header/);
+    assert.match(page, /<header>/);
+  });
+
   test('--logo-dark adds a second header image, and the tab keeps the light one', () => {
     const dark = tempFile('dark.svg', '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5" fill="#FFEEDD"/></svg>');
     const { html, site } = make({ apiDir: docs, logoDark: dark });
@@ -993,9 +1067,9 @@ describe('?plain, ?dark and ?version', () => {
     assert.equal(click('/type/samples.istore/', '_blank'), 'https://example.com/type/samples.istore/');
   });
 
-  test('the stylesheet hides the header, sidebar and breadcrumbs', () => {
+  test('the stylesheet hides the header, site chrome, sidebar and breadcrumbs', () => {
     const css = make().site.asset('app.css').body;
-    for (const part of ['header', '.sidebar', '.resize-handle', '.breadcrumbs']) {
+    for (const part of ['body > header', '.site-chrome', '.sidebar', '.resize-handle', '.breadcrumbs']) {
       assert.match(css, new RegExp(`:root\\[data-plain\\] ${part.replace('.', '\\.')}[,\\s{]`), `${part} is not hidden`);
     }
   });

@@ -13,6 +13,7 @@ const { Docify, withQuery } = require('./docify');
 const { Links } = require('./links');
 const { CSS, JS } = require('./assets');
 const { cleanSvg } = require('./html');
+const { checkControlMarks } = require('./layout');
 
 /** What a favicon may be, by extension; anything else is not one every browser shows. */
 const FAVICON_TYPES = {
@@ -40,6 +41,9 @@ const FAVICON_TYPES = {
  *   logo      svg file to show in the header, overriding <docs>/logo.svg
  *   logoDark  svg file to show under the dark theme, overriding <docs>/logo-dark.svg
  *   favicon   svg, png or ico file for the browser tab; without it the logo serves
+ *   siteHeader  html file placed above the header on every page, for a site the docs live inside
+ *   siteFooter  html file placed at the end of every page's content
+ *   sidebarToggle  'header' (the default) or 'sidebar', where the sidebar's show/hide button goes
  *   apiVersions  comma-separated versions the header's picker offers, newest first; without them
  *             there is no picker and every API is shown whatever its <since> says
  *   skipUndocumented  leave out anything with no <summary>
@@ -70,6 +74,12 @@ class Site {
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.faviconPath = options.favicon || '';
+    this.siteHeaderPath = options.siteHeader || '';
+    this.siteFooterPath = options.siteFooter || '';
+    this.sidebarToggle = options.sidebarToggle || 'header';
+    if (!['header', 'sidebar'].includes(this.sidebarToggle)) {
+      throw new Error(`--sidebar-toggle ${this.sidebarToggle}: expected header or sidebar.`);
+    }
     this.skipUndocumented = Boolean(options.skipUndocumented);
 
     // Split here for the same reason --link is: the list is a mistake in the command line or it is
@@ -150,6 +160,9 @@ class Site {
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
       favicon: this.readFavicon(this.faviconPath),
+      siteHeader: this.readSiteHeader(this.siteHeaderPath),
+      siteFooter: this.readHtml(this.siteFooterPath),
+      sidebarToggle: this.sidebarToggle,
       versions: this.versions,
       diagrams,
       // Where a page says something went wrong while it was being made: an equation that would not
@@ -158,6 +171,25 @@ class Site {
     });
     this.markdown = new MarkdownPages(this.renderer);
     return this.model.warnings;
+  }
+
+  /** Reads --site-header, warning about marks that would leave a control broken or missing. */
+  readSiteHeader(file) {
+    const html = this.readHtml(file);
+    for (const problem of checkControlMarks(html)) this.model.warnings.push(`${file}: ${problem}`);
+    return html;
+  }
+
+  /** Reads an html fragment named on the command line, on every reload like the logo. */
+  readHtml(file) {
+    if (!file) return '';
+
+    try {
+      return fs.readFileSync(file, 'utf8').trim();
+    } catch (err) {
+      this.model.warnings.push(`could not read ${file}: ${err.message}`);
+      return '';
+    }
   }
 
   /**

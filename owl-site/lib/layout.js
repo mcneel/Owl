@@ -27,11 +27,17 @@ function fullTitle(title, siteName) {
  *   logo         url of the SVG shown before the site name, or ''
  *   logoDark     url of the SVG for the dark theme; optional, logo covers both without it
  *   favicon      { href, type } of the browser tab icon, or null
+ *   siteHeader   html placed above the header, for a site the docs live inside, or ''. Marking spots
+ *                with <!-- owl:sidebar-toggle -->, <!-- owl:search -->, <!-- owl:pickers --> or
+ *                <!-- owl:theme --> puts those controls there instead, and owl's own bar is left out
+ *   siteFooter   html placed at the end of the content, or ''
  *   description  meta description, plain text
  *   canonical    root-relative url of this page
  *   breadcrumbs  [{label, url, icon?}] innermost last; icon names a sprite icon worn before the label
  *   body         main content HTML
  *   sidebar      optional sidebar HTML (renders the tree column)
+ *   sidebarToggle  'header' puts the sidebar toggle in the header bar; 'sidebar' docks it at the
+ *                corner of the tree column instead, where it stays when the column is hidden
  *   sidebarAlt   the namespace tree this page swaps in when its url carries the mode flag, or ''.
  *                Written into an inert template: a reader in the other mode is the exception, and
  *                a second tree drawn into the page proper would cost every reader its weight
@@ -60,12 +66,15 @@ function page(options) {
     logo = '',
     logoDark = '',
     favicon = null,
+    siteHeader = '',
+    siteFooter = '',
     description = '',
     canonical,
     shareUrl = '',
     breadcrumbs = [],
     body,
     sidebar = null,
+    sidebarToggle: togglePlace = 'header',
     sidebarAlt = '',
     treeKey = '',
     treeSrc = '',
@@ -112,6 +121,62 @@ function page(options) {
 
   const structuredData =
     graph.length > 0 ? { '@context': 'https://schema.org', '@graph': graph } : null;
+
+  // Ride with the search box unless the site header gives them a place of their own.
+  const pickers = `  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
+  ${versionSelector(versions)}
+  ${whatsNewLink(versions, routes)}
+`;
+  const ownPickers = /<!--\s*owl:pickers\s*-->/.test(siteHeader);
+
+  // Written once and placed either in owl's own bar or where the site header marks them.
+  const controls = {
+    sidebarToggle: togglePlace === 'header' ? sidebarToggle(sidebar) : '',
+    search: `  <form action="${attr(routes.search())}" method="get" role="search" class="nav-search">
+    <label class="skip-link" for="search">Search the API</label>
+    <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
+         and not only on the one that happens to carry a results list.
+
+         The scope is the slug, not the name: the index keys its assemblies by slug, and a name here
+         matched none of them, so every page but the search page quietly searched the whole API. -->
+    <!-- data-ns is what keeps a result opened from a namespace-mode page in that mode: the index is
+         built once in the plain shape, and this is the flag put back on the row's url. Absent on
+         every other page, where the plain shape is the right one; a page that swaps its tree for
+         the mode sets it on itself. -->
+    <input type="search" id="search" name="q" placeholder="Search"
+           value="${attr(currentQuery)}" autocomplete="off"
+           data-index-url="${attr(routes.asset('search.json'))}"
+           data-scope="${attr(scope ? slugify(scope) : '')}"${
+             routes.modeSuffix ? `\n           data-ns="${attr(routes.modeSuffix)}"` : ''
+           }>
+    ${
+      // Carries the assembly being read into the search, so the box searches what the selector
+      // beside it says. Nothing on a page that belongs to no assembly, which searches everything.
+      scope
+        ? `<input type="hidden" name="a" value="${attr(slugify(scope))}">`
+        : ''
+    }
+    <svg class="nav-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5l-1.5 1.5l-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16A6.5 6.5 0 0 1 3 9.5A6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14S14 12 14 9.5S12 5 9.5 5"/>
+    </svg>
+    <!-- The magnifier's corner while the box holds anything: pressing it empties the box through
+         the same input path a keystroke takes, so the dropdown and the search page's url follow. -->
+    <button type="button" class="nav-search-clear" id="nav-search-clear" aria-label="Clear search">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <g transform="matrix(1.0625,0,0,1.0625,4,3)">
+          <path fill="currentColor" fill-rule="evenodd" d="M8,16C12.389,16 16,12.389 16,8C16,3.611 12.389,0 8,0C3.611,0 -0,3.611 0,8C0,12.389 3.611,16 8,16M4.22,4.22C4.511,3.929 4.989,3.929 5.28,4.22L8,6.94L10.72,4.22C10.862,4.068 11.061,3.981 11.269,3.981C11.68,3.981 12.019,4.32 12.019,4.731C12.019,4.939 11.932,5.138 11.78,5.28L9.06,8L11.78,10.72C11.932,10.862 12.019,11.061 12.019,11.269C12.019,11.68 11.68,12.019 11.269,12.019C11.061,12.019 10.862,11.932 10.72,11.78L8,9.06L5.28,11.78C5.141,11.909 4.958,11.981 4.769,11.981C4.357,11.981 4.019,11.643 4.019,11.231C4.019,11.042 4.091,10.859 4.22,10.72L6.94,8L4.22,5.28C3.929,4.989 3.929,4.511 4.22,4.22"/>
+        </g>
+      </svg>
+    </button>
+    <!-- Filled as you type, on every page but the search page, which shows the full list itself. -->
+    <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
+  </form>
+${ownPickers ? '' : pickers}`,
+    pickers,
+    theme: themeSwitch(),
+  };
+  const integrated = CONTROL_MARK.test(siteHeader);
+  const chrome = integrated ? fillControls(siteHeader, controls) : siteHeader;
 
   return `<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-theme-pref="system">
@@ -165,56 +230,26 @@ ${structuredData ? `<script type="application/ld+json">${json(structuredData)}</
      body, because the search box above the content draws rows the moment it is typed into. -->
 ${icons.spriteHtml()}
 <a class="skip-link" href="#main">Skip to content</a>
-
-<header>
-  ${sidebarToggle(sidebar)}<span class="site-title"><a href="${attr(homeUrl || routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
-  <form action="${attr(routes.search())}" method="get" role="search">
-    <label class="skip-link" for="search">Search the API</label>
-    <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
-         and not only on the one that happens to carry a results list.
-
-         The scope is the slug, not the name: the index keys its assemblies by slug, and a name here
-         matched none of them, so every page but the search page quietly searched the whole API. -->
-    <!-- data-ns is what keeps a result opened from a namespace-mode page in that mode: the index is
-         built once in the plain shape, and this is the flag put back on the row's url. Absent on
-         every other page, where the plain shape is the right one; a page that swaps its tree for
-         the mode sets it on itself. -->
-    <input type="search" id="search" name="q" placeholder="Search"
-           value="${attr(currentQuery)}" autocomplete="off"
-           data-index-url="${attr(routes.asset('search.json'))}"
-           data-scope="${attr(scope ? slugify(scope) : '')}"${
-             routes.modeSuffix ? `\n           data-ns="${attr(routes.modeSuffix)}"` : ''
-           }>
-    ${
-      // Carries the assembly being read into the search, so the box searches what the selector
-      // beside it says. Nothing on a page that belongs to no assembly, which searches everything.
-      scope
-        ? `<input type="hidden" name="a" value="${attr(slugify(scope))}">`
-        : ''
-    }
-    <svg class="nav-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5l-1.5 1.5l-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16A6.5 6.5 0 0 1 3 9.5A6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14S14 12 14 9.5S12 5 9.5 5"/>
-    </svg>
-    <!-- The magnifier's corner while the box holds anything: pressing it empties the box through
-         the same input path a keystroke takes, so the dropdown and the search page's url follow. -->
-    <button type="button" class="nav-search-clear" id="nav-search-clear" aria-label="Clear search">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <g transform="matrix(1.0625,0,0,1.0625,4,3)">
-          <path fill="currentColor" fill-rule="evenodd" d="M8,16C12.389,16 16,12.389 16,8C16,3.611 12.389,0 8,0C3.611,0 -0,3.611 0,8C0,12.389 3.611,16 8,16M4.22,4.22C4.511,3.929 4.989,3.929 5.28,4.22L8,6.94L10.72,4.22C10.862,4.068 11.061,3.981 11.269,3.981C11.68,3.981 12.019,4.32 12.019,4.731C12.019,4.939 11.932,5.138 11.78,5.28L9.06,8L11.78,10.72C11.932,10.862 12.019,11.061 12.019,11.269C12.019,11.68 11.68,12.019 11.269,12.019C11.061,12.019 10.862,11.932 10.72,11.78L8,9.06L5.28,11.78C5.141,11.909 4.958,11.981 4.769,11.981C4.357,11.981 4.019,11.643 4.019,11.231C4.019,11.042 4.091,10.859 4.22,10.72L6.94,8L4.22,5.28C3.929,4.989 3.929,4.511 4.22,4.22"/>
-        </g>
-      </svg>
-    </button>
-    <!-- Filled as you type, on every page but the search page, which shows the full list itself. -->
-    <div class="nav-results" id="nav-results" role="listbox" aria-label="Search results" hidden></div>
-  </form>
-  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
-  ${versionSelector(versions)}
-  ${whatsNewLink(versions, routes)}
-  ${themeSwitch()}
-</header>
+${
+  chrome
+    ? `<div class="site-chrome site-chrome-header">\n${chrome}\n</div>`
+    : ''
+}
+${
+  // A site header that marks where owl's controls go takes the place of owl's own bar.
+  integrated
+    ? ''
+    : `<header>
+  ${controls.sidebarToggle}<span class="site-title"><a href="${attr(homeUrl || routes.home())}">${siteLogo(logo, logoDark)}<span class="site-name">${escape(siteName)}</span></a></span>
+${controls.search}  ${controls.theme}
+</header>`
+}
 
 <div class="layout">
 ${
+  // Outside the column, so it survives the tree being swapped and is still there once it is hidden.
+  togglePlace === 'sidebar' ? sidebarToggle(sidebar, true) : ''
+}${
   sidebar
     ? `  <aside class="sidebar" id="sidebar" aria-label="Navigation" data-tree="${attr(treeKey)}"${
         treeSrc ? ` data-tree-src="${attr(treeSrc)}"` : ''
@@ -239,6 +274,11 @@ ${
   stickyTop ? `  <div class="main-sticky">\n${stickyTop}\n  </div>` : ''
 }
 ${body}
+${
+  // In the content rather than under it: the page does not scroll, so a footer below the layout
+  // would take its height from every read.
+  siteFooter ? `  <div class="site-chrome site-chrome-footer">\n${siteFooter}\n  </div>` : ''
+}
   </main>
   <!-- Filled by the script when an Examples link is followed, and left out of the flow until then.
        The link it comes from is a real page, so nothing here is needed for the examples to be
@@ -260,22 +300,59 @@ ${body}
 `;
 }
 
+/** Marks a site header places owl's controls with, e.g. <!-- owl:search -->. */
+const CONTROL_MARK = /<!--\s*owl:(sidebar-toggle|search|pickers|theme)\s*-->/;
+
+/** The site header with each mark replaced by its control; any control left unmarked is left out. */
+function fillControls(html, controls) {
+  const names = { 'sidebar-toggle': 'sidebarToggle', search: 'search', pickers: 'pickers', theme: 'theme' };
+  return html.replace(new RegExp(CONTROL_MARK.source, 'g'), (_, name) => controls[names[name]]);
+}
+
 /**
- * The header's sidebar toggle, first in the bar so it sits against the column it acts on.
+ * Problems with a site header's marks, as warning lines: a repeated mark, or an owl: mark owl does
+ * not know. Empty when the header is fine.
+ */
+function checkControlMarks(html) {
+  const known = ['sidebar-toggle', 'search', 'pickers', 'theme'];
+  const counts = new Map();
+  for (const [, name] of html.matchAll(/<!--\s*owl:([\w-]+)\s*-->/g)) {
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+
+  const problems = [];
+  for (const [name, count] of counts) {
+    // A repeat writes the control twice under the same ids, and only the first copy works.
+    if (!known.includes(name)) problems.push(`unknown mark <!-- owl:${name} -->; expected one of ${known.join(', ')}`);
+    else if (count > 1) problems.push(`<!-- owl:${name} --> appears ${count} times; only one is allowed`);
+  }
+  return problems;
+}
+
+/**
+ * The sidebar toggle, first in the bar so it sits against the column it acts on, or docked at the
+ * column's corner.
  *
  * Only on pages that carry a sidebar; anywhere else there is nothing to toggle. aria-expanded is
  * written as shown, which is what a page without the script has; the script corrects it where a
- * hidden column was remembered. The mark is Octicons' three-bars, drawn rather than typed: a glyph
- * sits on a baseline and lands low in a square button, while a viewBox centres on the geometry.
+ * hidden column was remembered. The header's mark is Octicons' three-bars, drawn rather than typed:
+ * a glyph sits on a baseline and lands low in a square button, while a viewBox centres on the
+ * geometry. Docked, it is a panel with its column ruled off, the column it shows and hides.
  */
-function sidebarToggle(sidebar) {
+function sidebarToggle(sidebar, docked = false) {
   if (!sidebar) return '';
 
+  const mark = docked
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">' +
+      '<rect x="3.25" y="4.25" width="17.5" height="15.5" rx="2"/><path d="M9.25 4.25v15.5"/></g></svg>'
+    : '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+      '<path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>';
+
   return (
-    '<button id="sidebar-toggle" type="button" title="Toggle sidebar" ' +
+    `<button id="sidebar-toggle"${docked ? ' class="docked"' : ''} type="button" title="Toggle sidebar" ` +
     'aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true">' +
-    '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
-    '<path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg></button>'
+    mark +
+    '</button>'
   );
 }
 
@@ -535,5 +612,6 @@ module.exports = {
   memberFilterBar,
   assemblySelector,
   versionLabel,
+  checkControlMarks,
   DEFAULT_SITE_NAME,
 };

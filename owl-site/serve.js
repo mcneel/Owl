@@ -38,6 +38,9 @@ function parseArgs(argv) {
     logo: '',
     logoDark: '',
     favicon: '',
+    siteHeader: '',
+    siteFooter: '',
+    sidebarToggle: '',
     apiVersions: '',
     d2: '',
     skipUndocumented: false,
@@ -89,6 +92,15 @@ function parseArgs(argv) {
         break;
       case '--favicon':
         options.favicon = path.resolve(argv[++i]);
+        break;
+      case '--site-header':
+        options.siteHeader = path.resolve(argv[++i]);
+        break;
+      case '--site-footer':
+        options.siteFooter = path.resolve(argv[++i]);
+        break;
+      case '--sidebar-toggle':
+        options.sidebarToggle = argv[++i];
         break;
       case '--d2':
         options.d2 = argv[++i];
@@ -198,6 +210,8 @@ watch(ICON_DIR);
 watch(options.logo);
 watch(options.logoDark);
 watch(options.favicon);
+watch(options.siteHeader);
+watch(options.siteFooter);
 
 const server = http.createServer((request, response) => {
   let parsed;

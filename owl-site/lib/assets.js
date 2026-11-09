@@ -185,11 +185,11 @@ body.home { background: var(--bg-home); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--flash); outline-offset: 2px; }
 
 /* ---- Header ---- */
-header { background: var(--nav-bg); color: var(--nav-fg); padding: 0.6rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; z-index: 20; }
-header h1, header .site-title { font-size: 1.05rem; font-weight: 500; flex: 1; min-width: 0; }
-header .site-title a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--nav-fg); text-decoration: none; }
-header .site-title a:hover { background: var(--nav-hover); color: var(--nav-fg); }
-header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body > header { background: var(--nav-bg); color: var(--nav-fg); padding: 0.6rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; z-index: 20; }
+body > header h1, body > header .site-title { font-size: 1.05rem; font-weight: 500; flex: 1; min-width: 0; }
+body > header .site-title a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--nav-fg); text-decoration: none; }
+body > header .site-title a:hover { background: var(--nav-hover); color: var(--nav-fg); }
+body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Sized here rather than trusted from the file, so any logo.svg lands at the same height. */
 .site-logo { display: block; flex-shrink: 0; width: 1.4rem; height: 1.4rem; }
 /* Both variants ship in the markup when a dark one was given; only one is ever laid out, so the
@@ -206,9 +206,21 @@ header .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellips
 #sidebar-toggle:hover { background: var(--nav-focus); }
 /* A filled mark, unlike the stroked moon and sun beside it: the path carries its own weight. */
 #sidebar-toggle svg { display: block; width: 1.05rem; height: 1.05rem; fill: currentColor; }
+/* Docked (--sidebar-toggle sidebar): the collapse button's bare face, in the one corner both states
+   share - the tree's bar while the column shows, the breadcrumbs' line once it is gone - so a
+   second press finds it where the first left it. Above the phone's overlay, which it also closes. */
+.layout:has(> #sidebar-toggle.docked) { position: relative; }
+#sidebar-toggle.docked { position: absolute; z-index: 26; top: 0.35rem; left: 0.6rem; width: 1.5rem; height: 1.5rem; background: none; border: 1px solid transparent; color: var(--text2); }
+#sidebar-toggle.docked:hover { background: none; border-color: var(--border2); }
+#sidebar-toggle.docked svg { width: 1.1rem; height: 1.1rem; fill: none; }
+.layout:has(> #sidebar-toggle.docked) .sidebar-toolbar { padding-left: 2.5rem; }
+:root[data-sidebar="hidden"] #sidebar-toggle.docked { top: 1.3rem; }
+:root[data-sidebar="hidden"] .layout:has(> #sidebar-toggle.docked) .main-sticky { padding-left: 2.9rem; }
+/* Pages with no breadcrumbs, such as the home page, make room beside their title instead. */
+:root[data-sidebar="hidden"] .layout:has(> #sidebar-toggle.docked) .main-content > :first-child:not(.main-sticky) .page-title { margin-left: 1.4rem; }
 
 /* The magnifier sits inside the field, so the field owns the position it is measured against. */
-header form[role="search"] { position: relative; display: flex; align-items: center; flex-shrink: 0; }
+form.nav-search { position: relative; display: flex; align-items: center; flex-shrink: 0; }
 #search { width: 16rem; padding: 0 2rem 0 0.7rem; border: none; border-radius: 4px; background: var(--nav-field); color: var(--nav-fg); font-size: 0.85rem; outline: none; }
 #search::placeholder { color: var(--nav-dim); }
 #search:focus { background: var(--nav-focus); }
@@ -226,17 +238,17 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .nav-search-clear { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); display: none; appearance: none; border: none; background: none; padding: 0; width: 1.05rem; height: 1.05rem; cursor: pointer; color: var(--nav-dim); }
 .nav-search-clear:hover { color: var(--nav-fg); }
 .nav-search-clear svg { display: block; width: 100%; height: 100%; fill: currentColor; }
-header form[role="search"].filled .nav-search-icon { display: none; }
-header form[role="search"].filled .nav-search-clear { display: block; }
-header form[role="search"].index-loading .nav-search-icon { visibility: hidden; }
-header form[role="search"].index-loading .nav-search-clear { visibility: hidden; }
-header form[role="search"].index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
+form.nav-search.filled .nav-search-icon { display: none; }
+form.nav-search.filled .nav-search-clear { display: block; }
+form.nav-search.index-loading .nav-search-icon { visibility: hidden; }
+form.nav-search.index-loading .nav-search-clear { visibility: hidden; }
+form.nav-search.index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
 @keyframes search-spin { to { transform: rotate(360deg); } }
 @keyframes search-spin-in { to { opacity: 1; } }
 /* Motion is the one thing this drawing is made of, so reduced motion gets a slower turn rather
    than a still ring that would read as a broken icon. */
 @media (prefers-reduced-motion: reduce) {
-  header form[role="search"].index-loading::after { animation-duration: 2.5s, 0s; }
+  form.nav-search.index-loading::after { animation-duration: 2.5s, 0s; }
 }
 
 /* ---- Header search results ----
@@ -358,6 +370,10 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 
 /* ---- Layout ---- */
 .layout { display: flex; flex: 1; overflow: hidden; }
+/* Markup of the site the docs live inside, from --site-header and --site-footer. The header keeps
+   its height in the page's column; the footer runs to the content's edges, under its padding. */
+.site-chrome-header { flex-shrink: 0; }
+.site-chrome-footer { margin: 2rem calc(-1 * var(--gutter)) -1.5rem; }
 
 /* ---- Sidebar ---- */
 /* Scrolls, but never draws a bar: the tree is a narrow column and a gutter inside it costs more
@@ -370,10 +386,12 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 :root[data-sidebar="hidden"] .sidebar,
 :root[data-sidebar="hidden"] .resize-handle { display: none; }
 /* ?plain=true: the page alone, for a host that embeds it and brings its own navigation. */
-:root[data-plain] header,
+:root[data-plain] body > header,
+:root[data-plain] .site-chrome,
 :root[data-plain] .skip-link,
 :root[data-plain] .sidebar,
 :root[data-plain] .resize-handle,
+:root[data-plain] #sidebar-toggle.docked,
 :root[data-plain] .breadcrumbs { display: none; }
 /* Pinned, like the rows under it: it acts on the whole tree, so it is no use only while the top of
    the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
@@ -1143,22 +1161,28 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
   .layout { position: relative; }
   .sidebar, .resize-handle { display: none; }
   :root[data-sidebar-open] .sidebar { display: block; position: absolute; top: 0; bottom: 0; left: 0; z-index: 25; max-width: 85vw; box-shadow: 0 0 28px rgba(0, 0, 0, 0.35); }
+  /* Docked, the closed overlay is the hidden column: the button waits by the breadcrumbs. */
+  :root:not([data-sidebar-open]) #sidebar-toggle.docked { top: 1.3rem; left: 0.4rem; }
+  :root:not([data-sidebar-open]) .layout:has(> #sidebar-toggle.docked) .main-sticky { padding-left: 2.4rem; }
+  :root:not([data-sidebar-open]) .layout:has(> #sidebar-toggle.docked) .main-content > :first-child:not(.main-sticky) .page-title { margin-left: 1.65rem; }
 
   /* Search folds to its magnifier and opens across the header when tapped, giving the title back
      its room. It stays open while its results are up, so a tap on one does not move it away. */
-  header { position: relative; }
+  body > header { position: relative; }
+  /* Only around owl's search, so the rest of a site header keeps whatever it positions against. */
+  .site-chrome-header:has(form.nav-search) { position: relative; }
   #search { width: 30px; padding: 0; color: transparent; }
   #search::placeholder { color: transparent; }
-  .nav-search-icon, header form[role="search"].index-loading::after { right: calc((30px - 1.05rem) / 2); }
-  header form[role="search"].filled .nav-search-icon { display: block; }
-  header form[role="search"].filled .nav-search-clear { display: none; }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) { position: absolute; top: 0; bottom: 0; left: 0.9rem; right: 0.9rem; z-index: 1; background: var(--nav-bg); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search { width: 100%; padding: 0 2rem 0 0.7rem; color: var(--nav-fg); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search::placeholder { color: var(--nav-dim); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon,
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))).index-loading::after { right: 0.55rem; }
-  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon { display: none; }
-  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-clear { display: block; }
+  .nav-search-icon, form.nav-search.index-loading::after { right: calc((30px - 1.05rem) / 2); }
+  form.nav-search.filled .nav-search-icon { display: block; }
+  form.nav-search.filled .nav-search-clear { display: none; }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) { position: absolute; top: 0; bottom: 0; left: 0.9rem; right: 0.9rem; z-index: 1; background: var(--nav-bg); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) #search { width: 100%; padding: 0 2rem 0 0.7rem; color: var(--nav-fg); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) #search::placeholder { color: var(--nav-dim); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon,
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))).index-loading::after { right: 0.55rem; }
+  form.nav-search.filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon { display: none; }
+  form.nav-search.filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-clear { display: block; }
   .nav-results { max-width: none; width: 100%; }
 
   /* Width is what a phone is short of, so the padding gives it back to the text. */
