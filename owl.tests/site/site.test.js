@@ -494,6 +494,35 @@ describe('options', () => {
   test('--source-refs links each member to its line', () => {
     const { html, type } = make({ sourceRefs: 'https://github.com/me/samples/blob/main' });
     assert.match(html(type('CachedStore')), /https:\/\/github\.com\/me\/samples\/blob\/main\/owl\.tests\.source\/CSharp\/Types\.cs#L\d+/);
+    assert.match(html(type('CachedStore')), /<a class="chip chip-action chip-source" href="https:[^"]+#L\d+"[^>]*>Source<\/a>/);
+  });
+
+  test('the Source button opens in a new tab and shows where on hover', () => {
+    const { html, type } = make({ sourceRefs: 'https://github.com/me/samples/blob/main' });
+    const button = html(type('CachedStore')).match(/<a class="chip chip-action chip-source"[^>]*>/)[0];
+    assert.match(button, /target="_blank"/);
+    assert.match(button, /rel="noopener"/);
+    assert.match(button, /title="https:\/\/github\.com\/me\/samples\/blob\/main\/owl\.tests\.source\/CSharp\/Types\.cs:\d+"/);
+  });
+
+  test('the Source button sits before Example in the member header', () => {
+    const { html, type } = make({ sourceRefs: 'https://github.com/me/samples/blob/main' });
+    const page = html(type('Docs.Tagged'));
+    assert.match(page, /chip-source"[^>]*>Source<\/a><a class="chip chip-action chip-example"/);
+  });
+
+  test('the Source button is grey and does not open the examples dock', () => {
+    const { site } = make();
+    const css = site.asset('app.css').body;
+    assert.match(css, /\.chip-source, a\.chip-source:hover \{ background: var\(--bg3\); color: var\(--text3\); \}/);
+    assert.match(css, /\.chip-action ~ \.chip-action \{ margin-left: 0; \}/);
+    assert.match(site.asset('app.js').body, /closest\('\.chip-example'\)/);
+  });
+
+  test('--source-refs to a local path stays plain text', () => {
+    const { html, type } = make({ sourceRefs: '/src/samples' });
+    assert.match(html(type('CachedStore')), /\/src\/samples\/owl\.tests\.source\/CSharp\/Types\.cs:\d+/);
+    assert.doesNotMatch(html(type('CachedStore')), /chip-source/);
   });
 
   test('no --source-refs, no source links', () => {

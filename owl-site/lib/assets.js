@@ -1044,6 +1044,11 @@ code { font-family: monospace; }
    it can share the row's end with, which is a label rather than a thing to press. */
 .chip-action { background: var(--accent); color: var(--oc-white); font-weight: 500; padding: 0.18rem 0.65rem; margin-left: auto; }
 a.chip-action:hover { background: var(--accent); color: var(--oc-white); filter: brightness(1.1); }
+/* Only the first button takes the push to the far end; the rest sit beside it. */
+.chip-action ~ .chip-action { margin-left: 0; }
+/* Quieter than Example: it leaves the docs rather than adding to them. */
+.chip-source, a.chip-source:hover { background: var(--bg3); color: var(--text3); }
+a.chip-source:hover { color: var(--text); filter: none; }
 .example-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: 0.8rem 0 0; }
 .example-tab { appearance: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 500; color: var(--text3); padding: 0.4rem 0.8rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .example-tab:hover { color: var(--text); }
@@ -1950,7 +1955,7 @@ const JS = `
       // Anything that asks for a new tab or window is left alone to do that.
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
 
-      var link = e.target.closest && e.target.closest('.chip-action');
+      var link = e.target.closest && e.target.closest('.chip-example');
       if (!link) return;
 
       var href = link.getAttribute('href');
