@@ -1238,16 +1238,12 @@ class Renderer {
     return this.linkTypesIn(highlight(code, 'csharp'), assemblyName, ownName);
   }
 
-  /**
-   * A signature whose parameters can drop onto lines of their own under its '(' once the line runs
-   * out of room. The page script decides when; until then the breaks are hidden.
-   */
+  /** A signature with each parameter after the first on a line of its own, under its '('. */
   wrappableSignatureHtml(code, assemblyName, ownName) {
     const html = this.signatureHtml(code, assemblyName, ownName);
     const layout = parameterLayout(code);
     if (!layout) return html;
-    const indent = ' '.repeat(layout.column);
-    return cutMarkup(html, layout.starts).join(`<span class="sig-break">\n${indent}</span>`);
+    return cutMarkup(html, layout.starts).join('\n' + ' '.repeat(layout.column));
   }
 
   /**

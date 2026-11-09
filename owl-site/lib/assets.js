@@ -1003,9 +1003,6 @@ a.see-ref:hover { text-decoration: underline; }
 .declaration.clip-right::after { right: 0; }
 .member.obsolete { --decl-bg: var(--card-inherited); }
 .member .declaration { font-size: 0.78rem; }
-/* Parameter breaks stay hidden until the line is too wide, then each parameter takes its own line under the '('. */
-.sig-break { display: none; }
-.declaration.wrap .sig-break { display: inline; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
 code { font-family: monospace; }
@@ -2920,19 +2917,8 @@ const JS = `
     box.classList.toggle('clip-right', right);
   };
 
-  // Measured on one line each time: the box's width does not depend on whether it wraps.
-  var fitDeclaration = function (box) {
-    if (!box.querySelector('.sig-break')) return;
-    var scroller = box.firstElementChild;
-    box.classList.remove('wrap');
-    box.classList.toggle('wrap', scroller.scrollWidth > scroller.clientWidth + 1);
-  };
-
   var syncDeclarations = function () {
-    for (var i = 0; i < declarations.length; i++) {
-      fitDeclaration(declarations[i]);
-      syncDeclaration(declarations[i]);
-    }
+    for (var i = 0; i < declarations.length; i++) syncDeclaration(declarations[i]);
   };
 
   if (declarations.length) {
@@ -2964,10 +2950,7 @@ const JS = `
     // Each box, not the window: dragging the sidebar narrows the column and fires no resize.
     if (window.ResizeObserver) {
       var declObserver = new ResizeObserver(function (entries) {
-        for (var j = 0; j < entries.length; j++) {
-          fitDeclaration(entries[j].target);
-          syncDeclaration(entries[j].target);
-        }
+        for (var j = 0; j < entries.length; j++) syncDeclaration(entries[j].target);
       });
       for (var k = 0; k < declarations.length; k++) declObserver.observe(declarations[k]);
     } else {

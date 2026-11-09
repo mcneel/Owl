@@ -190,20 +190,19 @@ describe('type pages', () => {
     }
   });
 
-  test('a long parameter list can break onto lines under its opening paren', () => {
+  test('each parameter after the first sits on its own line under the opening paren', () => {
     const body = html(type('Members.Gadget'));
     const decl = body.split('<div class="declaration">').find((d) => d.includes('tok-func">Configure<')).split('</div>')[0];
-    const breaks = decl.match(/<span class="sig-break">\n( *)<\/span>/g) || [];
-    assert.equal(breaks.length, 4);
-    const line = decl.replace(/<span class="sig-break">[\s\S]*?<\/span>/g, '').replace(/<[^>]*>/g, '');
-    const column = line.indexOf('(') + 1;
-    for (const b of breaks) assert.equal(/\n( *)</.exec(b)[1].length, column);
+    const lines = decl.replace(/<[^>]*>/g, '').split('\n');
+    assert.equal(lines.length, 5);
+    const column = lines[0].indexOf('(') + 1;
+    for (const line of lines.slice(1)) assert.equal(/^ */.exec(line)[0].length, column);
   });
 
-  test('a single parameter never breaks off its declaration', () => {
+  test('a single parameter stays on the line of its declaration', () => {
     const body = html(type('Members.Gadget'));
     const indexer = body.split('<div class="declaration">').find((d) => d.includes('tok-keyword">this<')).split('</div>')[0];
-    assert.doesNotMatch(indexer, /sig-break/);
+    assert.doesNotMatch(indexer, /\n/);
   });
 
   test('obsolete members are marked', () => {
