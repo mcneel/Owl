@@ -3723,11 +3723,10 @@ ${
   <div class="page-head-brief">
     <div class="page-title-row"><h1 class="page-title" id="whatsnew-title">What's New</h1></div>
     <p class="page-intro" id="whatsnew-status">Loading…</p>
-    ${
+    <div class="whatsnew-tools">${
       // Hidden until there is a list to filter; the empty note travels with it, as on the derived tree.
       filterFieldHtml('Filter Changes', 'Filter changes', 'whatsnew-filter')
-    }
-    ${this.whatsNewNoteHtml()}
+    }${this.whatsNewCompareHtml()}</div>
   </div>
   ${
     // The type page's switches in the type page's place, at the foot of the head; both start on.
@@ -3756,12 +3755,12 @@ ${
     });
   }
 
-  /** How to compare two versions; nothing on a site that lists only one. */
-  whatsNewNoteHtml() {
+  /** The menu of older versions to compare against; filled by the page script, absent with one version. */
+  whatsNewCompareHtml() {
     if (this.versions.length < 2) return '';
     return (
-      `<p class="whatsnew-note">Tip: Compare any two versions with a URL like <code>${escape(this.routes.whatsNew())}` +
-      '?compare=X.x...X.x</code>: it lists what came after the first, up to and including the second.</p>'
+      '<label class="whatsnew-compare" hidden>Compare with ' +
+      '<select id="whatsnew-compare" title="Show everything since an older version"></select></label>'
     );
   }
 
