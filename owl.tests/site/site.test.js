@@ -634,7 +634,7 @@ describe("what's new", () => {
   });
 
   test('the page shows how to compare two versions', () => {
-    assert.match(html('/whatsnew/2/'), /<code>\/whatsnew\/X\.x\.\.\.X\.x\/<\/code>: it lists/);
+    assert.match(html('/whatsnew/2/'), /<code>\/whatsnew\/\?compare=X\.x\.\.\.X\.x<\/code>: it lists/);
     assert.doesNotMatch(make({ apiVersions: '3' }).html('/whatsnew/'), /whatsnew-note/);
   });
 

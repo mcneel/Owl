@@ -1314,6 +1314,7 @@ const JS = `
   // what 8.1 and 8.5 added. Untagged means it predates every version on the list, which is why the
   // absence of the attribute shows it.
   var VERSION_PARAM = 'version';
+  var COMPARE_PARAM = 'compare';
   var versionSelect = document.getElementById('version-filter');
   // A site offering one version writes it as a label rather than a menu. There is nothing to
   // choose, but the page is still filtered to it, so the version is read off the label instead.
@@ -1387,6 +1388,9 @@ const JS = `
       ? location.pathname.slice(root.length).replace(/[/]+$/, '')
       : '';
     try { spec = decodeURIComponent(spec); } catch (e) {}
+    // A pair in the query works on a plain file host, which has no file for a pair in the path.
+    var compare = urlParams().get(COMPARE_PARAM);
+    if (compare && compare.split('...').length === 2) spec = compare;
     if (!spec) spec = listedVersions[0] || '';
 
     var ends = spec.split('...');
@@ -2545,7 +2549,10 @@ const JS = `
       syncWhatsNewLink();
       // Here the version is the page, so picking another goes to its page, filtered the same way.
       if (whatsNew) {
-        location.href = whatsNewLink.href + location.search;
+        var params = urlParams();
+        params.delete(COMPARE_PARAM);
+        var query = params.toString();
+        location.href = whatsNewLink.href + (query ? '?' + query : '');
         return;
       }
       applyFilter();

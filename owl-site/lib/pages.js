@@ -3753,7 +3753,7 @@ ${
     if (this.versions.length < 2) return '';
     return (
       `<p class="whatsnew-note">Tip: Compare any two versions with a URL like <code>${escape(this.routes.whatsNew())}` +
-      'X.x...X.x/</code>: it lists what came after the first, up to and including the second.</p>'
+      '?compare=X.x...X.x</code>: it lists what came after the first, up to and including the second.</p>'
     );
   }
 
