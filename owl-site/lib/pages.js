@@ -252,6 +252,79 @@ function typeArgumentCount(html) {
   );
 }
 
+/**
+ * Where a declaration's parameter list sits: the column just past its '(' (or an indexer's '['),
+ * and the offset each parameter after the first starts at. Null with fewer than two parameters.
+ */
+function parameterLayout(code) {
+  const skipQuoted = (at) => {
+    const quote = code[at];
+    for (let i = at + 1; i < code.length; i++) {
+      if (code[i] === '\\') i++;
+      else if (code[i] === quote) return i;
+    }
+    return code.length;
+  };
+
+  // The list's opener hugs a name, a '>' or an operator symbol; a tuple type has a space or '<' before it.
+  let open = -1;
+  for (let i = 0, depth = 0; i < code.length && open < 0; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") i = skipQuoted(i);
+    else if (c === '(' || c === '[') {
+      const hugs = c === '(' ? i > 0 && !/[\s<,(]/.test(code[i - 1]) : code.slice(0, i).endsWith('this');
+      if (depth === 0 && hugs) open = i;
+      else depth++;
+    } else if (c === ')' || c === ']') depth--;
+  }
+  if (open < 0) return null;
+
+  const starts = [];
+  for (let i = open + 1, depth = 1; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") i = skipQuoted(i);
+    else if ('([{<'.includes(c)) depth++;
+    else if (')]}>'.includes(c)) {
+      if (--depth === 0) break;
+    } else if (c === ',' && depth === 1) {
+      let next = i + 1;
+      while (code[next] === ' ') next++;
+      starts.push(next);
+    }
+  }
+  if (!starts.length) return null;
+
+  return { column: open + 1 - (code.lastIndexOf('\n', open) + 1), starts };
+}
+
+/**
+ * Cuts highlighted markup at offsets into its text, closing the tags open at each cut and opening
+ * them again after it, so every piece stands on its own.
+ */
+function cutMarkup(html, offsets) {
+  const pieces = [];
+  const open = [];
+  let piece = '';
+  let text = 0;
+  let next = 0;
+  const tokens = html.match(/<[^>]*>|&[#\w]+;|[^<&]/g) || [];
+  for (const token of tokens) {
+    const closing = token.startsWith('</');
+    if (!closing && next < offsets.length && text === offsets[next]) {
+      for (let i = open.length - 1; i >= 0; i--) piece += `</${/^<(\w+)/.exec(open[i])[1]}>`;
+      pieces.push(piece);
+      piece = open.join('');
+      next++;
+    }
+    piece += token;
+    if (closing) open.pop();
+    else if (token.startsWith('<')) open.push(token);
+    else text++;
+  }
+  pieces.push(piece);
+  return pieces;
+}
+
 /** Kinds that take a parameter list, and so can be overloaded on it. */
 const CALLABLE_KINDS = new Set(['method', 'constructor', 'destructor', 'operator', 'conversion']);
 
@@ -1166,13 +1239,25 @@ class Renderer {
   }
 
   /**
+   * A signature whose parameters can drop onto lines of their own under its '(' once the line runs
+   * out of room. The page script decides when; until then the breaks are hidden.
+   */
+  wrappableSignatureHtml(code, assemblyName, ownName) {
+    const html = this.signatureHtml(code, assemblyName, ownName);
+    const layout = parameterLayout(code);
+    if (!layout) return html;
+    const indent = ' '.repeat(layout.column);
+    return cutMarkup(html, layout.starts).join(`<span class="sig-break">\n${indent}</span>`);
+  }
+
+  /**
    * A declaration with its attributes on the lines above it, '[Name(args)]' as source writes them.
    *
    * Each name links by its doc id rather than by spelling: the model drops the 'Attribute' suffix
    * the class is actually called by. Arguments link as a signature does, all but a named argument's
    * name, which is a property of the attribute and would otherwise read as a type.
    */
-  declarationHtml(attributes, code, assemblyName, ownName) {
+  declarationHtml(attributes, code, assemblyName, ownName, wrappable = false) {
     const punct = (text) => `<span class="tok-punct">${escape(text)}</span>`;
 
     const lines = (attributes || []).map((attribute) => {
@@ -1193,7 +1278,9 @@ class Renderer {
       return punct('[') + name + list + punct(']');
     });
 
-    lines.push(this.signatureHtml(code, assemblyName, ownName));
+    lines.push(
+      wrappable ? this.wrappableSignatureHtml(code, assemblyName, ownName) : this.signatureHtml(code, assemblyName, ownName)
+    );
     return `<div class="declaration"><div class="decl-scroll">${lines.join('\n')}</div></div>`;
   }
 
@@ -1923,7 +2010,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
   <div class="page-head-brief">
     <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.referencesChipHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     ${derived ? derived.tree : ''}
-    ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly)}
+    ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly, undefined, type.kind === 'delegate')}
     ${
       summaryHtml
         ? '<div class="page-head-intro">' +
@@ -2333,7 +2420,7 @@ ${
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
       '<div class="section"><span class="section-label">Signature:</span>' +
-      `<div class="declaration"><div class="decl-scroll">${this.signatureHtml(type.signature, assemblyName)}</div></div>` +
+      `<div class="declaration"><div class="decl-scroll">${this.wrappableSignatureHtml(type.signature, assemblyName)}</div></div>` +
       this.parametersHtml(type.parameters) +
       '</div>'
     );
@@ -2754,7 +2841,13 @@ ${
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
       // constant's value rides on the end the way the source states it.
-      this.declarationHtml(member.attributes, this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name)) +
+      this.declarationHtml(
+        member.attributes,
+        this.memberDeclaration(member, ownerKind),
+        assemblyName,
+        lastSegment(member.name),
+        CALLABLE_KINDS.has(member.kind) || member.kind === 'indexer'
+      ) +
       this.obsoleteHtml(member.obsolete) +
       (summary ? `<div class="summary">${summary}</div>` : '');
 
