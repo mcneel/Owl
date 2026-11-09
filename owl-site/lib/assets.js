@@ -1006,7 +1006,6 @@ a.see-ref:hover { text-decoration: underline; }
 .member .declaration { font-size: 0.78rem; margin-top: 0.5rem; margin-bottom: 0; }
 /* One parameter per row, its description beside it; past the description's minimum the block scrolls. */
 .sig-params { margin-top: 0.5em; display: grid; grid-template-columns: max-content max-content minmax(16rem, 1fr); column-gap: 1ch; row-gap: 0.15rem; }
-.sig-param-type { text-align: right; }
 .sig-param-doc { padding-left: 2rem; white-space: normal; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.8rem; color: var(--text3); }
 .sig-param-doc p { margin: 0; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
