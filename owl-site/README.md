@@ -76,6 +76,11 @@ them. Mark `owl:pickers` to place the pickers on their own, which also lets a si
 search leave `owl:search` unmarked and keep them. The theme is still `data-theme` on the root, so a
 site switch that sets it, and `data-theme-pref`, keeps owl's pages, diagrams included, in step.
 
+Each mark may appear once; a repeat would write the control twice under the same ids, so a repeated
+or unknown `owl:` mark is reported as a warning. The controls keep owl's header colours, and with any
+mark the site title and home link go with owl's bar. Owl's search is styled by its own class, so it
+works under any element; on a phone it opens across the whole site header.
+
 `--sidebar-toggle sidebar` docks the sidebar's show/hide button at the tree column's corner instead
 of the header, for a header shared with pages that have no sidebar. The `owl:sidebar-toggle` mark
 is then left empty.

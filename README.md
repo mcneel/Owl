@@ -136,6 +136,43 @@ owl build MyPlugin.csproj --link MyLib=/api/mylib
 
 Those types now link to the other site. .NET types link to Microsoft Learn automatically.
 
+## Publish Inside Another Site
+
+Put your site's own bar and footer on every page, so readers can get back to the rest of it:
+
+```bash
+owl build MyLib.csproj --site-header header.html --site-footer footer.html
+```
+
+Both files are plain HTML snippets placed as given. Owl's stylesheet resets margins and padding on every element,
+so their styles must set whatever they rely on. Pages opened with `?plain` leave them out.
+
+The header can also hold owl's own controls. Put a mark where each one goes and owl draws no bar of its own:
+
+```html
+<header class="site-header">
+  <!-- owl:sidebar-toggle -->
+  <a href="/">My Site</a>
+  <nav>...</nav>
+  <!-- owl:search -->
+  <!-- owl:theme -->
+</header>
+```
+
+| Mark | What Goes There |
+|---|---|
+| `<!-- owl:sidebar-toggle -->` | The sidebar's show/hide button. Empty with `--sidebar-toggle sidebar` |
+| `<!-- owl:search -->` | The search box, with the assembly and version pickers unless `owl:pickers` is marked too |
+| `<!-- owl:pickers -->` | The assembly and version pickers on their own, e.g. beside your site's own search |
+| `<!-- owl:theme -->` | The light/dark switch. Leave it out if your site has its own; set `data-theme` on `<html>` to keep owl in step |
+
+- Use each mark at most once. Owl warns about repeated or misspelled marks.
+- A control with no mark is left out. With any mark, owl's site title and home link are left out too.
+- Owl's controls keep owl's header colours, so they suit a dark bar best. Restyle them in your header's CSS if not.
+
+`--sidebar-toggle sidebar` moves the sidebar button into the corner of the sidebar, for a header that is shared with
+pages that have no sidebar.
+
 ## Keep Old Links Working
 
 Moving from Sandcastle or docify? Old page addresses can redirect to the new pages:
@@ -182,7 +219,7 @@ Lists undocumented API, and fails on broken `<see cref="..."/>` links and broken
 | serve, build | `--docs <dir>` | Folder of your own pages |
 | serve, build | `--logo <file>` | Header icon |
 | serve, build | `--favicon <file>` | Browser tab icon |
-| serve, build | `--site-header <file>` | HTML above the header on every page, e.g. a parent site's bar. Marks such as `<!-- owl:search -->` in it replace owl's own bar |
+| serve, build | `--site-header <file>` | HTML above the header on every page, e.g. a parent site's bar. See [Publish Inside Another Site](#publish-inside-another-site) |
 | serve, build | `--site-footer <file>` | HTML at the end of every page's content |
 | serve, build | `--sidebar-toggle <header\|sidebar>` | Where the sidebar's show/hide button goes; `sidebar` docks it at the tree column's corner (default `header`) |
 | serve, build | `--skip-undocumented` | Hide anything without a summary |
