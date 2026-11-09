@@ -111,7 +111,8 @@ wrong. C# keywords are left to Learn — `string` is `System.String` wherever it
 The model records the file and line every member was declared at, but nothing is shown unless
 `--source-refs` gives a root to hang those paths from — the recorded path is relative to the tree
 the projects were built from and means nothing on its own. An `http`/`https` root turns each into a
-link with a `#L<line>` anchor; anything else, such as a local checkout, is rendered as plain text.
+Source button in the member's header, linking with a `#L<line>` anchor; anything else, such as a
+local checkout, is rendered as plain text at the foot of the card.
 
 `--api-versions 9,8` is what draws the header's version picker, and the only thing that makes a
 `<since>` tag do anything. Choosing a version hides every API a `<since>` puts after it — in the

@@ -1389,22 +1389,31 @@ class Renderer {
    *
    * The model's path is relative to the tree the projects were built from, so it means nothing on
    * its own; the root is what turns it into somewhere a reader can actually go. An http root makes
-   * it a link with a line anchor, anything else stays text, which is what a local checkout wants.
+   * it a Source button in the card's header, anything else stays text at the card's foot, which
+   * is what a local checkout wants.
    */
-  sourceHtml(source) {
-    if (!source || !this.sourceRefs) return '';
-
+  sourceRef(source) {
+    if (!source || !this.sourceRefs) return null;
     const root = this.sourceRefs.replace(/\/$/, '');
     const path = `${root}/${source.file}`;
-    const label = `${path}:${source.line}`;
+    return { path, line: source.line, linked: /^https?:/i.test(root) };
+  }
 
-    if (!/^https?:/i.test(root)) {
-      return `<div class="section"><span class="param-type">${escape(label)}</span></div>`;
-    }
+  /** The declaration's location as plain text, for a root that is not a web address. */
+  sourceHtml(source) {
+    const ref = this.sourceRef(source);
+    if (!ref || ref.linked) return '';
+    return `<div class="section"><span class="param-type">${escape(`${ref.path}:${ref.line}`)}</span></div>`;
+  }
 
+  /** A Source button for the card's header, for a root that is a web address. */
+  sourceButtonHtml(source) {
+    const ref = this.sourceRef(source);
+    if (!ref || !ref.linked) return '';
+    // The full location on hover, since the button itself no longer spells it out.
     return (
-      `<div class="section"><a class="param-type" href="${attr(`${path}#L${source.line}`)}" ` +
-      `rel="noopener">${escape(label)}</a></div>`
+      `<a class="chip chip-action chip-source" href="${attr(`${ref.path}#L${ref.line}`)}" ` +
+      `title="${attr(`${ref.path}:${ref.line}`)}" target="_blank" rel="noopener">Source</a>`
     );
   }
 
@@ -2849,7 +2858,7 @@ ${
 
     const exampleButton =
       hasExamplePage(member)
-        ? `<a class="chip chip-action" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
+        ? `<a class="chip chip-action chip-example" href="${attr(this.routes.example(selfSlug, member.anchor))}">Example</a>`
         : '';
 
     // Everything past the description, which the card sets on a dimmer ground of its own. What a
@@ -2879,7 +2888,7 @@ ${
       // text alone, and both facts are read on the page that documents the member - where the
       // whole card already leads. The card still carries its data-since, so version filtering
       // sees the member either way.
-      (inheritedFrom ? '' : exampleButton + this.sinceChipHtml(member.docs)) +
+      (inheritedFrom ? '' : this.sourceButtonHtml(member.source) + exampleButton + this.sinceChipHtml(member.docs)) +
       '</div>' +
       // What the member does reads first, before the signature spells out how to call it.
       (summary ? `<div class="summary">${summary}</div>` : '') +
