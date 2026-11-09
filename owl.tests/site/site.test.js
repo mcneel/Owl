@@ -140,11 +140,10 @@ describe('type pages', () => {
     const page = text(type('Members.Gadget'));
     assert.match(page, /public const int MaxSize = 10/);
     assert.match(page, /public const Mode DefaultMode = Mode\.Disk/);
-    assert.match(page, /public void Keep\(Mode mode = Mode\.Disk, Mode\? fallback = Mode\.Memory\)/);
-    assert.match(page, /mode \(Mode = Mode\.Disk\)/);
+    assert.match(page, /public void Keep\(\s*Mode\s*mode = Mode\.Disk,[\s\S]*?Mode\?\s*fallback = Mode\.Memory[\s\S]*?\)/);
     assert.match(page, /public readonly int Id/);
     assert.match(page, /public string Label \{ get; \}/);
-    assert.match(page, /public void Configure\(ref int a, out int b, in int c, int d = 5, params string\[\] rest\)/);
+    assert.match(page, /public void Configure\(\s*ref int\s*a,\s*out int\s*b,\s*in int\s*c,\s*int\s*d = 5,\s*params string\[\]\s*rest\s*\)/);
     assert.match(page, /IDisposable\.Dispose/);
     // Conversions are a table of kind, from and to.
     assert.match(page, /explicitintGadget/);
@@ -190,19 +189,27 @@ describe('type pages', () => {
     }
   });
 
-  test('each parameter after the first sits on its own line under the opening paren', () => {
+  test('each parameter sits on its own row with its description beside it', () => {
     const body = html(type('Members.Gadget'));
-    const decl = body.split('<div class="declaration">').find((d) => d.includes('tok-func">Configure<')).split('</div>')[0];
-    const lines = decl.replace(/<[^>]*>/g, '').split('\n');
-    assert.equal(lines.length, 5);
-    const column = lines[0].indexOf('(') + 1;
-    for (const line of lines.slice(1)) assert.equal(/^ */.exec(line)[0].length, column);
-  });
+    const card = (name) => body.split('<div class="member"').find((d) => d.includes(`tok-func">${name}<`));
 
-  test('a single parameter stays on the line of its declaration', () => {
-    const body = html(type('Members.Gadget'));
-    const indexer = body.split('<div class="declaration">').find((d) => d.includes('tok-keyword">this<')).split('</div>')[0];
-    assert.doesNotMatch(indexer, /\n/);
+    const keep = card('Keep');
+    const rows = [
+      ...keep.matchAll(
+        /<div class="sig-param-type">([\s\S]*?)<\/div><div class="sig-param">([\s\S]*?)<\/div><div class="sig-param-doc">([\s\S]*?)<\/div>/g
+      ),
+    ];
+    const plain = (h) => h.replace(/<[^>]*>/g, '');
+    assert.deepEqual(rows.map((r) => plain(r[1])), ['  Mode', '  Mode?']);
+    assert.deepEqual(rows.map((r) => plain(r[2])), ['mode = Mode.Disk,', 'fallback = Mode.Memory']);
+    assert.match(rows[0][3], /Where to keep it\./);
+    assert.match(keep, /<\/div><\/div><span class="tok-punct">\)<\/span>/, 'the ) closes the list on a line of its own');
+    assert.doesNotMatch(keep, /Parameters:/, 'the parameters table is gone where the signature carries it');
+
+    // One parameter is laid out the same way, so its description has somewhere to go.
+    assert.equal((card('Convert').match(/class="sig-param"/g) || []).length, 1);
+    // No parameters, nothing to lay out.
+    assert.doesNotMatch(card('Defined'), /sig-params/);
   });
 
   test('obsolete members are marked', () => {

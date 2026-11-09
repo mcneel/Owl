@@ -253,8 +253,8 @@ function typeArgumentCount(html) {
 }
 
 /**
- * Where a declaration's parameter list sits: the column just past its '(' (or an indexer's '['),
- * and the offset each parameter after the first starts at. Null with fewer than two parameters.
+ * Where a declaration's parameters sit: the offset each one and its name start at, and that of the
+ * ')' (or an indexer's ']') that closes the list. Null when it takes none, or a name can't be found.
  */
 function parameterLayout(code) {
   const skipQuoted = (at) => {
@@ -279,22 +279,40 @@ function parameterLayout(code) {
   }
   if (open < 0) return null;
 
-  const starts = [];
-  for (let i = open + 1, depth = 1; i < code.length; i++) {
+  // Each parameter as [start, end, the '=' of its default value or -1].
+  const spans = [];
+  let start = open + 1;
+  let equals = -1;
+  let close = -1;
+  for (let i = open + 1, depth = 1; i < code.length && close < 0; i++) {
     const c = code[i];
     if (c === '"' || c === "'") i = skipQuoted(i);
     else if ('([{<'.includes(c)) depth++;
     else if (')]}>'.includes(c)) {
-      if (--depth === 0) break;
-    } else if (c === ',' && depth === 1) {
-      let next = i + 1;
-      while (code[next] === ' ') next++;
-      starts.push(next);
+      if (--depth === 0) close = i;
+    } else if (c === '=' && depth === 1 && equals < 0) equals = i;
+    else if (c === ',' && depth === 1) {
+      spans.push([start, i, equals]);
+      start = i + 1;
+      while (code[start] === ' ') start++;
+      equals = -1;
     }
   }
-  if (!starts.length) return null;
+  if (close < 0 || !code.slice(open + 1, close).trim()) return null;
+  spans.push([start, close, equals]);
 
-  return { column: open + 1 - (code.lastIndexOf('\n', open) + 1), starts };
+  // The name is the last word before any default value.
+  const starts = [];
+  const names = [];
+  for (const [from, to, eq] of spans) {
+    const before = code.slice(from, eq < 0 ? to : eq).replace(/\s+$/, '');
+    const name = /@?\w+$/.exec(before);
+    if (!name || name.index === 0) return null;
+    starts.push(from);
+    names.push(from + name.index);
+  }
+
+  return { starts, names, close };
 }
 
 /**
@@ -1238,12 +1256,36 @@ class Renderer {
     return this.linkTypesIn(highlight(code, 'csharp'), assemblyName, ownName);
   }
 
-  /** A signature with each parameter after the first on a line of its own, under its '('. */
-  wrappableSignatureHtml(code, assemblyName, ownName) {
-    const html = this.signatureHtml(code, assemblyName, ownName);
+  /**
+   * Whether a signature can carry its parameters' descriptions beside them, which it can when each
+   * parameter the model lists was found in it. Where it cannot, the parameters table stays.
+   */
+  placesParameters(code, parameters) {
     const layout = parameterLayout(code);
-    if (!layout) return html;
-    return cutMarkup(html, layout.starts).join('\n' + ' '.repeat(layout.column));
+    return Boolean(layout && parameters && layout.starts.length === parameters.length);
+  }
+
+  /**
+   * A signature with each parameter on a line of its own, types and names in columns and its
+   * description beside it, the closing ')' on a line after them.
+   */
+  parameterSignatureHtml(code, assemblyName, ownName, parameters) {
+    const html = this.signatureHtml(code, assemblyName, ownName);
+    if (!this.placesParameters(code, parameters)) return html;
+
+    const layout = parameterLayout(code);
+    const cuts = [];
+    layout.starts.forEach((start, i) => cuts.push(start, layout.names[i]));
+    const pieces = cutMarkup(html, cuts.concat(layout.close));
+    const rows = parameters.map((parameter, i) => {
+      const doc = parameter.doc ? docnodes.render(parameter.doc, this.docContext) : '';
+      return (
+        `<div class="sig-param-type">  ${pieces[1 + 2 * i].trimEnd()}</div>` +
+        `<div class="sig-param">${pieces[2 + 2 * i].trimEnd()}</div>` +
+        `<div class="sig-param-doc">${doc}</div>`
+      );
+    });
+    return pieces[0] + `<div class="sig-params">${rows.join('')}</div>` + pieces[pieces.length - 1];
   }
 
   /**
@@ -1253,7 +1295,7 @@ class Renderer {
    * the class is actually called by. Arguments link as a signature does, all but a named argument's
    * name, which is a property of the attribute and would otherwise read as a type.
    */
-  declarationHtml(attributes, code, assemblyName, ownName, wrappable = false) {
+  declarationHtml(attributes, code, assemblyName, ownName, parameters = null) {
     const punct = (text) => `<span class="tok-punct">${escape(text)}</span>`;
 
     const lines = (attributes || []).map((attribute) => {
@@ -1275,7 +1317,9 @@ class Renderer {
     });
 
     lines.push(
-      wrappable ? this.wrappableSignatureHtml(code, assemblyName, ownName) : this.signatureHtml(code, assemblyName, ownName)
+      parameters
+        ? this.parameterSignatureHtml(code, assemblyName, ownName, parameters)
+        : this.signatureHtml(code, assemblyName, ownName)
     );
     return `<div class="declaration"><div class="decl-scroll">${lines.join('\n')}</div></div>`;
   }
@@ -2006,7 +2050,7 @@ ${prose.length > 0 ? `<div class="summary">${docnodes.render(prose, this.docCont
   <div class="page-head-brief">
     <div class="page-title-row">${derived ? derived.toggle : ''}<h1 class="page-title">${this.kindIconHtml(type.kind)}${escape(type.name)}</h1>${this.inheritanceChainHtml(type)}${this.referencesChipHtml(type)}${this.sinceChipHtml(type.docs)}</div>
     ${derived ? derived.tree : ''}
-    ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly, undefined, type.kind === 'delegate')}
+    ${this.declarationHtml(type.attributes, this.declarationOf(type), assembly)}
     ${
       summaryHtml
         ? '<div class="page-head-intro">' +
@@ -2416,8 +2460,8 @@ ${
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
       '<div class="section"><span class="section-label">Signature:</span>' +
-      `<div class="declaration"><div class="decl-scroll">${this.wrappableSignatureHtml(type.signature, assemblyName)}</div></div>` +
-      this.parametersHtml(type.parameters) +
+      `<div class="declaration"><div class="decl-scroll">${this.parameterSignatureHtml(type.signature, assemblyName, undefined, type.parameters)}</div></div>` +
+      (this.placesParameters(type.signature, type.parameters) ? '' : this.parametersHtml(type.parameters)) +
       '</div>'
     );
   }
@@ -2730,7 +2774,10 @@ ${
       );
     }
 
-    detail.push(this.parametersHtml(member.parameters));
+    // A callable's signature carries its parameters' descriptions; the table is for when it cannot.
+    const code = this.memberDeclaration(member, ownerKind);
+    const parameters = CALLABLE_KINDS.has(member.kind) || member.kind === 'indexer' ? member.parameters : null;
+    if (!parameters || !this.placesParameters(code, parameters)) detail.push(this.parametersHtml(member.parameters));
 
     if (member.docs && member.docs.returns) {
       detail.push(
@@ -2834,18 +2881,13 @@ ${
       // sees the member either way.
       (inheritedFrom ? '' : exampleButton + this.sinceChipHtml(member.docs)) +
       '</div>' +
+      // What the member does reads first, before the signature spells out how to call it.
+      (summary ? `<div class="summary">${summary}</div>` : '') +
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
       // constant's value rides on the end the way the source states it.
-      this.declarationHtml(
-        member.attributes,
-        this.memberDeclaration(member, ownerKind),
-        assemblyName,
-        lastSegment(member.name),
-        CALLABLE_KINDS.has(member.kind) || member.kind === 'indexer'
-      ) +
-      this.obsoleteHtml(member.obsolete) +
-      (summary ? `<div class="summary">${summary}</div>` : '');
+      this.declarationHtml(member.attributes, code, assemblyName, lastSegment(member.name), parameters) +
+      this.obsoleteHtml(member.obsolete);
 
     // Kept out of the body so an inherited card can seat it below the head row: the provenance
     // segment belongs beside what identifies the member, not beside its parameter tables.
