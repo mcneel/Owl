@@ -220,7 +220,7 @@ body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow:
 :root[data-sidebar="hidden"] .layout:has(> #sidebar-toggle.docked) .main-content > :first-child:not(.main-sticky) .page-title { margin-left: 1.4rem; }
 
 /* The magnifier sits inside the field, so the field owns the position it is measured against. */
-header form[role="search"] { position: relative; display: flex; align-items: center; flex-shrink: 0; }
+form.nav-search { position: relative; display: flex; align-items: center; flex-shrink: 0; }
 #search { width: 16rem; padding: 0 2rem 0 0.7rem; border: none; border-radius: 4px; background: var(--nav-field); color: var(--nav-fg); font-size: 0.85rem; outline: none; }
 #search::placeholder { color: var(--nav-dim); }
 #search:focus { background: var(--nav-focus); }
@@ -238,17 +238,17 @@ header form[role="search"] { position: relative; display: flex; align-items: cen
 .nav-search-clear { position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); display: none; appearance: none; border: none; background: none; padding: 0; width: 1.05rem; height: 1.05rem; cursor: pointer; color: var(--nav-dim); }
 .nav-search-clear:hover { color: var(--nav-fg); }
 .nav-search-clear svg { display: block; width: 100%; height: 100%; fill: currentColor; }
-header form[role="search"].filled .nav-search-icon { display: none; }
-header form[role="search"].filled .nav-search-clear { display: block; }
-header form[role="search"].index-loading .nav-search-icon { visibility: hidden; }
-header form[role="search"].index-loading .nav-search-clear { visibility: hidden; }
-header form[role="search"].index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
+form.nav-search.filled .nav-search-icon { display: none; }
+form.nav-search.filled .nav-search-clear { display: block; }
+form.nav-search.index-loading .nav-search-icon { visibility: hidden; }
+form.nav-search.index-loading .nav-search-clear { visibility: hidden; }
+form.nav-search.index-loading::after { content: ''; position: absolute; right: 0.55rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: calc(1.05rem / -2); border: 2px solid var(--nav-dim); border-top-color: transparent; border-radius: 50%; pointer-events: none; opacity: 0; animation: search-spin 0.7s linear infinite, search-spin-in 0s linear 0.15s forwards; }
 @keyframes search-spin { to { transform: rotate(360deg); } }
 @keyframes search-spin-in { to { opacity: 1; } }
 /* Motion is the one thing this drawing is made of, so reduced motion gets a slower turn rather
    than a still ring that would read as a broken icon. */
 @media (prefers-reduced-motion: reduce) {
-  header form[role="search"].index-loading::after { animation-duration: 2.5s, 0s; }
+  form.nav-search.index-loading::after { animation-duration: 2.5s, 0s; }
 }
 
 /* ---- Header search results ----
@@ -1169,18 +1169,20 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
   /* Search folds to its magnifier and opens across the header when tapped, giving the title back
      its room. It stays open while its results are up, so a tap on one does not move it away. */
   body > header { position: relative; }
+  /* Only around owl's search, so the rest of a site header keeps whatever it positions against. */
+  .site-chrome-header:has(form.nav-search) { position: relative; }
   #search { width: 30px; padding: 0; color: transparent; }
   #search::placeholder { color: transparent; }
-  .nav-search-icon, header form[role="search"].index-loading::after { right: calc((30px - 1.05rem) / 2); }
-  header form[role="search"].filled .nav-search-icon { display: block; }
-  header form[role="search"].filled .nav-search-clear { display: none; }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) { position: absolute; top: 0; bottom: 0; left: 0.9rem; right: 0.9rem; z-index: 1; background: var(--nav-bg); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search { width: 100%; padding: 0 2rem 0 0.7rem; color: var(--nav-fg); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) #search::placeholder { color: var(--nav-dim); }
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon,
-  header form[role="search"]:is(:focus-within, :has(.nav-results:not([hidden]))).index-loading::after { right: 0.55rem; }
-  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon { display: none; }
-  header form[role="search"].filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-clear { display: block; }
+  .nav-search-icon, form.nav-search.index-loading::after { right: calc((30px - 1.05rem) / 2); }
+  form.nav-search.filled .nav-search-icon { display: block; }
+  form.nav-search.filled .nav-search-clear { display: none; }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) { position: absolute; top: 0; bottom: 0; left: 0.9rem; right: 0.9rem; z-index: 1; background: var(--nav-bg); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) #search { width: 100%; padding: 0 2rem 0 0.7rem; color: var(--nav-fg); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) #search::placeholder { color: var(--nav-dim); }
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon,
+  form.nav-search:is(:focus-within, :has(.nav-results:not([hidden]))).index-loading::after { right: 0.55rem; }
+  form.nav-search.filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-icon { display: none; }
+  form.nav-search.filled:is(:focus-within, :has(.nav-results:not([hidden]))) .nav-search-clear { display: block; }
   .nav-results { max-width: none; width: 100%; }
 
   /* Width is what a phone is short of, so the padding gives it back to the text. */

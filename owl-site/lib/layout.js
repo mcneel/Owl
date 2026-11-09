@@ -132,7 +132,7 @@ function page(options) {
   // Written once and placed either in owl's own bar or where the site header marks them.
   const controls = {
     sidebarToggle: togglePlace === 'header' ? sidebarToggle(sidebar) : '',
-    search: `  <form action="${attr(routes.search())}" method="get" role="search">
+    search: `  <form action="${attr(routes.search())}" method="get" role="search" class="nav-search">
     <label class="skip-link" for="search">Search the API</label>
     <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
          and not only on the one that happens to carry a results list.
