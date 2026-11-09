@@ -33,6 +33,7 @@ node check.js --json .owl/json                  # links, metadata, offline-ness
 | `--d2 <path>` | serve, build | The `d2` binary that draws diagrams. Defaults to `d2` on `PATH`. |
 | `--site-header <file>` | serve, build | HTML placed above the header on every page. |
 | `--site-footer <file>` | serve, build | HTML placed at the end of every page's content. |
+| `--sidebar-toggle <header\|sidebar>` | serve, build | Where the sidebar's show/hide button goes (default `header`). |
 | `--skip-undocumented` | all | Leave out anything with no `<summary>`. |
 | `--quiet` | build | Only print the summary, not per-page progress. |
 | `--dist <dir>` | check | Check an already-exported directory instead of rendering. |
@@ -74,6 +75,10 @@ light and dark switch simply leaves `owl:theme` unmarked.
 them. Mark `owl:pickers` to place the pickers on their own, which also lets a site with its own
 search leave `owl:search` unmarked and keep them. The theme is still `data-theme` on the root, so a
 site switch that sets it, and `data-theme-pref`, keeps owl's pages, diagrams included, in step.
+
+`--sidebar-toggle sidebar` docks the sidebar's show/hide button at the tree column's corner instead
+of the header, for a header shared with pages that have no sidebar. The `owl:sidebar-toggle` mark
+is then left empty.
 
 `--skip-undocumented` renders only what somebody has written a `<summary>` for, which is worth
 having while coverage is still low: the alternative is a site whose pages are mostly signatures with

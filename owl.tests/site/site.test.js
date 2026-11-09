@@ -529,6 +529,19 @@ describe('options', () => {
     assert.doesNotMatch(page, /id="theme-switch"/);
   });
 
+  test('--sidebar-toggle sidebar docks the toggle by the tree, and leaves the header mark empty', () => {
+    const header = tempFile('docked.html', '<header class="parent"><!-- owl:sidebar-toggle --><a href="/">Parent</a></header>');
+    const { html, site } = make({ apiDir: docs, siteHeader: header, sidebarToggle: 'sidebar' });
+    const page = html(site.routes.type(slugify('Samples.Members.Gadget')));
+    assert.match(page, /<header class="parent"><a href="\/">Parent<\/a><\/header>/);
+    assert.match(page, /<div class="layout">\n<button id="sidebar-toggle" class="docked"[\s\S]*?<aside class="sidebar"/);
+    assert.equal(page.match(/id="sidebar-toggle"/g).length, 1);
+  });
+
+  test('--sidebar-toggle rejects anything but header or sidebar', () => {
+    assert.throws(() => make({ apiDir: docs, sidebarToggle: 'left' }), /--sidebar-toggle left/);
+  });
+
   test('an owl:theme mark in --site-header places the theme switch there', () => {
     const header = tempFile('themed.html', '<header class="parent"><a href="/">Parent</a><!-- owl:theme --></header>');
     const { html, site } = make({ apiDir: docs, siteHeader: header });

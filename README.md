@@ -184,6 +184,7 @@ Lists undocumented API, and fails on broken `<see cref="..."/>` links and broken
 | serve, build | `--favicon <file>` | Browser tab icon |
 | serve, build | `--site-header <file>` | HTML above the header on every page, e.g. a parent site's bar. Marks such as `<!-- owl:search -->` in it replace owl's own bar |
 | serve, build | `--site-footer <file>` | HTML at the end of every page's content |
+| serve, build | `--sidebar-toggle <header\|sidebar>` | Where the sidebar's show/hide button goes; `sidebar` docks it at the tree column's corner (default `header`) |
 | serve, build | `--skip-undocumented` | Hide anything without a summary |
 
 Run `owl --help` to see all options.

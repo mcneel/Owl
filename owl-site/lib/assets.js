@@ -206,6 +206,18 @@ body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow:
 #sidebar-toggle:hover { background: var(--nav-focus); }
 /* A filled mark, unlike the stroked moon and sun beside it: the path carries its own weight. */
 #sidebar-toggle svg { display: block; width: 1.05rem; height: 1.05rem; fill: currentColor; }
+/* Docked (--sidebar-toggle sidebar): the collapse button's bare face, in the one corner both states
+   share - the tree's bar while the column shows, the breadcrumbs' line once it is gone - so a
+   second press finds it where the first left it. Above the phone's overlay, which it also closes. */
+.layout:has(> #sidebar-toggle.docked) { position: relative; }
+#sidebar-toggle.docked { position: absolute; z-index: 26; top: 0.35rem; left: 0.6rem; width: 1.5rem; height: 1.5rem; background: none; border: 1px solid transparent; color: var(--text2); }
+#sidebar-toggle.docked:hover { background: none; border-color: var(--border2); }
+#sidebar-toggle.docked svg { width: 1.1rem; height: 1.1rem; fill: none; }
+.layout:has(> #sidebar-toggle.docked) .sidebar-toolbar { padding-left: 2.5rem; }
+:root[data-sidebar="hidden"] #sidebar-toggle.docked { top: 1.3rem; }
+:root[data-sidebar="hidden"] .layout:has(> #sidebar-toggle.docked) .main-sticky { padding-left: 2.9rem; }
+/* Pages with no breadcrumbs, such as the home page, make room beside their title instead. */
+:root[data-sidebar="hidden"] .layout:has(> #sidebar-toggle.docked) .main-content > :first-child:not(.main-sticky) .page-title { margin-left: 1.4rem; }
 
 /* The magnifier sits inside the field, so the field owns the position it is measured against. */
 header form[role="search"] { position: relative; display: flex; align-items: center; flex-shrink: 0; }
@@ -379,6 +391,7 @@ header form[role="search"].index-loading::after { content: ''; position: absolut
 :root[data-plain] .skip-link,
 :root[data-plain] .sidebar,
 :root[data-plain] .resize-handle,
+:root[data-plain] #sidebar-toggle.docked,
 :root[data-plain] .breadcrumbs { display: none; }
 /* Pinned, like the rows under it: it acts on the whole tree, so it is no use only while the top of
    the tree is in view. Opaque and above the pinned rows, which pass beneath it. Its height is
@@ -1148,6 +1161,10 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; }
   .layout { position: relative; }
   .sidebar, .resize-handle { display: none; }
   :root[data-sidebar-open] .sidebar { display: block; position: absolute; top: 0; bottom: 0; left: 0; z-index: 25; max-width: 85vw; box-shadow: 0 0 28px rgba(0, 0, 0, 0.35); }
+  /* Docked, the closed overlay is the hidden column: the button waits by the breadcrumbs. */
+  :root:not([data-sidebar-open]) #sidebar-toggle.docked { top: 1.3rem; left: 0.4rem; }
+  :root:not([data-sidebar-open]) .layout:has(> #sidebar-toggle.docked) .main-sticky { padding-left: 2.4rem; }
+  :root:not([data-sidebar-open]) .layout:has(> #sidebar-toggle.docked) .main-content > :first-child:not(.main-sticky) .page-title { margin-left: 1.65rem; }
 
   /* Search folds to its magnifier and opens across the header when tapped, giving the title back
      its room. It stays open while its results are up, so a tap on one does not move it away. */

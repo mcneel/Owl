@@ -42,6 +42,7 @@ const FAVICON_TYPES = {
  *   favicon   svg, png or ico file for the browser tab; without it the logo serves
  *   siteHeader  html file placed above the header on every page, for a site the docs live inside
  *   siteFooter  html file placed at the end of every page's content
+ *   sidebarToggle  'header' (the default) or 'sidebar', where the sidebar's show/hide button goes
  *   apiVersions  comma-separated versions the header's picker offers, newest first; without them
  *             there is no picker and every API is shown whatever its <since> says
  *   skipUndocumented  leave out anything with no <summary>
@@ -74,6 +75,10 @@ class Site {
     this.faviconPath = options.favicon || '';
     this.siteHeaderPath = options.siteHeader || '';
     this.siteFooterPath = options.siteFooter || '';
+    this.sidebarToggle = options.sidebarToggle || 'header';
+    if (!['header', 'sidebar'].includes(this.sidebarToggle)) {
+      throw new Error(`--sidebar-toggle ${this.sidebarToggle}: expected header or sidebar.`);
+    }
     this.skipUndocumented = Boolean(options.skipUndocumented);
 
     // Split here for the same reason --link is: the list is a mistake in the command line or it is
@@ -156,6 +161,7 @@ class Site {
       favicon: this.readFavicon(this.faviconPath),
       siteHeader: this.readHtml(this.siteHeaderPath),
       siteFooter: this.readHtml(this.siteFooterPath),
+      sidebarToggle: this.sidebarToggle,
       versions: this.versions,
       diagrams,
       // Where a page says something went wrong while it was being made: an equation that would not

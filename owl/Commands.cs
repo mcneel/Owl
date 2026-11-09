@@ -112,6 +112,7 @@ sealed class Command
         case "--favicon":
         case "--site-header":
         case "--site-footer":
+        case "--sidebar-toggle":
         case "--source-refs":
         case "--api-versions":
         case "--link":

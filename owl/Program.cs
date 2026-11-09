@@ -98,6 +98,8 @@ static void PrintUsage()
       --site-header <file>  HTML placed above the header on every page, e.g. a parent site's bar;
                             <!-- owl:search --> and the like in it replace owl's own bar
       --site-footer <file>  HTML placed at the end of every page's content
+      --sidebar-toggle <at> Where the sidebar's show/hide button goes: header (default), or
+                            sidebar to dock it at the tree column's corner
       --source-refs <path>  Root for "declared in" references; without it there are none
       --api-versions <list> Versions the header's picker offers, newest first, comma separated;
                             without it there is no picker and <since> filters nothing

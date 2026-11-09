@@ -36,6 +36,8 @@ function fullTitle(title, siteName) {
  *   breadcrumbs  [{label, url, icon?}] innermost last; icon names a sprite icon worn before the label
  *   body         main content HTML
  *   sidebar      optional sidebar HTML (renders the tree column)
+ *   sidebarToggle  'header' puts the sidebar toggle in the header bar; 'sidebar' docks it at the
+ *                corner of the tree column instead, where it stays when the column is hidden
  *   sidebarAlt   the namespace tree this page swaps in when its url carries the mode flag, or ''.
  *                Written into an inert template: a reader in the other mode is the exception, and
  *                a second tree drawn into the page proper would cost every reader its weight
@@ -72,6 +74,7 @@ function page(options) {
     breadcrumbs = [],
     body,
     sidebar = null,
+    sidebarToggle: togglePlace = 'header',
     sidebarAlt = '',
     treeKey = '',
     treeSrc = '',
@@ -128,7 +131,7 @@ function page(options) {
 
   // Written once and placed either in owl's own bar or where the site header marks them.
   const controls = {
-    sidebarToggle: sidebarToggle(sidebar),
+    sidebarToggle: togglePlace === 'header' ? sidebarToggle(sidebar) : '',
     search: `  <form action="${attr(routes.search())}" method="get" role="search">
     <label class="skip-link" for="search">Search the API</label>
     <!-- The index and the scope ride on the box itself, so it can answer as you type on any page
@@ -244,6 +247,9 @@ ${controls.search}  ${controls.theme}
 
 <div class="layout">
 ${
+  // Outside the column, so it survives the tree being swapped and is still there once it is hidden.
+  togglePlace === 'sidebar' ? sidebarToggle(sidebar, true) : ''
+}${
   sidebar
     ? `  <aside class="sidebar" id="sidebar" aria-label="Navigation" data-tree="${attr(treeKey)}"${
         treeSrc ? ` data-tree-src="${attr(treeSrc)}"` : ''
@@ -304,21 +310,29 @@ function fillControls(html, controls) {
 }
 
 /**
- * The header's sidebar toggle, first in the bar so it sits against the column it acts on.
+ * The sidebar toggle, first in the bar so it sits against the column it acts on, or docked at the
+ * column's corner.
  *
  * Only on pages that carry a sidebar; anywhere else there is nothing to toggle. aria-expanded is
  * written as shown, which is what a page without the script has; the script corrects it where a
- * hidden column was remembered. The mark is Octicons' three-bars, drawn rather than typed: a glyph
- * sits on a baseline and lands low in a square button, while a viewBox centres on the geometry.
+ * hidden column was remembered. The header's mark is Octicons' three-bars, drawn rather than typed:
+ * a glyph sits on a baseline and lands low in a square button, while a viewBox centres on the
+ * geometry. Docked, it is a panel with its column ruled off, the column it shows and hides.
  */
-function sidebarToggle(sidebar) {
+function sidebarToggle(sidebar, docked = false) {
   if (!sidebar) return '';
 
+  const mark = docked
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">' +
+      '<rect x="3.25" y="4.25" width="17.5" height="15.5" rx="2"/><path d="M9.25 4.25v15.5"/></g></svg>'
+    : '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+      '<path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>';
+
   return (
-    '<button id="sidebar-toggle" type="button" title="Toggle sidebar" ' +
+    `<button id="sidebar-toggle"${docked ? ' class="docked"' : ''} type="button" title="Toggle sidebar" ` +
     'aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true">' +
-    '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
-    '<path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg></button>'
+    mark +
+    '</button>'
   );
 }
 
