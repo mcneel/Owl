@@ -559,6 +559,19 @@ describe('options', () => {
     assert.doesNotMatch(page, /role="search"/);
   });
 
+  test('a repeated or unknown owl: mark in --site-header is reported', () => {
+    const header = tempFile('bad-marks.html', '<header><!-- owl:search --><!-- owl:search --><!-- owl:serach --></header>');
+    const { site } = make({ apiDir: docs, siteHeader: header });
+    assert.ok(site.model.warnings.some((w) => /owl:search --> appears 2 times/.test(w)));
+    assert.ok(site.model.warnings.some((w) => /unknown mark <!-- owl:serach -->/.test(w)));
+  });
+
+  test('a well-marked --site-header raises no mark warnings', () => {
+    const header = tempFile('good-marks.html', '<div><!-- owl:search --><!-- owl:theme --></div>');
+    const { site } = make({ apiDir: docs, siteHeader: header });
+    assert.ok(!site.model.warnings.some((w) => w.includes('owl:')));
+  });
+
   test('a --site-header that cannot be read is reported and left out', () => {
     const missing = path.join(os.tmpdir(), 'owl-no-such-dir', 'header.html');
     const { html, site } = make({ apiDir: docs, siteHeader: missing });

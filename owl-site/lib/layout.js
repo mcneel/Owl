@@ -310,6 +310,26 @@ function fillControls(html, controls) {
 }
 
 /**
+ * Problems with a site header's marks, as warning lines: a repeated mark, or an owl: mark owl does
+ * not know. Empty when the header is fine.
+ */
+function checkControlMarks(html) {
+  const known = ['sidebar-toggle', 'search', 'pickers', 'theme'];
+  const counts = new Map();
+  for (const [, name] of html.matchAll(/<!--\s*owl:([\w-]+)\s*-->/g)) {
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+
+  const problems = [];
+  for (const [name, count] of counts) {
+    // A repeat writes the control twice under the same ids, and only the first copy works.
+    if (!known.includes(name)) problems.push(`unknown mark <!-- owl:${name} -->; expected one of ${known.join(', ')}`);
+    else if (count > 1) problems.push(`<!-- owl:${name} --> appears ${count} times; only one is allowed`);
+  }
+  return problems;
+}
+
+/**
  * The sidebar toggle, first in the bar so it sits against the column it acts on, or docked at the
  * column's corner.
  *
@@ -592,5 +612,6 @@ module.exports = {
   memberFilterBar,
   assemblySelector,
   versionLabel,
+  checkControlMarks,
   DEFAULT_SITE_NAME,
 };

@@ -13,6 +13,7 @@ const { Docify, withQuery } = require('./docify');
 const { Links } = require('./links');
 const { CSS, JS } = require('./assets');
 const { cleanSvg } = require('./html');
+const { checkControlMarks } = require('./layout');
 
 /** What a favicon may be, by extension; anything else is not one every browser shows. */
 const FAVICON_TYPES = {
@@ -159,7 +160,7 @@ class Site {
       logo: this.readLogo(this.logoPath),
       logoDark: this.readLogo(this.logoDarkPath),
       favicon: this.readFavicon(this.faviconPath),
-      siteHeader: this.readHtml(this.siteHeaderPath),
+      siteHeader: this.readSiteHeader(this.siteHeaderPath),
       siteFooter: this.readHtml(this.siteFooterPath),
       sidebarToggle: this.sidebarToggle,
       versions: this.versions,
@@ -170,6 +171,13 @@ class Site {
     });
     this.markdown = new MarkdownPages(this.renderer);
     return this.model.warnings;
+  }
+
+  /** Reads --site-header, warning about marks that would leave a control broken or missing. */
+  readSiteHeader(file) {
+    const html = this.readHtml(file);
+    for (const problem of checkControlMarks(html)) this.model.warnings.push(`${file}: ${problem}`);
+    return html;
   }
 
   /** Reads an html fragment named on the command line, on every reload like the logo. */
