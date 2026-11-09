@@ -917,7 +917,7 @@ ${TEMML_CSS}
 /* The type is the payload of the two lines, so it takes the reading colour and a step up in
    size; saying the card leads somewhere is the border's job, not the text's. */
 .inherited-from-type { font-size: 0.78rem; color: var(--text3); margin-top: 0.15rem; }
-.member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap; }
+.member-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
 /* Every badge and chip is a mark rather than words: double-clicking the name beside one is a reader
    picking up that name to paste somewhere, and 'class' riding along with it is never what they
    meant. */
@@ -1002,7 +1002,12 @@ a.see-ref:hover { text-decoration: underline; }
 .declaration.clip-left::before { left: 0; }
 .declaration.clip-right::after { right: 0; }
 .member.obsolete { --decl-bg: var(--card-inherited); }
-.member .declaration { font-size: 0.78rem; }
+/* The same gap as under the title, so title, summary and signature are spaced evenly; the card's padding takes the bottom. */
+.member .declaration { font-size: 0.78rem; margin-top: 0.5rem; margin-bottom: 0; }
+/* One parameter per row, its description beside it; past the description's minimum the block scrolls. */
+.sig-params { margin-top: 0.5em; display: grid; grid-template-columns: max-content max-content minmax(16rem, 1fr); column-gap: 1ch; row-gap: 0.15rem; }
+.sig-param-doc { padding-left: 2rem; white-space: normal; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.8rem; color: var(--text3); }
+.sig-param-doc p { margin: 0; }
 pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.6rem 0; }
 pre code { font-family: monospace; font-size: 0.8rem; line-height: 1.55; background: none; padding: 0; }
 code { font-family: monospace; }

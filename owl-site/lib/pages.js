@@ -252,6 +252,97 @@ function typeArgumentCount(html) {
   );
 }
 
+/**
+ * Where a declaration's parameters sit: the offset each one and its name start at, and that of the
+ * ')' (or an indexer's ']') that closes the list. Null when it takes none, or a name can't be found.
+ */
+function parameterLayout(code) {
+  const skipQuoted = (at) => {
+    const quote = code[at];
+    for (let i = at + 1; i < code.length; i++) {
+      if (code[i] === '\\') i++;
+      else if (code[i] === quote) return i;
+    }
+    return code.length;
+  };
+
+  // The list's opener hugs a name, a '>' or an operator symbol; a tuple type has a space or '<' before it.
+  let open = -1;
+  for (let i = 0, depth = 0; i < code.length && open < 0; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") i = skipQuoted(i);
+    else if (c === '(' || c === '[') {
+      const hugs = c === '(' ? i > 0 && !/[\s<,(]/.test(code[i - 1]) : code.slice(0, i).endsWith('this');
+      if (depth === 0 && hugs) open = i;
+      else depth++;
+    } else if (c === ')' || c === ']') depth--;
+  }
+  if (open < 0) return null;
+
+  // Each parameter as [start, end, the '=' of its default value or -1].
+  const spans = [];
+  let start = open + 1;
+  let equals = -1;
+  let close = -1;
+  for (let i = open + 1, depth = 1; i < code.length && close < 0; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") i = skipQuoted(i);
+    else if ('([{<'.includes(c)) depth++;
+    else if (')]}>'.includes(c)) {
+      if (--depth === 0) close = i;
+    } else if (c === '=' && depth === 1 && equals < 0) equals = i;
+    else if (c === ',' && depth === 1) {
+      spans.push([start, i, equals]);
+      start = i + 1;
+      while (code[start] === ' ') start++;
+      equals = -1;
+    }
+  }
+  if (close < 0 || !code.slice(open + 1, close).trim()) return null;
+  spans.push([start, close, equals]);
+
+  // The name is the last word before any default value.
+  const starts = [];
+  const names = [];
+  for (const [from, to, eq] of spans) {
+    const before = code.slice(from, eq < 0 ? to : eq).replace(/\s+$/, '');
+    const name = /@?\w+$/.exec(before);
+    if (!name || name.index === 0) return null;
+    starts.push(from);
+    names.push(from + name.index);
+  }
+
+  return { starts, names, close };
+}
+
+/**
+ * Cuts highlighted markup at offsets into its text, closing the tags open at each cut and opening
+ * them again after it, so every piece stands on its own.
+ */
+function cutMarkup(html, offsets) {
+  const pieces = [];
+  const open = [];
+  let piece = '';
+  let text = 0;
+  let next = 0;
+  const tokens = html.match(/<[^>]*>|&[#\w]+;|[^<&]/g) || [];
+  for (const token of tokens) {
+    const closing = token.startsWith('</');
+    if (!closing && next < offsets.length && text === offsets[next]) {
+      for (let i = open.length - 1; i >= 0; i--) piece += `</${/^<(\w+)/.exec(open[i])[1]}>`;
+      pieces.push(piece);
+      piece = open.join('');
+      next++;
+    }
+    piece += token;
+    if (closing) open.pop();
+    else if (token.startsWith('<')) open.push(token);
+    else text++;
+  }
+  pieces.push(piece);
+  return pieces;
+}
+
 /** Kinds that take a parameter list, and so can be overloaded on it. */
 const CALLABLE_KINDS = new Set(['method', 'constructor', 'destructor', 'operator', 'conversion']);
 
@@ -1166,13 +1257,45 @@ class Renderer {
   }
 
   /**
+   * Whether a signature can carry its parameters' descriptions beside them, which it can when each
+   * parameter the model lists was found in it. Where it cannot, the parameters table stays.
+   */
+  placesParameters(code, parameters) {
+    const layout = parameterLayout(code);
+    return Boolean(layout && parameters && layout.starts.length === parameters.length);
+  }
+
+  /**
+   * A signature with each parameter on a line of its own, types and names in columns and its
+   * description beside it, the closing ')' on a line after them.
+   */
+  parameterSignatureHtml(code, assemblyName, ownName, parameters) {
+    const html = this.signatureHtml(code, assemblyName, ownName);
+    if (!this.placesParameters(code, parameters)) return html;
+
+    const layout = parameterLayout(code);
+    const cuts = [];
+    layout.starts.forEach((start, i) => cuts.push(start, layout.names[i]));
+    const pieces = cutMarkup(html, cuts.concat(layout.close));
+    const rows = parameters.map((parameter, i) => {
+      const doc = parameter.doc ? docnodes.render(parameter.doc, this.docContext) : '';
+      return (
+        `<div class="sig-param-type">  ${pieces[1 + 2 * i].trimEnd()}</div>` +
+        `<div class="sig-param">${pieces[2 + 2 * i].trimEnd()}</div>` +
+        `<div class="sig-param-doc">${doc}</div>`
+      );
+    });
+    return pieces[0] + `<div class="sig-params">${rows.join('')}</div>` + pieces[pieces.length - 1];
+  }
+
+  /**
    * A declaration with its attributes on the lines above it, '[Name(args)]' as source writes them.
    *
    * Each name links by its doc id rather than by spelling: the model drops the 'Attribute' suffix
    * the class is actually called by. Arguments link as a signature does, all but a named argument's
    * name, which is a property of the attribute and would otherwise read as a type.
    */
-  declarationHtml(attributes, code, assemblyName, ownName) {
+  declarationHtml(attributes, code, assemblyName, ownName, parameters = null) {
     const punct = (text) => `<span class="tok-punct">${escape(text)}</span>`;
 
     const lines = (attributes || []).map((attribute) => {
@@ -1193,7 +1316,11 @@ class Renderer {
       return punct('[') + name + list + punct(']');
     });
 
-    lines.push(this.signatureHtml(code, assemblyName, ownName));
+    lines.push(
+      parameters
+        ? this.parameterSignatureHtml(code, assemblyName, ownName, parameters)
+        : this.signatureHtml(code, assemblyName, ownName)
+    );
     return `<div class="declaration"><div class="decl-scroll">${lines.join('\n')}</div></div>`;
   }
 
@@ -2333,8 +2460,8 @@ ${
     if (type.kind !== 'delegate' || !type.signature) return '';
     return (
       '<div class="section"><span class="section-label">Signature:</span>' +
-      `<div class="declaration"><div class="decl-scroll">${this.signatureHtml(type.signature, assemblyName)}</div></div>` +
-      this.parametersHtml(type.parameters) +
+      `<div class="declaration"><div class="decl-scroll">${this.parameterSignatureHtml(type.signature, assemblyName, undefined, type.parameters)}</div></div>` +
+      (this.placesParameters(type.signature, type.parameters) ? '' : this.parametersHtml(type.parameters)) +
       '</div>'
     );
   }
@@ -2647,7 +2774,10 @@ ${
       );
     }
 
-    detail.push(this.parametersHtml(member.parameters));
+    // A callable's signature carries its parameters' descriptions; the table is for when it cannot.
+    const code = this.memberDeclaration(member, ownerKind);
+    const parameters = CALLABLE_KINDS.has(member.kind) || member.kind === 'indexer' ? member.parameters : null;
+    if (!parameters || !this.placesParameters(code, parameters)) detail.push(this.parametersHtml(member.parameters));
 
     if (member.docs && member.docs.returns) {
       detail.push(
@@ -2751,12 +2881,13 @@ ${
       // sees the member either way.
       (inheritedFrom ? '' : exampleButton + this.sinceChipHtml(member.docs)) +
       '</div>' +
+      // What the member does reads first, before the signature spells out how to call it.
+      (summary ? `<div class="summary">${summary}</div>` : '') +
       // The whole declaration as source writes it, modifiers and all: a reader looking for whether
       // a member is static, sealed or assignable looks where those facts would be declared, and a
       // constant's value rides on the end the way the source states it.
-      this.declarationHtml(member.attributes, this.memberDeclaration(member, ownerKind), assemblyName, lastSegment(member.name)) +
-      this.obsoleteHtml(member.obsolete) +
-      (summary ? `<div class="summary">${summary}</div>` : '');
+      this.declarationHtml(member.attributes, code, assemblyName, lastSegment(member.name), parameters) +
+      this.obsoleteHtml(member.obsolete);
 
     // Kept out of the body so an inherited card can seat it below the head row: the provenance
     // segment belongs beside what identifies the member, not beside its parameter tables.
