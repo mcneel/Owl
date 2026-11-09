@@ -1370,9 +1370,9 @@ const JS = `
   }
 
   // ---- What's New ----
-  // The url names the comparison: '9' is the run the version filter gives 9, '6...9' exactly what
-  // came after 6 up to and including 9, nothing the newest. Read here rather than written into the page,
-  // so that a server can answer any pair with the one shell. See whatsNew in lib/pages.js.
+  // The path names a version: '9' is the run the version filter gives 9, nothing the newest.
+  // ?compare=6...9 is exactly what came after 6 up to and including 9. Read here rather than written
+  // into the page, so that one file answers every pair, even on a plain file host. See whatsNew in lib/pages.js.
   var whatsNew = document.getElementById('whatsnew');
   var whatsNewLink = document.getElementById('whatsnew-link');
 
@@ -1388,7 +1388,8 @@ const JS = `
       ? location.pathname.slice(root.length).replace(/[/]+$/, '')
       : '';
     try { spec = decodeURIComponent(spec); } catch (e) {}
-    // A pair in the query works on a plain file host, which has no file for a pair in the path.
+    // Only ?compare names a pair; the servers send a pair in the path there.
+    if (spec.indexOf('...') !== -1) spec = '';
     var compare = urlParams().get(COMPARE_PARAM);
     if (compare && compare.split('...').length === 2) spec = compare;
     if (!spec) spec = listedVersions[0] || '';

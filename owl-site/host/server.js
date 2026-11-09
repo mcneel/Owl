@@ -208,8 +208,17 @@ const server = http.createServer((req, res) => {
   }
 
   let relative = pathname.slice(BASE.length);
-  // One page answers every comparison; it reads which from the url. Only listed versions were exported.
-  if (/^\/whatsnew\/[^/]+\/$/.test(relative) && !fs.existsSync(path.join(ROOT, relative))) {
+  // A pair in the path is the old form of ?compare, kept so links to it still land.
+  const pair = /^\/whatsnew\/([^/]*\d[^/]*\.\.\.[^/]*\d[^/]*)\/$/.exec(relative);
+  if (pair && pair[1].split('...').length === 2) {
+    const rest = new URLSearchParams(url.search);
+    rest.delete('compare');
+    const query = rest.toString();
+    const location = `${BASE}/whatsnew/?compare=${encodeURIComponent(pair[1])}${query ? '&' + query : ''}`;
+    return send(res, 301, { Location: location, 'Cache-Control': CACHE }, '', head);
+  }
+  // One page answers every version; it reads which from the url. Only listed versions were exported.
+  if (/^\/whatsnew\/[^/]+\/$/.test(relative) && !relative.includes('...') && !fs.existsSync(path.join(ROOT, relative))) {
     relative = '/whatsnew/';
   }
   let file = path.join(ROOT, relative);

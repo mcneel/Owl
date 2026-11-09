@@ -617,12 +617,17 @@ describe("what's new", () => {
     assert.match(html(site.routes.home()), /<a id="whatsnew-link" href="\/whatsnew\/3\/" data-root="\/whatsnew\/">/);
   });
 
-  test('a version, a pair or neither has a page', () => {
-    for (const url of ['/whatsnew/', '/whatsnew/2.1/', '/whatsnew/9/', '/whatsnew/2...3/', '/whatsnew/6.0...9.0/']) {
-      assert.equal(get(url).status, 200, url);
-    }
+  test('a version or neither has a page', () => {
+    for (const url of ['/whatsnew/', '/whatsnew/2.1/', '/whatsnew/9/']) assert.equal(get(url).status, 200, url);
     assert.equal(get('/whatsnew/latest/').status, 404);
     assert.equal(get('/whatsnew/1...2...3/').status, 404);
+  });
+
+  test('a pair in the path moves to ?compare, keeping the rest of the query', () => {
+    assert.equal(get('/whatsnew/6.0...9.0/').location, '/whatsnew/?compare=6.0...9.0');
+    const moved = site.resolve('/whatsnew/2...3/', new URLSearchParams('dark=true&compare=1...2'), false);
+    assert.equal(moved.status, 301);
+    assert.equal(moved.location, '/whatsnew/?compare=2...3&dark=true');
   });
 
   test('the page pins its heading, filter box and toggles', () => {
@@ -662,6 +667,90 @@ describe("what's new", () => {
     assert.deepEqual(members['Gadget(int)'].slice(4), ['2.1', '']);
     assert.deepEqual(members['Keep(Mode, Mode?)'].slice(4), ['', '2.1']);
     assert.equal(Object.keys(members).length, 2);
+  });
+});
+
+describe("what's new in the browser", () => {
+  const vm = require('node:vm');
+  const { JS } = require(path.join(site, 'lib', 'assets'));
+  const versions = ['3', '2.1', '2'];
+
+  /** Runs the page script on a What's New page at an address, with only the elements it reads. */
+  function open(pathname, search = '') {
+    const element = (attrs = {}) => {
+      const a = new Map(Object.entries(attrs));
+      return {
+        textContent: '', hidden: false, style: {}, dataset: {},
+        classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
+        getAttribute: (k) => (a.has(k) ? a.get(k) : null), setAttribute: (k, v) => a.set(k, v),
+        hasAttribute: (k) => a.has(k), removeAttribute: (k) => a.delete(k),
+        addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], appendChild() {}, closest: () => null,
+      };
+    };
+    let onPick = null;
+    const select = element();
+    select.options = versions.map((value) => ({ value }));
+    let picked = '';
+    Object.defineProperty(select, 'value', {
+      get: () => picked,
+      set: (v) => { picked = versions.includes(v) ? v : ''; select.selectedIndex = versions.indexOf(picked); },
+    });
+    select.value = versions[0];
+    select.addEventListener = (name, handler) => { if (name === 'change') onPick = handler; };
+    const ids = {
+      'version-filter': select,
+      whatsnew: element({ 'data-root': '/whatsnew/', 'data-src': '/assets/whatsnew.json' }),
+      'whatsnew-link': element({ 'data-root': '/whatsnew/' }),
+      'whatsnew-title': element(),
+      'whatsnew-status': element(),
+    };
+    const location = { pathname, search, hash: '', href: `https://example.com${pathname}${search}`, origin: 'https://example.com' };
+    const context = {
+      URL, URLSearchParams, location, setTimeout, clearTimeout,
+      // The script writes the picked version into the address; a browser would update location to match.
+      history: { replaceState: (s, t, url) => { location.search = new URL(url, location.href).search; }, pushState() {} },
+      fetch: () => new Promise(() => {}),
+      localStorage: { getItem: () => null, setItem() {} },
+      sessionStorage: { getItem: () => null, setItem() {} },
+      matchMedia: () => ({ matches: false, addEventListener() {} }),
+      requestAnimationFrame() {}, addEventListener() {},
+      document: {
+        title: "What's New", getElementById: (id) => ids[id] || null, querySelector: () => null, querySelectorAll: () => [],
+        addEventListener() {}, documentElement: element(), body: element(), createElement: () => element(),
+      },
+    };
+    context.window = context;
+    vm.runInNewContext(JS, context);
+
+    /** Picks a version from the menu and returns where the page goes. */
+    const pick = (version) => {
+      select.value = version;
+      onPick();
+      return location.href;
+    };
+    return { title: ids['whatsnew-title'].textContent, status: ids['whatsnew-status'].textContent, pick };
+  }
+
+  test('?compare names the pair', () => {
+    assert.equal(open('/whatsnew/', '?compare=2...3').title, "What's New from v2 to v3");
+  });
+
+  test('a pair in the path is left to the servers to move', () => {
+    assert.equal(open('/whatsnew/2...3/').title, "What's New in v3");
+  });
+
+  test('a pair the wrong way round asks for the older first', () => {
+    assert.equal(open('/whatsnew/', '?compare=3...2').status, 'Put the older version first: 2...3.');
+  });
+
+  test('anything but a pair in ?compare is ignored', () => {
+    assert.equal(open('/whatsnew/', '?compare=1...2...3').title, "What's New in v3");
+    assert.equal(open('/whatsnew/2.1/', '?compare=2').title, "What's New in v2.1");
+  });
+
+  test('picking a version leaves the comparison, keeping the rest of the query', () => {
+    assert.equal(open('/whatsnew/', '?compare=2...3&dark=true').pick('2.1'), '/whatsnew/2.1/?dark=true&version=2.1');
+    assert.equal(open('/whatsnew/', '?compare=2...3').pick('3'), '/whatsnew/3/');
   });
 });
 
@@ -1227,12 +1316,16 @@ describe('exported server', () => {
   /** The head of the page the server answers url with. */
   const head = async (url) => (await (await fetch(root + url)).text()).split('</head>')[0];
 
-  test("answers any What's New comparison with the one page", async () => {
+  test("answers any What's New version with the one page, and moves a pair in the path to ?compare", async () => {
     const shell = await (await fetch(`${root}/api/samples/whatsnew/`)).text();
     assert.equal((await fetch(`${root}/api/samples/whatsnew/2/`)).status, 200);
-    const pair = await fetch(`${root}/api/samples/whatsnew/6.0...9.0/`);
-    assert.equal(pair.status, 200);
-    assert.equal(await pair.text(), shell);
+    const unlisted = await fetch(`${root}/api/samples/whatsnew/9.0/`);
+    assert.equal(unlisted.status, 200);
+    assert.equal(await unlisted.text(), shell);
+    const pair = await fetch(`${root}/api/samples/whatsnew/6.0...9.0/?dark=true`, { redirect: 'manual' });
+    assert.equal(pair.status, 301);
+    assert.equal(pair.headers.get('location'), '/api/samples/whatsnew/?compare=6.0...9.0&dark=true');
+    assert.equal((await fetch(`${root}/api/samples/whatsnew/1...2...3/`)).status, 404);
     assert.equal((await fetch(`${root}/api/samples/assets/whatsnew.json`)).status, 200);
     assert.equal((await fetch(`${root}/api/samples/references/?type=samples.point`)).status, 200);
     assert.equal((await fetch(`${root}/api/samples/assets/references.json`)).status, 200);
