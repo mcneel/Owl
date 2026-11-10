@@ -2417,11 +2417,11 @@ ${
     const rows = rowsHtml(type, new Set([type.docId]));
     if (!rows) return null;
 
-    // A way to narrow the tree, but only where there is a tree to narrow: over ten rows a name is
+    // A way to narrow the tree, but only where there is a tree to narrow: over five rows a name is
     // found by typing it, under that it is found by looking, and a box on every small tree is a
     // control to ignore. The empty note travels with the box - only a filter can empty the list.
     const filter =
-      listed > 10
+      listed > 5
         ? filterFieldHtml('Filter Derived Types', 'Filter derived types')
         : '';
     const empty = filter ? '<div class="tree-empty" hidden>Nothing matches.</div>' : '';
