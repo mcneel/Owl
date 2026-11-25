@@ -691,6 +691,25 @@ describe('options', () => {
     assert.throws(() => make({ links: ['nonsense'] }), /expected <assembly>=<url>/);
   });
 
+  test('--link with placeholders reaches docs owl did not write', () => {
+    const { html, type } = make({ links: ['System.Runtime=https://docs.example.com/find?asset_id={id}&page={slug}'] });
+    assert.match(
+      html(type('Members.Gadget')),
+      /href="https:\/\/docs\.example\.com\/find\?asset_id=T%3ASystem\.IDisposable&amp;page=system\.idisposable"/
+    );
+  });
+
+  test('--link placeholders are {id}, {slug} and {build}', () => {
+    assert.throws(() => make({ links: ['System.Runtime=https://x/{name}'] }), /unknown \{name\}/);
+  });
+
+  test('--link with {build} needs several builds', () => {
+    const { checkBuildLinks } = require(path.join(site, 'lib', 'links'));
+    assert.throws(() => checkBuildLinks(['A=https://x/{build}/{id}'], false), /needs several builds/);
+    assert.doesNotThrow(() => checkBuildLinks(['A=https://x/{build}/{id}'], true));
+    assert.doesNotThrow(() => checkBuildLinks(['A=/api/a'], false));
+  });
+
   test('--sandcastle redirects old page addresses', () => {
     const { get } = make({ sandcastle: true });
     assert.equal(get('/html/T_Samples_MemoryStore.htm').status, 301);
@@ -1747,6 +1766,16 @@ describe('builds', () => {
     assert.equal(two.label, 'Edition Two');
   });
 
+  test('a --link pattern fills {build} with the build being written', () => {
+    const linked = new Builds({
+      jsonDir: models,
+      builds: BUILDS,
+      links: ['System.Runtime=https://docs.example.com/{build}/?asset_id={id}'],
+    });
+    const page = linked.resolve('/two/type/samples.members.gadget/', null, false).body;
+    assert.match(page, /href="https:\/\/docs\.example\.com\/two\/\?asset_id=T%3ASystem\.IDisposable"/);
+  });
+
   test('titles name the build, so the builds do not share them', () => {
     assert.match(html('/api/samples/two/type/samples.editions.everywhere/'), /<title>[^<]*\(Edition Two\)<\/title>/);
   });
@@ -1778,7 +1807,7 @@ describe('builds', () => {
   test('the server answers What\'s New for any version inside a build', async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-builds-server-'));
     execFileSync('node', [path.join(site, 'build.js'), '--json', models, '--out', out, '--base', '/api/samples',
-      '--api-versions', '3,2', '--server', '--quiet', ...BUILDS.flatMap((b) => ['--build', b])], { stdio: 'pipe' });
+      '--api-versions', '3,2', '--server', '--quiet', '--sandcastle', ...BUILDS.flatMap((b) => ['--build', b])], { stdio: 'pipe' });
 
     const server = spawn('node', [path.join(out, 'server.js')], { env: { ...process.env, PORT: '0' } });
     try {
@@ -1801,6 +1830,11 @@ describe('builds', () => {
       const home = await fetch(`${root}/api/samples/`);
       assert.equal(home.status, 200);
       assert.match(await home.text(), /url=\/api\/samples\/one\//);
+
+      // Sandcastle's root page, named after a help file the model never knew.
+      const project = await fetch(`${root}/api/samples/two/html/R_Project_SamplesHelp.htm`, { redirect: 'manual' });
+      assert.equal(project.status, 301);
+      assert.equal(project.headers.get('location'), '/api/samples/two/');
     } finally {
       server.kill();
     }

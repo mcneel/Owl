@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const { Site } = require('./lib/site');
 const { Builds } = require('./lib/builds');
+const { checkBuildLinks } = require('./lib/links');
 const { stub: sandcastleStub } = require('./lib/sandcastle');
 const { stub: docifyStub } = require('./lib/docify');
 
@@ -148,6 +149,7 @@ if (!options.out) {
 let builds = null;
 let sites;
 try {
+  checkBuildLinks(options.links, options.builds.length > 0);
   builds = options.builds.length > 0 ? new Builds(options) : null;
   sites = builds ? builds.sites : [new Site(options)];
 } catch (err) {

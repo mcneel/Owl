@@ -353,6 +353,15 @@ public sealed class CommandLineTests(SampleModel model)
   }
 
   [Fact]
+  public void LinkWithBuildNeedsSeveralBuilds()
+  {
+    var (code, output) = Run(
+      "build", "--json", model.Directory, "--out", TempDir(), "--link", "System.Runtime=https://x/{build}/{id}");
+    Assert.Equal(2, code);
+    Assert.Contains("{build} needs several builds", output);
+  }
+
+  [Fact]
   public void BuildExportsEveryBuild()
   {
     string models = TempDir();

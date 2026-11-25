@@ -236,7 +236,8 @@ for (const [url, html] of pages) {
 // Where the --link map sends references this set does not document. Root-relative and therefore
 // indistinguishable from one of this site's own urls, so they are named here rather than counted
 // as pages that went missing; whether the other site has them is that site's check to run.
-const linkedSites = links.map((entry) => entry.slice(entry.indexOf('=') + 1).replace(/\/$/, ''));
+// A pattern counts up to its first placeholder, which is as much of the address as is fixed.
+const linkedSites = links.map((entry) => entry.slice(entry.indexOf('=') + 1).split('{')[0].replace(/\/$/, ''));
 let outboundLinks = 0;
 
 // Second pass so fragment targets can be validated against the collected anchor sets.

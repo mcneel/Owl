@@ -110,7 +110,10 @@ static void PrintUsage()
       --api-versions <list> Versions the header's picker offers, newest first, comma separated;
                             without it there is no picker and <since> filters nothing
       --link <asm>=<url>    Site documenting a referenced assembly, so its types link rather than
-                            sitting there as text. Repeatable; <asm> may end in '*'
+                            sitting there as text. Repeatable; <asm> may end in '*'. For docs not
+                            made with owl, <url> is a pattern with {id} (doc id), {slug} (owl's
+                            page name) or {build} (build stub), e.g.
+                            "HostAPI=https://docs.example.com/{build}/?id={id}"
       --d2 <path>           The d2 binary that draws diagrams (default: d2 on PATH)
       --skip-undocumented   Leave anything with no <summary> out of the site
       --sandcastle          Also answer the Sandcastle urls this set was published at
@@ -118,7 +121,8 @@ static void PrintUsage()
       --quiet               Only print the summary, not per-page progress (build)
       --server              Put the site in <out>/site, with a node server beside it (build).
                             The site works without it; the server also previews shared member
-                            links as the member, redirects --sandcastle and --docify urls,
+                            links as the member, redirects --sandcastle and --docify urls
+                            (Sandcastle's R_Project_<name>.htm home included),
                             answers Accept: text/markdown with the page's Markdown copy,
                             redirects wrongly cased urls, and answers What's New for any version
 

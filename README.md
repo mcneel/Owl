@@ -152,6 +152,20 @@ owl build MyPlugin.csproj --link MyLib=/api/mylib
 
 Those types now link to the other site. .NET types link to Microsoft Learn automatically.
 
+Docs not made with owl address their pages differently. Write the address as a pattern instead:
+
+```bash
+owl build MyPlugin.csproj --link "HostAPI=https://docs.example.com/find?id={id}"
+```
+
+| Placeholder | Becomes | e.g. |
+|---|---|---|
+| `{id}` | The type's doc id | `T%3AHost.Geometry.Point` |
+| `{slug}` | Owl's page name for the type | `host.geometry.point` |
+| `{build}` | The stub of the build being written, with [several builds](#document-several-builds) | `2026` |
+
+`--link MyLib=/api/mylib` is the same as `--link "MyLib=/api/mylib/type/{slug}/"`. Members link to their type.
+
 ## Publish Inside Another Site
 
 Put your site's own bar and footer on every page, so readers can get back to the rest of it:
@@ -207,7 +221,8 @@ new one. Add the request's query to the new address's own.
 The site works on any plain file host. Build with `--server` to add a small node server that also:
 
 - Previews a pasted member link, such as `type/mylib.storage/?member=read#read`, as that member rather than its type
-- Redirects the old addresses of `--sandcastle` and `--docify`, rather than forwarding the reader from a page
+- Redirects the old addresses of `--sandcastle` and `--docify`, rather than forwarding the reader from a page,
+  including Sandcastle's `html/R_Project_<name>.htm` home
 - Answers a request for `text/markdown` with the page's Markdown copy
 - Redirects an address typed in the wrong case, such as `type/MyLib.Storage/`, to its page
 - Answers a What's New address for any version, not only those in `--api-versions`
