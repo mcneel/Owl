@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { Site } = require('./lib/site');
+const { Builds } = require('./lib/builds');
 const { stub: sandcastleStub } = require('./lib/sandcastle');
 const { stub: docifyStub } = require('./lib/docify');
 
@@ -27,6 +28,10 @@ const { stub: docifyStub } = require('./lib/docify');
  *   node build.js --json .owl/json --out dist [--base /prefix] [--site-url https://host]
  *   node build.js --json .owl/json --out dist [--api-versions 9,8]
  *   node build.js --json .owl/json --out app --base /prefix --server
+ *   node build.js --json .owl/json --out dist --build 2026=Revit 2026 --build 2025=Revit 2025
+ *
+ * With several --build, each build is written whole under <out>/<stub>, and the root forwards to the
+ * first one.
  */
 
 function parseArgs(argv) {
@@ -53,6 +58,8 @@ function parseArgs(argv) {
     docify: false,
     quiet: false,
     server: false,
+    // '<stub>=<name>' per build; with them, --json holds one model per stub.
+    builds: [],
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -120,6 +127,9 @@ function parseArgs(argv) {
       case '--server':
         options.server = true;
         break;
+      case '--build':
+        options.builds.push(argv[++i]);
+        break;
       default:
         throw new Error(`Unknown argument '${argv[i]}'. Try 'owl --help'.`);
     }
@@ -135,31 +145,46 @@ if (!options.out) {
   process.exit(2);
 }
 
-let site;
+let builds = null;
+let sites;
 try {
-  site = new Site(options);
+  builds = options.builds.length > 0 ? new Builds(options) : null;
+  sites = builds ? builds.sites : [new Site(options)];
 } catch (err) {
   console.error(err.message);
   process.exit(1);
 }
 
+// What every written url is relative to: the site's base, which holds each build's folder.
+const base = builds ? builds.base : sites[0].routes.base;
+
+/** The build a message is about, where there are several. */
+function label(site) {
+  return site.build ? `${site.build.name}: ` : '';
+}
+
 // Loading the model raises most warnings, but not all of them: a diagram is drawn while the page
 // that holds it is rendered, so anything d2 has to say arrives during the export below. Reported by
 // what has not been reported yet, so the run ends having mentioned everything exactly once.
-let warningsReported = 0;
+const warningsReported = new Map();
 
 function reportWarnings() {
-  for (const warning of site.model.warnings.slice(warningsReported)) {
-    console.warn('warning: ' + warning);
+  for (const site of sites) {
+    const from = warningsReported.get(site) || 0;
+    for (const warning of site.model.warnings.slice(from)) {
+      console.warn(`warning: ${label(site)}${warning}`);
+    }
+    warningsReported.set(site, site.model.warnings.length);
   }
-  warningsReported = site.model.warnings.length;
 }
 
 reportWarnings();
 
 if (options.skipUndocumented && !options.quiet) {
-  const { types, members } = site.model.skipped;
-  console.log(`skipping ${types} undocumented type(s) and ${members} undocumented member(s)`);
+  for (const site of sites) {
+    const { types, members } = site.model.skipped;
+    console.log(`${label(site)}skipping ${types} undocumented type(s) and ${members} undocumented member(s)`);
+  }
 }
 
 // The server sits beside the pages rather than among them, so it is never served as one.
@@ -169,8 +194,8 @@ const siteDir = options.server ? path.join(options.out, 'site') : options.out;
 function outputPathFor(url) {
   let relative = url;
 
-  if (site.base && relative.startsWith(site.base)) {
-    relative = relative.slice(site.base.length);
+  if (base && relative.startsWith(base)) {
+    relative = relative.slice(base.length);
   }
 
   relative = relative.replace(/^\/+/, '');
@@ -194,60 +219,8 @@ const started = Date.now();
 let pages = 0;
 let bytes = 0;
 
-// Static export cannot answer ?q=, so the search page ships the client-side path plus a
-// noscript fallback that links into the browse hierarchy.
-//
-// The stubs stand where the namespace-mode copies of the type and example pages used to be
-// published, forwarding old links to the plain page with the mode flag on. Not in the sitemap, so
-// they are written from a list of their own.
-const urls = site.renderer.sitemapUrls().concat(site.renderer.stubUrls());
-
-for (const url of urls) {
-  const result = site.resolve(url, null, false);
-
-  if (result.status !== 200) {
-    console.error(`error: ${url} returned ${result.status}`);
-    process.exitCode = 1;
-    continue;
-  }
-
-  const target = write(url, result.body);
-  pages++;
-  bytes += Buffer.byteLength(result.body, 'utf8');
-
-  if (!options.quiet && pages % 250 === 0) {
-    console.log(`  ${pages}/${urls.length} pages`);
-  }
-}
-
-// The search page is deliberately absent from the sitemap (it is noindex), but the site still
-// needs the file. So is the root of a single-assembly site, which is only a redirect to it.
-const searchResult = site.resolve(site.routes.search(), null, false);
-write(site.routes.search().replace(/\?.*$/, ''), searchResult.body);
-pages++;
-
-// Noindex like search, and one file for every type: the type it lists is read from the query.
-write(site.routes.references(), site.resolve(site.routes.references(), null, false).body);
-pages++;
-
-// The bare What's New url is the newest version's page under another name, so it is not in the
-// sitemap either; a server answers any comparison the export did not write with this file.
-if (site.versions.length > 0) {
-  write(site.routes.whatsNew(), site.resolve(site.routes.whatsNew(), null, false).body);
-  pages++;
-}
-
-if (!urls.includes(site.routes.home())) {
-  const rootResult = site.resolve(site.routes.home(), null, false);
-  write(site.routes.home(), rootResult.body);
-  pages++;
-}
-
-// The urls this documentation set used to be published at, when it was published by Sandcastle. A
-// file host cannot be asked to answer one url with another, so each becomes a page that redirects
-// itself; they are not in the sitemap, because the page they point at is.
 // A server answering from this list sends a real redirect, which a page embedding the docs follows
-// without ever loading a stub.
+// without ever loading a stub. One list for every build, keyed by the whole url.
 const moved = {};
 
 /** The key a moved url is listed under, so a server can match a request without knowing its spelling. */
@@ -255,79 +228,143 @@ function movedKey(url) {
   return url.toLowerCase().replace(/\/+$/, '');
 }
 
-if (site.sandcastle) {
-  let redirects = 0;
+/** Writes one build's pages, assets and redirects; a site of one build is the whole export. */
+function exportSite(site) {
+  // Static export cannot answer ?q=, so the search page ships the client-side path plus a
+  // noscript fallback that links into the browse hierarchy.
+  //
+  // The stubs stand where the namespace-mode copies of the type and example pages used to be
+  // published, forwarding old links to the plain page with the mode flag on. Not in the sitemap, so
+  // they are written from a list of their own.
+  const urls = site.renderer.sitemapUrls().concat(site.renderer.stubUrls());
 
-  for (const [url, target] of site.sandcastle.stubs()) {
-    write(url, sandcastleStub(target));
-    moved[movedKey(url)] = target;
-    redirects++;
+  for (const url of urls) {
+    const result = site.resolve(url, null, false);
+
+    if (result.status !== 200) {
+      console.error(`error: ${url} returned ${result.status}`);
+      process.exitCode = 1;
+      continue;
+    }
+
+    write(url, result.body);
+    pages++;
+    bytes += Buffer.byteLength(result.body, 'utf8');
+
+    if (!options.quiet && pages % 250 === 0) {
+      console.log(`  ${label(site)}${pages} pages`);
+    }
   }
 
-  if (!options.quiet) console.log(`  ${redirects} sandcastle redirects`);
-  pages += redirects;
-}
+  // The search page is deliberately absent from the sitemap (it is noindex), but the site still
+  // needs the file. So is the root of a single-assembly site, which is only a redirect to it.
+  const searchResult = site.resolve(site.routes.search(), null, false);
+  write(site.routes.search().replace(/\?.*$/, ''), searchResult.body);
+  pages++;
 
-// Docify's urls, the same way. Each stub carries the query it was asked with across, since that is
-// how the script editor asks for the plain page.
-if (site.docify) {
-  let redirects = 0;
+  // Noindex like search, and one file for every type: the type it lists is read from the query.
+  write(site.routes.references(), site.resolve(site.routes.references(), null, false).body);
+  pages++;
 
-  for (const [url, target] of site.docify.stubs()) {
-    write(url, docifyStub(target));
-    moved[movedKey(url)] = target;
-    redirects++;
+  // The bare What's New url is the newest version's page under another name, so it is not in the
+  // sitemap either; a server answers any comparison the export did not write with this file.
+  if (site.versions.length > 0) {
+    write(site.routes.whatsNew(), site.resolve(site.routes.whatsNew(), null, false).body);
+    pages++;
   }
 
-  if (!options.quiet) console.log(`  ${redirects} docify redirects`);
-  pages += redirects;
-}
-
-// The root of a single-assembly site is a refresh page for plain file hosts; a server redirects it.
-if (site.renderer.rootRedirects) {
-  moved[movedKey(site.routes.home())] = site.renderer.homeUrl();
-}
-
-write(`${site.base}/redirects.json`, JSON.stringify(moved));
-
-const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
-
-const whatsNew = site.versions.length > 0 ? ['whatsnew.json'] : [];
-
-const logos = [site.renderer.logo && 'logo.svg', site.renderer.logoDark && 'logo-dark.svg'].filter(Boolean);
-const favicon = site.renderer.favicon ? [site.renderer.favicon.name] : [];
-
-for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...trees, ...whatsNew, ...logos, ...favicon]) {
-  const result = site.asset(asset);
-  write(site.routes.asset(asset), result.body);
-  bytes += Buffer.byteLength(result.body, 'utf8');
-}
-
-// Each page's Markdown copy beside it, for agents; a file host serves these as they are.
-for (const url of site.markdown.urls()) {
-  const result = site.resolve(url, null, false);
-  if (result.status !== 200) {
-    console.error(`error: ${url} returned ${result.status}`);
-    process.exitCode = 1;
-    continue;
+  if (!urls.includes(site.routes.home())) {
+    const rootResult = site.resolve(site.routes.home(), null, false);
+    write(site.routes.home(), rootResult.body);
+    pages++;
   }
-  write(url, result.body);
-  bytes += Buffer.byteLength(result.body, 'utf8');
-}
-write(site.routes.llms(), site.markdown.llms());
 
-write(site.routes.sitemap(), site.renderer.sitemap(new Date().toISOString().slice(0, 10)));
-write('/robots.txt', site.renderer.robots());
+  // The urls this documentation set used to be published at, when it was published by Sandcastle. A
+  // file host cannot be asked to answer one url with another, so each becomes a page that redirects
+  // itself; they are not in the sitemap, because the page they point at is.
+  if (site.sandcastle) {
+    let redirects = 0;
+
+    for (const [url, target] of site.sandcastle.stubs()) {
+      write(url, sandcastleStub(target));
+      moved[movedKey(url)] = target;
+      redirects++;
+    }
+
+    if (!options.quiet) console.log(`  ${label(site)}${redirects} sandcastle redirects`);
+    pages += redirects;
+  }
+
+  // Docify's urls, the same way. Each stub carries the query it was asked with across, since that is
+  // how the script editor asks for the plain page.
+  if (site.docify) {
+    let redirects = 0;
+
+    for (const [url, target] of site.docify.stubs()) {
+      write(url, docifyStub(target));
+      moved[movedKey(url)] = target;
+      redirects++;
+    }
+
+    if (!options.quiet) console.log(`  ${label(site)}${redirects} docify redirects`);
+    pages += redirects;
+  }
+
+  // The root of a single-assembly site is a refresh page for plain file hosts; a server redirects it.
+  if (site.renderer.rootRedirects) {
+    moved[movedKey(site.routes.home())] = site.renderer.homeUrl();
+  }
+
+  const trees = site.renderer.treeAssetNames().map((key) => `tree-${key}.json`);
+
+  const whatsNew = site.versions.length > 0 ? ['whatsnew.json'] : [];
+
+  const logos = [site.renderer.logo && 'logo.svg', site.renderer.logoDark && 'logo-dark.svg'].filter(Boolean);
+  const favicon = site.renderer.favicon ? [site.renderer.favicon.name] : [];
+
+  for (const asset of ['app.css', 'app.js', 'search.json', 'references.json', ...trees, ...whatsNew, ...logos, ...favicon]) {
+    const result = site.asset(asset);
+    write(site.routes.asset(asset), result.body);
+    bytes += Buffer.byteLength(result.body, 'utf8');
+  }
+
+  // Each page's Markdown copy beside it, for agents; a file host serves these as they are.
+  for (const url of site.markdown.urls()) {
+    const result = site.resolve(url, null, false);
+    if (result.status !== 200) {
+      console.error(`error: ${url} returned ${result.status}`);
+      process.exitCode = 1;
+      continue;
+    }
+    write(url, result.body);
+    bytes += Buffer.byteLength(result.body, 'utf8');
+  }
+  write(site.routes.llms(), site.markdown.llms());
+
+  write(site.routes.sitemap(), site.renderer.sitemap(new Date().toISOString().slice(0, 10)));
+}
+
+for (const site of sites) exportSite(site);
+
+// The root of a site of several builds forwards to the first. Not listed as moved, since a newer
+// build listed first later moves it again, and a permanent redirect would be remembered.
+if (builds) {
+  write(`${base}/`, builds.resolve(`${base}/`, null, false).body);
+  pages++;
+}
+
+write(`${base}/redirects.json`, JSON.stringify(moved));
+write('/robots.txt', builds ? builds.robots() : sites[0].renderer.robots());
 
 if (options.server) {
   const server = fs.readFileSync(path.join(__dirname, 'host', 'server.js'), 'utf8');
-  const based = server.replace("'__OWL_BASE__'", JSON.stringify(site.routes.base));
+  const based = server.replace("'__OWL_BASE__'", JSON.stringify(base));
   fs.writeFileSync(path.join(options.out, 'server.js'), based);
 
   const manifest = {
     name: 'owl-site-server',
     private: true,
-    description: `Serves the ${site.renderer.siteName} website`,
+    description: `Serves the ${sites[0].renderer.siteName} website`,
     scripts: { start: 'node server.js' },
     engines: { node: '>=18' },
   };

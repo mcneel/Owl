@@ -166,6 +166,40 @@ External *members* stop at their declaring type's page. Their anchors are deriva
 almost: owl appends a counter where two members normalize alike — six in 19,147 on one large library — and
 a computed anchor would land those on the right page beside the wrong card.
 
+## Builds are folders, versions are a filter
+
+Owl has two ways to show more than one surface of a library, and they answer different questions.
+`--api-versions` is a filter over one compilation: every API is on the page, and the picker hides what
+a `<since>` puts after the version chosen. Several `-c` builds are separate compilations: a library
+that compiles differently per configuration — one build per host year, behind `#if` — has types,
+members, signatures and docs that exist in one build and not in another, and no `<since>` can
+describe that. Calling both "version" would leave a reader unable to tell which one they changed, so
+the second is named for what it is, a build, with a picker of its own.
+
+Each build is a whole site in a folder named by its stub, rather than one set of pages carrying
+`?build=` the way they carry `?version=`. A query only works when every page holds every build and the
+browser hides the rest; for builds that means merging signatures and docs that differ per build into
+one page, at several times its size. A plain file host cannot answer `?build=` with a different file,
+so the folders are what keep the export servable from anywhere, with or without `--server`. The cost is
+that each build has its own search, tree and sitemap, which is also what a reader of one build wants.
+
+The picker is worked out when a page is written, not in the browser. Every build's page list is known
+to the one process writing them, so each option is already the page to land on: the same page in that
+build, or the nearest breadcrumb that build has, or its home, marked missing. Nothing is fetched to
+find out, and the note that says what is missing rides in the session store, so the address stays the
+landing page's own.
+
+The root forwards to the first build listed and is never a permanent redirect: adding a newer build
+first moves it, and a browser that remembered a 301 would keep opening the old one. Titles carry the
+build's name for the same reason a picker exists — the builds share every page name, and a tab or a
+search result has to say which one it is.
+
+`-c` takes its builds as `name:configuration:stub` rather than as plain configuration names with
+labels elsewhere: the picker needs all three, and one option that collects them keeps the build's
+parts from drifting apart across flags. A single value is a plain configuration however it is
+written, since there is nothing to pick between. The stub is lower case because hosts, and owl's own
+server, treat urls by their lower-case spelling.
+
 ## The tree is sent once, not with every page
 
 The sidebar tree is the same list of types on every page that carries it — what

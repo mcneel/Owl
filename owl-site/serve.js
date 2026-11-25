@@ -46,6 +46,8 @@ function parseArgs(argv) {
     skipUndocumented: false,
     sandcastle: false,
     docify: false,
+    // '<stub>=<name>' per build; with them, --json holds one model per stub.
+    builds: [],
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -114,6 +116,9 @@ function parseArgs(argv) {
       case '--docify':
         options.docify = true;
         break;
+      case '--build':
+        options.builds.push(argv[++i]);
+        break;
       default:
         throw new Error(`Unknown argument '${arg}'. Try 'owl --help'.`);
     }
@@ -124,18 +129,24 @@ function parseArgs(argv) {
 
 const options = parseArgs(process.argv.slice(2));
 
+// The site, or lib/builds.js holding one per build, and the sites either way.
 let site;
+let sites;
 
 // Whatever loading the model had to say, and then whatever rendering a page has to say: a diagram
 // is drawn when the page holding it is asked for, so d2's complaint about one arrives mid-serve.
 // A rebuild starts a new list, and this starts over with it.
-let warningsReported = 0;
+let warningsReported = new Map();
 
 function reportWarnings() {
-  for (const warning of site.model.warnings.slice(warningsReported)) {
-    console.warn('warning: ' + warning);
+  for (const one of sites) {
+    const from = warningsReported.get(one) || 0;
+    const prefix = one.build ? `${one.build.name}: ` : '';
+    for (const warning of one.model.warnings.slice(from)) {
+      console.warn(`warning: ${prefix}${warning}`);
+    }
+    warningsReported.set(one, one.model.warnings.length);
   }
-  warningsReported = site.model.warnings.length;
 }
 
 /**
@@ -152,8 +163,10 @@ function rebuild() {
   }
 
   const { Site } = require('./lib/site');
-  site = new Site(options);
-  warningsReported = 0;
+  const { Builds } = require('./lib/builds');
+  site = options.builds.length > 0 ? new Builds(options) : new Site(options);
+  sites = site.sites || [site];
+  warningsReported = new Map();
 }
 
 try {
@@ -166,8 +179,11 @@ try {
 reportWarnings();
 
 if (options.skipUndocumented) {
-  const { types, members } = site.model.skipped;
-  console.log(`skipping ${types} undocumented type(s) and ${members} undocumented member(s)`);
+  for (const one of sites) {
+    const { types, members } = one.model.skipped;
+    const prefix = one.build ? `${one.build.name}: ` : '';
+    console.log(`${prefix}skipping ${types} undocumented type(s) and ${members} undocumented member(s)`);
+  }
 }
 
 // Reload on change so editing an authored page, regenerating the model or adjusting the renderer
@@ -254,15 +270,19 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(options.port, () => {
-  const assemblies = site.model.index.assemblies;
-  const sum = (key) => assemblies.reduce((total, a) => total + (a[key] || 0), 0);
+  console.log(sites[0].renderer.siteName);
 
-  console.log(site.renderer.siteName);
-  console.log(
-    `  ${assemblies.length} assemblies, ` +
-      `${sum('typeCount')} types, ${sum('memberCount')} members`
-  );
-  console.log(`  http://localhost:${options.port}${site.routes.home()}`);
+  for (const one of sites) {
+    const assemblies = one.model.index.assemblies;
+    const sum = (key) => assemblies.reduce((total, a) => total + (a[key] || 0), 0);
+
+    if (one.build) console.log(`  ${one.build.name}`);
+    console.log(
+      `  ${assemblies.length} assemblies, ` +
+        `${sum('typeCount')} types, ${sum('memberCount')} members`
+    );
+    console.log(`  http://localhost:${options.port}${one.routes.home()}`);
+  }
   console.log('Press Ctrl+C to stop.');
 });
 

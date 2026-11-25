@@ -13,6 +13,11 @@
     <DefineConstants>$(DefineConstants);OWL_SAMPLE</DefineConstants>
   </PropertyGroup>
 
+  <!-- A second build of the same source, for the tests of a site that picks between builds. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Edition2'">
+    <DefineConstants>$(DefineConstants);SAMPLES_EDITION2</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Read by <code source="..."/>, never compiled. -->
     <Compile Remove="Examples/**" />

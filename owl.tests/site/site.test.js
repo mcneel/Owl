@@ -1671,6 +1671,141 @@ describe('exported server for one assembly', () => {
   });
 });
 
+// Two builds of the samples, the second compiled with SAMPLES_EDITION2.
+describe('builds', () => {
+  const { Builds } = require(path.join(site, 'lib', 'builds'));
+  const BUILDS = ['one=Edition One', 'two=Edition Two'];
+  let models;
+  let builds;
+
+  before(() => {
+    models = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-builds-'));
+    execFileSync(
+      'dotnet',
+      [
+        'run', '--project', path.join(repo, 'owl'), '--', 'gen',
+        path.join(repo, 'owl.tests.source/CSharp/Samples.CSharp.csproj'),
+        path.join(repo, 'owl.tests.source/VisualBasic/Samples.VisualBasic.vbproj'),
+        '-c', 'Edition One:Debug:one', 'Edition Two:Edition2:two',
+        '--out', models,
+      ],
+      { stdio: 'ignore' }
+    );
+    builds = new Builds({ jsonDir: models, base: '/api/samples', builds: BUILDS });
+  });
+
+  const html = (url) => {
+    const result = builds.resolve(url, null, false);
+    assert.equal(result.status, 200, `${url} returned ${result.status}`);
+    return result.body;
+  };
+
+  /** The picker's options on a page, as { name, url, missing, selected }. */
+  const picker = (url) =>
+    [...html(url).matchAll(/<option value="([^"]*)" data-name="([^"]*)"( data-missing)?( selected)?>/g)].map(
+      ([, value, name, missing, selected]) => ({ name, url: value, missing: Boolean(missing), selected: Boolean(selected) })
+    );
+
+  test('each build is its own site under its stub', () => {
+    assert.match(html('/api/samples/one/type/samples.editions.onlyindefault/'), /OnlyInDefault/);
+    assert.match(html('/api/samples/two/type/samples.editions.onlyinedition2/'), /OnlyInEdition2/);
+    assert.equal(builds.resolve('/api/samples/two/type/samples.editions.onlyindefault/', null, false).status, 404);
+    assert.equal(builds.resolve('/api/samples/three/', null, false).status, 404);
+  });
+
+  test('a member compiled into one build shows in that build only', () => {
+    assert.match(html('/api/samples/two/type/samples.editions.everywhere/'), /Added/);
+    assert.doesNotMatch(html('/api/samples/one/type/samples.editions.everywhere/'), /Added/);
+  });
+
+  test('search and the tree are per build', () => {
+    const search = (stub) => builds.sites[stub === 'one' ? 0 : 1].asset('search.json').body;
+    assert.match(search('two'), /OnlyInEdition2/);
+    assert.doesNotMatch(search('one'), /OnlyInEdition2/);
+    assert.match(html('/api/samples/two/'), /data-tree-src="\/api\/samples\/two\/assets\/tree-/);
+  });
+
+  test('the root forwards to the first build, never permanently', () => {
+    const root = builds.resolve('/api/samples/', null, false);
+    assert.equal(root.status, 302);
+    assert.equal(root.location, builds.homeUrl());
+    assert.ok(root.location.startsWith('/api/samples/one/'));
+  });
+
+  test('the picker leads to the same page in the other build', () => {
+    assert.deepEqual(picker('/api/samples/two/type/samples.editions.everywhere/'), [
+      { name: 'Edition One', url: '/api/samples/one/type/samples.editions.everywhere/', missing: false, selected: false },
+      { name: 'Edition Two', url: '/api/samples/two/type/samples.editions.everywhere/', missing: false, selected: true },
+    ]);
+  });
+
+  test('the picker leads a page one build lacks to its nearest page there', () => {
+    const [, two] = picker('/api/samples/one/type/samples.editions.onlyindefault/');
+    assert.equal(two.missing, true);
+    assert.equal(two.url, '/api/samples/two/namespace/samples.editions/');
+    assert.match(html('/api/samples/one/type/samples.editions.onlyindefault/'), /Edition Two \(page missing\)/);
+  });
+
+  test('titles name the build, so the builds do not share them', () => {
+    assert.match(html('/api/samples/two/type/samples.editions.everywhere/'), /<title>[^<]*\(Edition Two\)<\/title>/);
+  });
+
+  test('robots names every build', () => {
+    const robots = builds.resolve('/api/samples/robots.txt', null, false).body;
+    assert.match(robots, /Disallow: \/api\/samples\/one\/search\//);
+    assert.match(robots, /Disallow: \/api\/samples\/two\/search\//);
+  });
+
+  test('a site of one build has no picker', () => {
+    const { html: single } = make();
+    assert.doesNotMatch(single('/'), /build-filter/);
+  });
+
+  test('builds need lower-case stubs that differ', () => {
+    assert.throws(() => new Builds({ jsonDir: models, builds: ['One=Edition One', 'two=Edition Two'] }), /lower-case/);
+    assert.throws(() => new Builds({ jsonDir: models, builds: ['one=A', 'one=B'] }), /another build/);
+    assert.throws(() => new Builds({ jsonDir: models, builds: ['one=A'] }), /two or more/);
+  });
+
+  test('an exported site of builds passes the site check', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-builds-out-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', models, '--out', out, '--docs', docs, '--quiet',
+      ...BUILDS.flatMap((b) => ['--build', b])], { stdio: 'pipe' });
+    execFileSync('node', [path.join(site, 'check.js'), '--dist', out], { stdio: 'pipe' });
+  });
+
+  test('the server answers What\'s New for any version inside a build', async () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-site-builds-server-'));
+    execFileSync('node', [path.join(site, 'build.js'), '--json', models, '--out', out, '--base', '/api/samples',
+      '--api-versions', '3,2', '--server', '--quiet', ...BUILDS.flatMap((b) => ['--build', b])], { stdio: 'pipe' });
+
+    const server = spawn('node', [path.join(out, 'server.js')], { env: { ...process.env, PORT: '0' } });
+    try {
+      const port = await new Promise((resolve) => {
+        server.stdout.on('data', (chunk) => {
+          const found = /listening on (\d+)/.exec(String(chunk));
+          if (found) resolve(found[1]);
+        });
+      });
+      const root = `http://localhost:${port}`;
+
+      const unlisted = await fetch(`${root}/api/samples/two/whatsnew/2.5/`);
+      assert.equal(unlisted.status, 200);
+      assert.match(await unlisted.text(), /\(Edition Two\)/);
+
+      const pair = await fetch(`${root}/api/samples/two/whatsnew/2...3/`, { redirect: 'manual' });
+      assert.equal(pair.status, 301);
+      assert.equal(pair.headers.get('location'), '/api/samples/two/whatsnew/?compare=2...3');
+
+      const home = await fetch(`${root}/api/samples/`);
+      assert.equal(home.status, 200);
+      assert.match(await home.text(), /url=\/api\/samples\/one\//);
+    } finally {
+      server.kill();
+    }
+  });
+});
+
 describe('slugs', () => {
   test('are lower case and keep dots', () => {
     assert.equal(slugify('Samples.MemoryStore'), 'samples.memorystore');

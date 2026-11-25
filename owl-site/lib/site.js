@@ -50,6 +50,7 @@ const FAVICON_TYPES = {
  *   sandcastle  answer the Sandcastle urls this documentation set used to be published at
  *   docify    answer the docify urls this documentation set used to be published at
  *   d2        the d2 binary that draws ```d2 fences, 'd2' from PATH by default
+ *   build     { stub, name, picker } when this is one of several builds; see lib/builds.js
  */
 class Site {
   constructor(options = {}) {
@@ -104,6 +105,9 @@ class Site {
     this.docifyUrls = Boolean(options.docify);
 
     this.d2 = options.d2 || 'd2';
+
+    // Which build this site is, when lib/builds.js holds several: { stub, name, picker }.
+    this.build = options.build || null;
 
     // Naming a d2 that is not there is a mistake worth stopping for. The default is what makes
     // diagrams optional - without one installed a fence stays the code block it was written as -
@@ -164,6 +168,7 @@ class Site {
       siteFooter: this.readHtml(this.siteFooterPath),
       sidebarToggle: this.sidebarToggle,
       versions: this.versions,
+      build: this.build,
       diagrams,
       // Where a page says something went wrong while it was being made: an equation that would not
       // typeset, alongside the diagrams that would not draw.

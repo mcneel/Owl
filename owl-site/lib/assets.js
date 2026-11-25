@@ -198,7 +198,7 @@ body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow:
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #version-current, #whatsnew-link, #theme-switch, #sidebar-toggle { height: 30px; }
+#build-filter, #asm-filter, #search, #version-filter, #version-current, #whatsnew-link, #theme-switch, #sidebar-toggle { height: 30px; }
 
 /* ---- Sidebar toggle ----
    The theme toggle's face, before the title and against the column it shows and hides. */
@@ -274,13 +274,16 @@ form.nav-search.index-loading::after { content: ''; position: absolute; right: 0
 /* ---- Header selects ---- */
 /* appearance:none drops the platform arrow so both selects can carry the same chevron; the popup
    itself is still drawn by the OS, which is the one part a <select> cannot be styled into. */
-#asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
+#build-filter, #asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
 #asm-filter { max-width: 18rem; }
-#asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
+#build-filter { max-width: 18rem; }
+#build-filter:hover, #asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
 /* Any version but the newest wears the warning's orange, so a reader never forgets they chose an older one. */
 #version-filter.older { background-color: var(--note-obsolete); }
 /* The popup is an OS menu, so its options need colours that do not assume the dark bar. */
-#asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
+#build-filter option, #asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
+/* Says the page a reader switched builds from is not in the build they landed in. */
+.build-notice { margin: 0.75rem 1.5rem 0; padding: 0.5rem 0.75rem; border-left: 3px solid var(--note-obsolete); border-radius: 4px; background: var(--bg2); color: var(--text); font-size: 0.85rem; }
 /* A site offering one version says so here instead. The same face as the select it stands in for,
    without the chevron or the hover, since there is nothing to open. */
 #version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
@@ -2269,6 +2272,41 @@ const JS = `
       if (assemblySelect.value) location.href = keepParams(assemblySelect.value);
     });
   }
+
+  // ---- Build selector ----
+  // Each option is already the page to land on. One that is not this page says so on arrival, through
+  // the session store, so the address stays the page's own.
+  var BUILD_MISSING = 'owl-build-missing';
+  var buildSelect = document.getElementById('build-filter');
+  if (buildSelect) {
+    buildSelect.addEventListener('change', function () {
+      var option = buildSelect.options[buildSelect.selectedIndex];
+      var missing = option.hasAttribute('data-missing');
+      if (missing) {
+        try {
+          sessionStorage.setItem(BUILD_MISSING, JSON.stringify({
+            page: buildSelect.getAttribute('data-page') || '',
+            build: option.getAttribute('data-name') || ''
+          }));
+        } catch (e) {}
+      }
+      location.href = keepParams(option.value) + (missing ? '' : location.hash);
+    });
+  }
+
+  try {
+    var buildNote = JSON.parse(sessionStorage.getItem(BUILD_MISSING) || 'null');
+    sessionStorage.removeItem(BUILD_MISSING);
+    var buildMain = document.getElementById('main');
+    if (buildNote && buildNote.page && buildMain) {
+      var buildNotice = document.createElement('div');
+      buildNotice.className = 'build-notice';
+      buildNotice.setAttribute('role', 'status');
+      buildNotice.textContent = buildNote.page + ' is not in ' + buildNote.build + '.';
+      var buildSticky = buildMain.querySelector('.main-sticky');
+      buildMain.insertBefore(buildNotice, buildSticky ? buildSticky.nextSibling : buildMain.firstChild);
+    }
+  } catch (e) {}
 
   // ---- Browse mode ----
   // The namespace-mode reading of a type or example page: the same file with '?ns' on the url. A

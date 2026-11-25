@@ -15,6 +15,6 @@ node --test owl.tests/site/site.test.js     # the website
 - `ModelTests.cs` – types, members and signatures in the docs data
 - `DocCommentTests.cs` – documentation comment tags
 - `CommandLineTests.cs` – the `owl` command: `gen`, `build`, `serve`, `verify`
-- `site/` – the website, with and without hand-written pages
+- `site/` – the website, with and without hand-written pages, and with several builds
 
 To test something new, add it to the samples first, then add a test here.

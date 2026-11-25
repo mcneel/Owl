@@ -66,7 +66,8 @@ static void PrintUsage()
     Options:
       -o, --out <dir>       Model directory for gen and serve (default .owl/json)
                             Site directory for build (default .owl/site)
-      --json <dir>          Reuse an existing model instead of generating one
+      --json <dir>          Reuse an existing model instead of generating one; with several -c
+                            builds, each build's model is read from <dir>/<stub>
       --docs <dir>          Authored markdown pages (default docs/api, when it exists)
                             Without them the site is browsed by namespace alone
       --name <text>         Site name
@@ -76,7 +77,11 @@ static void PrintUsage()
     Model options, for what the documentation is generated from:
       --tfm <tfm>           Which framework to document, for a project that multi-targets
                             (default net8.0); a project that targets one is documented as it is
-      -c, --configuration   Build configuration MSBuild evaluates under (default Debug)
+      -c, --configuration   Build configuration MSBuild evaluates under (default Debug). Several,
+                            each as <name>:<configuration>:<stub>, document one build each in a
+                            folder named <stub>, with a build picker in the header; the first
+                            is the one the site opens on. e.g.
+                            -c "Host 2026:Release-2026:2026" "Host 2025:Release-2025:2025"
       --repo-root <dir>     Root that recorded source paths are relative to (default: git root)
       --examples <dir>      Extra root for <code source="..."/> paths, tried before the project
                             directory and the repo root
@@ -111,8 +116,11 @@ static void PrintUsage()
       --sandcastle          Also answer the Sandcastle urls this set was published at
       --docify              Also answer the docify urls this set was published at
       --quiet               Only print the summary, not per-page progress (build)
-      --server              Put the site in <out>/site, with a node server beside it that also
-                            answers old urls and member link previews (build)
+      --server              Put the site in <out>/site, with a node server beside it (build).
+                            The site works without it; the server also previews shared member
+                            links as the member, redirects --sandcastle and --docify urls,
+                            answers Accept: text/markdown with the page's Markdown copy,
+                            redirects wrongly cased urls, and answers What's New for any version
 
     serve and build generate before they render, so both take the model options too.
 
