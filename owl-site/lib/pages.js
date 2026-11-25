@@ -815,7 +815,7 @@ class Renderer {
       homeUrl: this.homeUrl(),
       versions: this.versions,
       buildName: this.build ? this.build.name : '',
-      builds: this.build ? this.build.picker(options.canonical, options.breadcrumbs) : [],
+      builds: this.build ? this.build.picker(options.canonical) : [],
       ...options,
       // Where the rows this page left out of its tree are to be fetched from. Named by the same
       // key the tree's remembered state is kept under, and left off the trees that have no asset -

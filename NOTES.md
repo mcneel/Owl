@@ -184,10 +184,11 @@ so the folders are what keep the export servable from anywhere, with or without 
 that each build has its own search, tree and sitemap, which is also what a reader of one build wants.
 
 The picker is worked out when a page is written, not in the browser. Every build's page list is known
-to the one process writing them, so each option is already the page to land on: the same page in that
-build, or the nearest breadcrumb that build has, or its home, marked missing. Nothing is fetched to
-find out, and the note that says what is missing rides in the session store, so the address stays the
-landing page's own.
+to the one process writing them, so each option is already the same page in that build, and a build
+without it is written disabled, with Not Available as its tooltip rather than in its name, so the
+picker keeps one width from page to page. Nothing is fetched to find out. Disabled rather than
+sent somewhere nearby, because landing on a different page than the one picked reads as a broken link,
+while a greyed-out build says plainly that this API is not in it.
 
 The root forwards to the first build listed and is never a permanent redirect: adding a newer build
 first moves it, and a browser that remembered a 301 would keep opening the old one. Titles carry the

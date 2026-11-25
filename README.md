@@ -129,7 +129,7 @@ owl build MyLib.csproj -c "Host 2026:Release-2026:2026" "Host 2025:Release-2025:
 
 Each build gets its own folder, named by its stub, with its own pages, search and tree, as in
 `public/2026/type/mylib.storage/`. The site's root opens the first build listed. Picking another build opens the
-same page there, or the closest page that build has, with a note saying what is missing.
+same page there. A build without the page is greyed out, with Not Available as its tooltip, and cannot be picked.
 
 With one `-c` value there is no picker and no folder. `--api-versions` picks versions within each build. To reuse
 models, `--json <dir>` reads each build's from `<dir>/<stub>`.
@@ -178,8 +178,8 @@ The header can also hold owl's own controls. Put a mark where each one goes and 
 | Mark | What Goes There |
 |---|---|
 | `<!-- owl:sidebar-toggle -->` | The sidebar's show/hide button. Empty with `--sidebar-toggle sidebar` |
-| `<!-- owl:search -->` | The search box, with the build, assembly and version pickers unless `owl:pickers` is marked too |
-| `<!-- owl:pickers -->` | The build, assembly and version pickers on their own, e.g. beside your site's own search |
+| `<!-- owl:search -->` | The search box, with the assembly, build and version pickers unless `owl:pickers` is marked too |
+| `<!-- owl:pickers -->` | The assembly, build and version pickers on their own, e.g. beside your site's own search |
 | `<!-- owl:theme -->` | The light/dark switch. Leave it out if your site has its own; set `data-theme` on `<html>` to keep owl in step |
 
 - Use each mark at most once. Owl warns about repeated or misspelled marks.

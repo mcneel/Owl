@@ -60,7 +60,7 @@ class Builds {
           build: {
             stub: build.stub,
             name: build.name,
-            picker: (canonical, breadcrumbs) => this.picker(build.stub, canonical, breadcrumbs),
+            picker: (canonical) => this.picker(build.stub, canonical),
           },
         })
     );
@@ -97,27 +97,22 @@ class Builds {
   /**
    * The header's build picker for one page: { name, url, current, missing } per build.
    *
-   * Each build leads to the same page in it, or where that build has none, to the nearest
-   * breadcrumb it does have, else its home; those are marked missing.
+   * Each build leads to the same page in it; a build without that page is marked missing. A page
+   * with no address of its own, such as Not Found, leads to each build's home.
    */
-  picker(currentStub, canonical, breadcrumbs = []) {
+  picker(currentStub, canonical) {
     const from = `${this.base}/${currentStub}/`;
-    const candidates = [canonical, ...breadcrumbs.map((crumb) => crumb.url).reverse()].filter(
-      (url) => typeof url === 'string' && url.startsWith(from)
-    );
+    const own = typeof canonical === 'string' && canonical.startsWith(from);
 
     return this.list.map((build, i) => {
       const site = this.sites[i];
-      if (build.stub === currentStub) {
-        return { name: build.name, url: canonical || site.renderer.homeUrl(), current: true, missing: false };
+      if (!own) {
+        return { name: build.name, url: site.renderer.homeUrl(), current: build.stub === currentStub, missing: false };
       }
 
-      const to = `${this.base}/${build.stub}/`;
-      const pages = this.pages(site);
-      const found = candidates.map((url) => to + url.slice(from.length)).find((url) => pages.has(url));
-      const exact = Boolean(canonical) && found === to + canonical.slice(from.length);
-
-      return { name: build.name, url: found || site.renderer.homeUrl(), current: false, missing: !exact };
+      const url = `${this.base}/${build.stub}/${canonical.slice(from.length)}`;
+      const missing = build.stub !== currentStub && !this.pages(site).has(url);
+      return { name: build.name, url, current: build.stub === currentStub, missing };
     });
   }
 

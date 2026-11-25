@@ -282,8 +282,8 @@ form.nav-search.index-loading::after { content: ''; position: absolute; right: 0
 #version-filter.older { background-color: var(--note-obsolete); }
 /* The popup is an OS menu, so its options need colours that do not assume the dark bar. */
 #build-filter option, #asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
-/* Says the page a reader switched builds from is not in the build they landed in. */
-.build-notice { margin: 0.75rem 1.5rem 0; padding: 0.5rem 0.75rem; border-left: 3px solid var(--note-obsolete); border-radius: 4px; background: var(--bg2); color: var(--text); font-size: 0.85rem; }
+/* A build without this page, listed so the reader knows it exists. */
+#build-filter option:disabled { color: var(--text3); }
 /* A site offering one version says so here instead. The same face as the select it stands in for,
    without the chevron or the hover, since there is nothing to open. */
 #version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
@@ -2274,39 +2274,13 @@ const JS = `
   }
 
   // ---- Build selector ----
-  // Each option is already the page to land on. One that is not this page says so on arrival, through
-  // the session store, so the address stays the page's own.
-  var BUILD_MISSING = 'owl-build-missing';
+  // Each option is this page in that build; the member being read comes along.
   var buildSelect = document.getElementById('build-filter');
   if (buildSelect) {
     buildSelect.addEventListener('change', function () {
-      var option = buildSelect.options[buildSelect.selectedIndex];
-      var missing = option.hasAttribute('data-missing');
-      if (missing) {
-        try {
-          sessionStorage.setItem(BUILD_MISSING, JSON.stringify({
-            page: buildSelect.getAttribute('data-page') || '',
-            build: option.getAttribute('data-name') || ''
-          }));
-        } catch (e) {}
-      }
-      location.href = keepParams(option.value) + (missing ? '' : location.hash);
+      if (buildSelect.value) location.href = keepParams(buildSelect.value) + location.hash;
     });
   }
-
-  try {
-    var buildNote = JSON.parse(sessionStorage.getItem(BUILD_MISSING) || 'null');
-    sessionStorage.removeItem(BUILD_MISSING);
-    var buildMain = document.getElementById('main');
-    if (buildNote && buildNote.page && buildMain) {
-      var buildNotice = document.createElement('div');
-      buildNotice.className = 'build-notice';
-      buildNotice.setAttribute('role', 'status');
-      buildNotice.textContent = buildNote.page + ' is not in ' + buildNote.build + '.';
-      var buildSticky = buildMain.querySelector('.main-sticky');
-      buildMain.insertBefore(buildNotice, buildSticky ? buildSticky.nextSibling : buildMain.firstChild);
-    }
-  } catch (e) {}
 
   // ---- Browse mode ----
   // The namespace-mode reading of a type or example page: the same file with '?ns' on the url. A

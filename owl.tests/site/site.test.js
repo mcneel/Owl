@@ -1700,11 +1700,13 @@ describe('builds', () => {
     return result.body;
   };
 
-  /** The picker's options on a page, as { name, url, missing, selected }. */
-  const picker = (url) =>
-    [...html(url).matchAll(/<option value="([^"]*)" data-name="([^"]*)"( data-missing)?( selected)?>/g)].map(
-      ([, value, name, missing, selected]) => ({ name, url: value, missing: Boolean(missing), selected: Boolean(selected) })
+  /** The picker's options on a page, as { label, url, disabled, selected }. */
+  const picker = (url) => {
+    const select = /<select id="build-filter"[^>]*>([\s\S]*?)<\/select>/.exec(html(url))[1];
+    return [...select.matchAll(/<option value="([^"]*)"( disabled title="Not Available")?( selected)?>([^<]*)<\/option>/g)].map(
+      ([, value, disabled, selected, label]) => ({ label, url: value, disabled: Boolean(disabled), selected: Boolean(selected) })
     );
+  };
 
   test('each build is its own site under its stub', () => {
     assert.match(html('/api/samples/one/type/samples.editions.onlyindefault/'), /OnlyInDefault/);
@@ -1734,16 +1736,15 @@ describe('builds', () => {
 
   test('the picker leads to the same page in the other build', () => {
     assert.deepEqual(picker('/api/samples/two/type/samples.editions.everywhere/'), [
-      { name: 'Edition One', url: '/api/samples/one/type/samples.editions.everywhere/', missing: false, selected: false },
-      { name: 'Edition Two', url: '/api/samples/two/type/samples.editions.everywhere/', missing: false, selected: true },
+      { label: 'Edition One', url: '/api/samples/one/type/samples.editions.everywhere/', disabled: false, selected: false },
+      { label: 'Edition Two', url: '/api/samples/two/type/samples.editions.everywhere/', disabled: false, selected: true },
     ]);
   });
 
-  test('the picker leads a page one build lacks to its nearest page there', () => {
+  test('the picker disables a build that lacks the page, saying why in its tooltip', () => {
     const [, two] = picker('/api/samples/one/type/samples.editions.onlyindefault/');
-    assert.equal(two.missing, true);
-    assert.equal(two.url, '/api/samples/two/namespace/samples.editions/');
-    assert.match(html('/api/samples/one/type/samples.editions.onlyindefault/'), /Edition Two \(page missing\)/);
+    assert.equal(two.disabled, true);
+    assert.equal(two.label, 'Edition Two');
   });
 
   test('titles name the build, so the builds do not share them', () => {

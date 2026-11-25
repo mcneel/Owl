@@ -130,8 +130,8 @@ function page(options) {
     graph.length > 0 ? { '@context': 'https://schema.org', '@graph': graph } : null;
 
   // Ride with the search box unless the site header gives them a place of their own.
-  const pickers = `  ${buildSelector(builds, title || siteName)}
-  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
+  const pickers = `  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
+  ${buildSelector(builds)}
   ${versionSelector(versions)}
   ${whatsNewLink(versions, routes)}
 `;
@@ -531,24 +531,24 @@ function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
 }
 
 /**
- * The header's build picker: each build's copy of this page, or the nearest page it has, marked
- * missing. The page's own title rides along, so the build that lacks it can say what is missing.
+ * The header's build picker: each build's copy of this page. A build without this page is listed
+ * but disabled, so the reader sees it exists and that this page is not in it.
  */
-function buildSelector(builds, pageTitle) {
+function buildSelector(builds) {
   if (!builds || builds.length < 2) return '';
 
+  // Names alone, so the picker is as wide as the longest of them on every page.
   const options = builds
     .map(
       (build) =>
-        `<option value="${attr(build.url)}" data-name="${attr(build.name)}"` +
-        `${build.missing ? ' data-missing' : ''}${build.current ? ' selected' : ''}>` +
-        `${escape(build.name)}${build.missing ? ' (page missing)' : ''}</option>`
+        `<option value="${attr(build.url)}"${build.missing ? ' disabled title="Not Available"' : ''}` +
+        `${build.current ? ' selected' : ''}>${escape(build.name)}</option>`
     )
     .join('');
 
   return (
     '<label class="skip-link" for="build-filter">Build</label>' +
-    `<select id="build-filter" title="Build" data-page="${attr(pageTitle)}">${options}</select>`
+    `<select id="build-filter" title="Build">${options}</select>`
   );
 }
 
