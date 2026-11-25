@@ -164,7 +164,8 @@ function rebuild() {
 
   const { Site } = require('./lib/site');
   const { Builds } = require('./lib/builds');
-  site = options.builds.length > 0 ? new Builds(options) : new Site(options);
+  require('./lib/links').checkBuildLinks(options.links, options.builds.length > 0);
+  site =options.builds.length > 0 ? new Builds(options) : new Site(options);
   sites = site.sites || [site];
   warningsReported = new Map();
 }

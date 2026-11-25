@@ -71,7 +71,7 @@ class Site {
 
     // Parsed once here rather than per reload: a bad --link is a mistake in the command line, and
     // the run should stop on it at the start rather than on the first page that needed it.
-    this.links = new Links(options.links || []);
+    this.links = new Links(options.links || [], options.build ? options.build.stub : '');
     this.logoPath = options.logo || '';
     this.logoDarkPath = options.logoDark || '';
     this.faviconPath = options.favicon || '';

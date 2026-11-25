@@ -166,6 +166,18 @@ External *members* stop at their declaring type's page. Their anchors are deriva
 almost: owl appends a counter where two members normalize alike — six in 19,147 on one large library — and
 a computed anchor would land those on the right page beside the wrong card.
 
+Docs written by something else take a pattern rather than a site root, because the one thing owl can
+rely on there is the doc id: `{id}` is the compiler's own name for the type, and most generators, or a
+resolver in front of them such as apidocs.co's, can be asked for a page by it. `{slug}` makes the plain
+form one case of the pattern rather than a rule of its own. `{build}` is there for a host whose API
+changes per version, as Revit's does: a site of several builds links each build's pages to the same
+year of the host's docs, which no single address could. A one-build site has no build to fill it with,
+so owl stops on it before generating anything rather than writing a link per type that goes nowhere.
+
+Members still stop at their type, even where the other docs could take a member's own id. Owl's own
+links do the same for the reason above, and a reader who followed a member link on one site and a
+type link on another would not be able to tell which a link will do.
+
 ## Builds are folders, versions are a filter
 
 Owl has two ways to show more than one surface of a library, and they answer different questions.

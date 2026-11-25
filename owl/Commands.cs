@@ -244,6 +244,12 @@ sealed class Command
       command.OutDir = DEFAULT_SITE_DIR;
     }
 
+    // Said before generating rather than after, as the site would: a one-build site has nothing to fill it with.
+    if (command.Builds.Count == 0 && command.LinkArgs().FirstOrDefault(a => a.Contains("{build}")) is string link)
+    {
+      throw new OwlError($"--link {link}: {{build}} needs several builds, given to -c as <name>:<configuration>:<stub>.");
+    }
+
     foreach (ApiBuild build in command.Builds)
     {
       command.SiteArgs.Add("--build");

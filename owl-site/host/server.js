@@ -208,6 +208,15 @@ const server = http.createServer((req, res) => {
   }
 
   let relative = pathname.slice(BASE.length);
+
+  // Sandcastle's root page was named after the help file, which the model never knew, so it is not in
+  // the moved list; its shape is enough. Only where the export answered Sandcastle urls at all.
+  const project = /^((?:\/[^/]+)?)\/html\/r_project_[^/]*\.htm$/i.exec(relative);
+  if (project && fs.existsSync(path.join(ROOT, project[1], 'html'))) {
+    const location = `${BASE}${project[1]}/${url.search}`;
+    return send(res, 301, { Location: location, 'Cache-Control': CACHE }, '', head);
+  }
+
   // A site of several builds has a What's New in each build's folder.
   // A pair in the path is the old form of ?compare, kept so links to it still land.
   const pair = /^((?:\/[^/]+)?)\/whatsnew\/([^/]*\d[^/]*\.\.\.[^/]*\d[^/]*)\/$/.exec(relative);
