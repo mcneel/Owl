@@ -57,7 +57,9 @@ function fullTitle(title, siteName) {
  *   currentAssembly  which of them this page belongs to, or '' for the whole API
  *   assemblyUrl  where choosing an assembly goes, when it is not that assembly's page
  *   versions     versions for the header's API version picker, newest first; none draws no picker
- *   markdown     root-relative url of this page's Markdown copy, or '' for a page with none
+ *   builds       [{name, url, current, missing}] for the header's build picker; none draws no picker
+ *   buildName    the build this page belongs to, added to the title so each build's pages differ
+ *   markdown    root-relative url of this page's Markdown copy, or '' for a page with none
  */
 function page(options) {
   const {
@@ -90,8 +92,13 @@ function page(options) {
     currentAssembly = '',
     assemblyUrl = null,
     versions = [],
+    builds = [],
+    buildName = '',
     markdown = '',
   } = options;
+
+  // Each build has the same pages, so the build in the title keeps them apart in tabs and results.
+  const titleSite = buildName ? `${siteName} (${buildName})` : siteName;
 
   // Search narrows to what the header's picker says; with no picker the reader sees the whole API,
   // so that is what the box searches.
@@ -124,6 +131,7 @@ function page(options) {
 
   // Ride with the search box unless the site header gives them a place of their own.
   const pickers = `  ${assemblySelector(assemblies, currentAssembly, routes, assemblyUrl)}
+  ${buildSelector(builds)}
   ${versionSelector(versions)}
   ${whatsNewLink(versions, routes)}
 `;
@@ -186,7 +194,7 @@ ${ownPickers ? '' : pickers}`,
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(fullTitle(title, siteName))}</title>
+<title>${escape(fullTitle(title, titleSite))}</title>
 ${description ? `<meta name="description" content="${attr(description)}">` : ''}
 ${canonicalUrl ? `<link rel="canonical" href="${attr(canonicalUrl)}">` : ''}
 <meta name="robots" content="${noindex ? 'noindex,follow' : 'index,follow'}">
@@ -523,6 +531,28 @@ function assemblySelector(assemblies, currentAssembly, routes, urlFor) {
 }
 
 /**
+ * The header's build picker: each build's copy of this page. A build without this page is listed
+ * but disabled, so the reader sees it exists and that this page is not in it.
+ */
+function buildSelector(builds) {
+  if (!builds || builds.length < 2) return '';
+
+  // Names alone, so the picker is as wide as the longest of them on every page.
+  const options = builds
+    .map(
+      (build) =>
+        `<option value="${attr(build.url)}"${build.missing ? ' disabled title="Not Available"' : ''}` +
+        `${build.current ? ' selected' : ''}>${escape(build.name)}</option>`
+    )
+    .join('');
+
+  return (
+    '<label class="skip-link" for="build-filter">Build</label>' +
+    `<select id="build-filter" title="Build">${options}</select>`
+  );
+}
+
+/**
  * A version as the site writes it: 'v' and the number, since a bare 9 in the header reads as a
  * count of something rather than as a version.
  *
@@ -611,6 +641,7 @@ module.exports = {
   filterBar,
   memberFilterBar,
   assemblySelector,
+  buildSelector,
   versionLabel,
   checkControlMarks,
   DEFAULT_SITE_NAME,

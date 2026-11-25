@@ -6,6 +6,9 @@ Sample projects that [owl.tests](../owl.tests) documents. They are never run, on
 - `VisualBasic/` – a Visual Basic library that builds on the C# one
 - `docs/api/` – hand-written pages for the sample site
 
+The C# library also builds as `-c Edition2`, which compiles `Editions.cs` differently, for the tests of
+a site with several builds.
+
 Some problems are there on purpose, such as a broken `<see cref>`, a missing example file and an
 undocumented member, so `owl verify` has something to find.
 

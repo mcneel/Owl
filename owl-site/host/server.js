@@ -208,18 +208,20 @@ const server = http.createServer((req, res) => {
   }
 
   let relative = pathname.slice(BASE.length);
+  // A site of several builds has a What's New in each build's folder.
   // A pair in the path is the old form of ?compare, kept so links to it still land.
-  const pair = /^\/whatsnew\/([^/]*\d[^/]*\.\.\.[^/]*\d[^/]*)\/$/.exec(relative);
-  if (pair && pair[1].split('...').length === 2) {
+  const pair = /^((?:\/[^/]+)?)\/whatsnew\/([^/]*\d[^/]*\.\.\.[^/]*\d[^/]*)\/$/.exec(relative);
+  if (pair && pair[2].split('...').length === 2) {
     const rest = new URLSearchParams(url.search);
     rest.delete('compare');
     const query = rest.toString();
-    const location = `${BASE}/whatsnew/?compare=${encodeURIComponent(pair[1])}${query ? '&' + query : ''}`;
+    const location = `${BASE}${pair[1]}/whatsnew/?compare=${encodeURIComponent(pair[2])}${query ? '&' + query : ''}`;
     return send(res, 301, { Location: location, 'Cache-Control': CACHE }, '', head);
   }
   // One page answers every version; it reads which from the url. Only listed versions were exported.
-  if (/^\/whatsnew\/[^/]+\/$/.test(relative) && !relative.includes('...') && !fs.existsSync(path.join(ROOT, relative))) {
-    relative = '/whatsnew/';
+  const version = /^((?:\/[^/]+)?)\/whatsnew\/[^/]+\/$/.exec(relative);
+  if (version && !relative.includes('...') && !fs.existsSync(path.join(ROOT, relative))) {
+    relative = `${version[1]}/whatsnew/`;
   }
   let file = path.join(ROOT, relative);
   if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {

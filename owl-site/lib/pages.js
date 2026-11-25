@@ -713,6 +713,9 @@ class Renderer {
     // what leaves a site that has never said what version it is without a picker to answer with.
     this.versions = options.versions || [];
 
+    // Which build this is, when the site holds several; null draws no build picker.
+    this.build = options.build || null;
+
     // Diagrams are drawn by an outside binary, so the one renderer is built by the Site and passed
     // through to wherever a fenced block can appear: authored markdown, and doc comments alike.
     this.diagrams = options.diagrams || null;
@@ -811,6 +814,8 @@ class Renderer {
       siteUrl: this.siteUrl,
       homeUrl: this.homeUrl(),
       versions: this.versions,
+      buildName: this.build ? this.build.name : '',
+      builds: this.build ? this.build.picker(options.canonical) : [],
       ...options,
       // Where the rows this page left out of its tree are to be fetched from. Named by the same
       // key the tree's remembered state is kept under, and left off the trees that have no asset -

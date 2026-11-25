@@ -73,6 +73,9 @@ const markdownPages = new Map();
 
 // The header and tab icons the site has, which pages link to like any other asset.
 const iconUrls = new Set();
+
+// Every file of an exported site, which covers the assets of each build's folder too.
+const distFiles = new Set();
 const ICON_FILES = /^(logo|logo-dark)\.svg$|^favicon\.(svg|png|ico)$/;
 
 function fail(message) {
@@ -96,6 +99,8 @@ function collectPages() {
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
+        if (!entry.isDirectory()) distFiles.add('/' + path.relative(distDir, full).split(path.sep).join('/'));
+
         if (entry.isDirectory()) walk(full);
         else if (entry.name.endsWith('.md') || entry.name === 'llms.txt') {
           const rel = path.relative(distDir, full).split(path.sep).join('/');
@@ -180,6 +185,7 @@ for (const extra of ['/assets/app.css', '/assets/app.js', '/assets/search.json',
   knownUrls.add(extra);
 }
 
+for (const url of distFiles) knownUrls.add(url);
 for (const url of treeAssets.keys()) knownUrls.add(url);
 for (const url of iconUrls) knownUrls.add(url);
 for (const url of markdownPages.keys()) {

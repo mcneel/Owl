@@ -315,6 +315,80 @@ public sealed class CommandLineTests(SampleModel model)
     }
   }
 
+  static readonly string[] TwoBuilds = ["-c", "Edition One:Debug:one", "Edition Two:Edition2:two"];
+
+  [Fact]
+  public void GenWritesOneModelPerBuild()
+  {
+    string dir = TempDir();
+    var (code, output) = Run(["gen", SampleModel.Projects[0], .. TwoBuilds, "--out", dir]);
+    Assert.True(code == 0, output);
+
+    string one = File.ReadAllText(Path.Combine(dir, "one", "Samples.CSharp.json"));
+    string two = File.ReadAllText(Path.Combine(dir, "two", "Samples.CSharp.json"));
+    Assert.Contains("T:Samples.Editions.OnlyInDefault", one);
+    Assert.DoesNotContain("T:Samples.Editions.OnlyInEdition2", one);
+    Assert.Contains("T:Samples.Editions.OnlyInEdition2", two);
+    Assert.DoesNotContain("T:Samples.Editions.OnlyInDefault", two);
+  }
+
+  [Fact]
+  public void OneBuildIsAPlainConfiguration()
+  {
+    string dir = TempDir();
+    var (code, output) = Run("gen", SampleModel.Projects[0], "-c", "Edition Two:Edition2:two", "--out", dir);
+    Assert.True(code == 0, output);
+    Assert.Contains("T:Samples.Editions.OnlyInEdition2", File.ReadAllText(Path.Combine(dir, "Samples.CSharp.json")));
+  }
+
+  [Theory]
+  [InlineData("<name>:<configuration>:<stub>", "Debug", "Edition2")]
+  [InlineData("used by another build", "One:Debug:same", "Two:Edition2:same")]
+  [InlineData("lower-case letters", "One:Debug:One", "Two:Edition2:two")]
+  public void SeveralBuildsNeedNamesAndStubs(string message, params string[] builds)
+  {
+    var (code, output) = Run(["gen", SampleModel.Projects[0], "-c", .. builds, "--out", TempDir()]);
+    Assert.Equal(2, code);
+    Assert.Contains(message, output);
+  }
+
+  [Fact]
+  public void BuildExportsEveryBuild()
+  {
+    string models = TempDir();
+    var (genCode, genOutput) = Run(["gen", .. SampleModel.Projects, .. TwoBuilds, "--out", models]);
+    Assert.True(genCode == 0, genOutput);
+
+    string dir = TempDir();
+    var (code, output) = Run(
+      ["build", "--json", models, .. TwoBuilds, "--docs", Docs, "--out", dir, "--quiet",
+       "--base", "/api/samples", "--site-url", "https://example.com"]);
+    Assert.True(code == 0, output);
+
+    foreach (string file in new[]
+    {
+      "index.html", "robots.txt",
+      "one/sitemap.xml", "one/assets/search.json", "one/type/samples.editions.onlyindefault/index.html",
+      "two/sitemap.xml", "two/assets/search.json", "two/type/samples.editions.onlyinedition2/index.html",
+    })
+    {
+      Assert.True(File.Exists(Path.Combine(dir, file)), $"{file} was not written");
+    }
+
+    Assert.False(File.Exists(Path.Combine(dir, "two", "type", "samples.editions.onlyindefault", "index.html")));
+
+    // The root forwards to the first build, and robots names every build's sitemap.
+    Assert.Contains("url=/api/samples/one/", File.ReadAllText(Path.Combine(dir, "index.html")));
+    string robots = File.ReadAllText(Path.Combine(dir, "robots.txt"));
+    Assert.Contains("Sitemap: https://example.com/api/samples/one/sitemap.xml", robots);
+    Assert.Contains("Sitemap: https://example.com/api/samples/two/sitemap.xml", robots);
+
+    // Each build's pages pick between the builds.
+    string page = File.ReadAllText(Path.Combine(dir, "two", "type", "samples.editions.everywhere", "index.html"));
+    Assert.Contains("id=\"build-filter\"", page);
+    Assert.Contains("value=\"/api/samples/one/type/samples.editions.everywhere/\"", page);
+  }
+
   static int FreePort()
   {
     var listener = new TcpListener(IPAddress.Loopback, 0);

@@ -118,6 +118,22 @@ The header's What's New link lists what the picked version added and made obsole
 listed. Its Compare with menu picks an older version to measure from instead, which opens
 `whatsnew/?compare=8.4...8.12`: what came after 8.4, up to and including 8.12. Any two versions can be typed there.
 
+## Document Several Builds
+
+A library that compiles differently per build configuration, such as one build per host version, can be one site
+with a build picker in the header. Give `-c` each build as `<name>:<configuration>:<stub>`:
+
+```bash
+owl build MyLib.csproj -c "Host 2026:Release-2026:2026" "Host 2025:Release-2025:2025" --out ./public
+```
+
+Each build gets its own folder, named by its stub, with its own pages, search and tree, as in
+`public/2026/type/mylib.storage/`. The site's root opens the first build listed. Picking another build opens the
+same page there. A build without the page is greyed out, with Not Available as its tooltip, and cannot be picked.
+
+With one `-c` value there is no picker and no folder. `--api-versions` picks versions within each build. To reuse
+models, `--json <dir>` reads each build's from `<dir>/<stub>`.
+
 ## Link to Your Source Code
 
 ```bash
@@ -162,8 +178,8 @@ The header can also hold owl's own controls. Put a mark where each one goes and 
 | Mark | What Goes There |
 |---|---|
 | `<!-- owl:sidebar-toggle -->` | The sidebar's show/hide button. Empty with `--sidebar-toggle sidebar` |
-| `<!-- owl:search -->` | The search box, with the assembly and version pickers unless `owl:pickers` is marked too |
-| `<!-- owl:pickers -->` | The assembly and version pickers on their own, e.g. beside your site's own search |
+| `<!-- owl:search -->` | The search box, with the assembly, build and version pickers unless `owl:pickers` is marked too |
+| `<!-- owl:pickers -->` | The assembly, build and version pickers on their own, e.g. beside your site's own search |
 | `<!-- owl:theme -->` | The light/dark switch. Leave it out if your site has its own; set `data-theme` on `<html>` to keep owl in step |
 
 - Use each mark at most once. Owl warns about repeated or misspelled marks.
@@ -186,18 +202,22 @@ Each old address gets a page that forwards the reader. If your host can send red
 `redirects.json` in the output instead. It maps each old address, lower case and without a trailing slash, to its
 new one. Add the request's query to the new address's own.
 
-## Member Link Previews
+## Publish With a Server
 
-A member's address reads `type/mylib.storage/?member=read#read`, so a pasted link can preview as that member
-rather than its type. A plain file host previews it as the type. To preview the member, build with `--server`:
+The site works on any plain file host. Build with `--server` to add a small node server that also:
+
+- Previews a pasted member link, such as `type/mylib.storage/?member=read#read`, as that member rather than its type
+- Redirects the old addresses of `--sandcastle` and `--docify`, rather than forwarding the reader from a page
+- Answers a request for `text/markdown` with the page's Markdown copy
+- Redirects an address typed in the wrong case, such as `type/MyLib.Storage/`, to its page
+- Answers a What's New address for any version, not only those in `--api-versions`
 
 ```bash
 owl build MyLib.csproj --base /api/mylib --server -o app
 ```
 
-The site goes in `app/site`, with a node server beside it. Push `app` to any node host, Heroku included, and it
-starts with `npm start` on the port the host gives it. It also redirects the old addresses of `--sandcastle` and
-`--docify`.
+The site goes in `app/site`, with the server beside it. Push `app` to any node host, Heroku included, and it
+starts with `npm start` on the port the host gives it.
 
 ## Check Documentation in CI
 
@@ -213,7 +233,7 @@ Lists undocumented API, and fails on broken `<see cref="..."/>` links and broken
 |---|---|---|
 | all | `--name <text>` | Site name |
 | all | `--tfm <tfm>` | Framework to document, e.g. `net48` |
-| all | `-c <name>` | Build configuration, e.g. `Release` |
+| all | `-c <name>` | Build configuration, e.g. `Release`. Several make a build picker; see [Document Several Builds](#document-several-builds) |
 | serve | `--port <n>` | Port to use (default 8080) |
 | build | `--out <dir>` | Where to write the site |
 | serve, build | `--docs <dir>` | Folder of your own pages |

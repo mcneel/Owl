@@ -44,6 +44,12 @@ sealed class Command
   /// <summary>Site options, passed straight to owl-site.</summary>
   public List<string> SiteArgs { get; } = [];
 
+  /// <summary>The one build configuration given to -c, or null for owl-gen's default or several builds.</summary>
+  public string? Configuration { get; private set; }
+
+  /// <summary>The builds a site picks between, from several -c values; empty for one build.</summary>
+  public List<ApiBuild> Builds { get; } = [];
+
   /// <summary>True when projects were given, so the model is written before serving or exporting.</summary>
   public bool Generates => Projects.Count > 0;
 
@@ -55,6 +61,7 @@ sealed class Command
   {
     var command = new Command { Name = name };
     bool outSet = false;
+    var configurations = new List<string>();
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -91,6 +98,21 @@ sealed class Command
           else
           {
             command.ModelDir = Next(args, ref i, arg);
+          }
+          break;
+
+        // Takes every value up to the next flag or project, since each value is a build.
+        case "-c":
+        case "--configuration":
+          int before = configurations.Count;
+          while (i + 1 < args.Length && IsValue(args[i + 1], name))
+          {
+            configurations.Add(args[++i]);
+          }
+
+          if (configurations.Count == before)
+          {
+            throw new OwlError($"{arg} needs a value");
           }
           break;
 
@@ -165,6 +187,28 @@ sealed class Command
       }
     }
 
+    // One value is a plain configuration, even written as a build, since there is nothing to pick between.
+    if (configurations.Count == 1)
+    {
+      command.Configuration = ApiBuild.TryParse(configurations[0])?.Id ?? configurations[0];
+    }
+    else
+    {
+      foreach (string value in configurations)
+      {
+        ApiBuild build = ApiBuild.TryParse(value) ?? throw new OwlError(
+          $"-c {value}: with several builds, write each as <name>:<configuration>:<stub>, " +
+          "e.g. \"Revit 2026:Release-2026:2026\".");
+
+        if (command.Builds.Any(b => b.Stub == build.Stub))
+        {
+          throw new OwlError($"-c {value}: the stub '{build.Stub}' is used by another build.");
+        }
+
+        command.Builds.Add(build);
+      }
+    }
+
     // verify checks the projects themselves, so a reused model has nothing to offer it.
     if (name == "verify")
     {
@@ -200,8 +244,21 @@ sealed class Command
       command.OutDir = DEFAULT_SITE_DIR;
     }
 
+    foreach (ApiBuild build in command.Builds)
+    {
+      command.SiteArgs.Add("--build");
+      command.SiteArgs.Add($"{build.Stub}={build.Name}");
+    }
+
     return command;
   }
+
+  /// <summary>Whether an argument after -c is another of its values rather than the next option.</summary>
+  static bool IsValue(string arg, string command) =>
+    !arg.StartsWith('-') &&
+    !OwlGen.IsProjectPath(arg) &&
+    // serve's bare port form, as in the default branch below.
+    !(command == "serve" && int.TryParse(arg, out _));
 
   /// <summary>Runs the command and returns the exit code to hand back to the shell.</summary>
   public int Run()
@@ -222,32 +279,53 @@ sealed class Command
       Requirements.Node();
     }
 
+    // Each build is a model of its own, in a directory named by its stub.
+    (string Dir, string[] Config, string Label)[] models = Builds.Count == 0
+      ? [(ModelDir!, Configuration is null ? [] : ["-c", Configuration], "")]
+      : [.. Builds.Select(b => (Path.Combine(ModelDir!, b.Stub), new[] { "-c", b.Id }, $"{b.Name} ({b.Id})"))];
+
     if (Generates)
     {
-      int code = Tools.Gen(Projects.Concat(["--out", ModelDir!]).Concat(GenArgs));
+      int worst = 0;
 
-      // verify's findings fail the run without spoiling the model, so the pages are still checked.
-      if (verifiesPages && File.Exists(Path.Combine(ModelDir!, "index.json")))
+      foreach (var (dir, config, label) in models)
       {
-        return Math.Max(code, Tools.Site("verify.js", Model().Concat(LinkArgs())));
+        if (label.Length > 0)
+        {
+          Console.WriteLine($"== {label}");
+        }
+
+        int code = Tools.Gen(Projects.Concat(["--out", dir]).Concat(config).Concat(GenArgs));
+
+        // verify's findings fail the run without spoiling the model, so the pages are still checked.
+        if (verifiesPages && File.Exists(Path.Combine(dir, "index.json")))
+        {
+          code = Math.Max(code, Tools.Site("verify.js", Model(dir).Concat(LinkArgs())));
+        }
+        // A failed generation leaves no model, or a stale one, so rendering it would be misleading.
+        else if (code != 0 && Name != "verify")
+        {
+          return code;
+        }
+
+        worst = Math.Max(worst, code);
       }
 
-      // A failed generation leaves no model, or a stale one, so rendering it would be misleading.
-      if (code != 0)
+      if (Name == "verify" || worst != 0)
       {
-        return code;
+        return worst;
       }
     }
-    else if (!Directory.Exists(ModelDir))
+    else if (models.FirstOrDefault(m => !Directory.Exists(m.Dir)) is { Dir: not null } missing)
     {
-      throw new OwlError($"No model in {ModelDir}. Run 'owl gen <project.csproj>' first.");
+      throw new OwlError($"No model in {missing.Dir}. Run 'owl gen <project.csproj>' first.");
     }
 
     return Name switch
     {
       "gen" or "verify" => 0,
-      "serve" => Tools.Site("serve.js", Model().Concat(["--port", Port]).Concat(SiteArgs)),
-      "build" => Tools.Site("build.js", Model().Concat(["--out", OutDir]).Concat(SiteArgs)),
+      "serve" => Tools.Site("serve.js", Model(ModelDir!).Concat(["--port", Port]).Concat(SiteArgs)),
+      "build" => Tools.Site("build.js", Model(ModelDir!).Concat(["--out", OutDir]).Concat(SiteArgs)),
       _ => throw new OwlError($"Unknown command '{Name}'."),
     };
   }
@@ -269,8 +347,8 @@ sealed class Command
     }
   }
 
-  string[] Model() =>
-    DocsDir is null ? ["--json", ModelDir!] : ["--json", ModelDir!, "--docs", DocsDir];
+  string[] Model(string dir) =>
+    DocsDir is null ? ["--json", dir] : ["--json", dir, "--docs", DocsDir];
 
   static string Next(string[] args, ref int index, string arg)
   {
@@ -280,5 +358,41 @@ sealed class Command
     }
 
     return args[++index];
+  }
+}
+
+/// <summary>One build a site picks between: what the picker shows, the configuration, and its url folder.</summary>
+/// <param name="Name">Shown in the build picker, e.g. "Revit 2026 (Rhino 8)".</param>
+/// <param name="Id">The build configuration MSBuild evaluates under, e.g. Release-2026-R8.</param>
+/// <param name="Stub">The build's folder in every url, e.g. 2026-r8.</param>
+sealed record ApiBuild(string Name, string Id, string Stub)
+{
+  /// <summary>Reads <c>name:id:stub</c>, or returns null when the value is not written that way.</summary>
+  /// <exception cref="OwlError">The value has the shape but an unusable stub.</exception>
+  public static ApiBuild? TryParse(string value)
+  {
+    // From the right, so a name may hold a colon of its own.
+    int last = value.LastIndexOf(':');
+    int middle = last > 0 ? value.LastIndexOf(':', last - 1) : -1;
+    if (middle <= 0)
+    {
+      return null;
+    }
+
+    var build = new ApiBuild(value[..middle].Trim(), value[(middle + 1)..last].Trim(), value[(last + 1)..].Trim());
+    if (build.Name.Length == 0 || build.Id.Length == 0)
+    {
+      return null;
+    }
+
+    // Lower case, because hosts and owl's server treat urls by their lower-case spelling.
+    if (!System.Text.RegularExpressions.Regex.IsMatch(build.Stub, "^[a-z0-9][a-z0-9._-]*$"))
+    {
+      throw new OwlError(
+        $"-c {value}: the stub '{build.Stub}' is part of every url, so it takes lower-case letters, " +
+        "digits, '.', '_' and '-' only.");
+    }
+
+    return build;
   }
 }

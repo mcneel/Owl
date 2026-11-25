@@ -198,7 +198,7 @@ body > header .site-name { white-space: nowrap; overflow: hidden; text-overflow:
 /* One height for the whole header row. Set here rather than left to each control's own padding,
    because a select, an input and a button each size themselves differently. Vertical padding is
    dropped in favour of centring, so the height is exactly what it says. */
-#asm-filter, #search, #version-filter, #version-current, #whatsnew-link, #theme-switch, #sidebar-toggle { height: 30px; }
+#build-filter, #asm-filter, #search, #version-filter, #version-current, #whatsnew-link, #theme-switch, #sidebar-toggle { height: 30px; }
 
 /* ---- Sidebar toggle ----
    The theme toggle's face, before the title and against the column it shows and hides. */
@@ -274,13 +274,16 @@ form.nav-search.index-loading::after { content: ''; position: absolute; right: 0
 /* ---- Header selects ---- */
 /* appearance:none drops the platform arrow so both selects can carry the same chevron; the popup
    itself is still drawn by the OS, which is the one part a <select> cannot be styled into. */
-#asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
+#build-filter, #asm-filter, #version-filter { appearance: none; -webkit-appearance: none; border: none; border-radius: 4px; padding: 0 1.5rem 0 0.65rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none; flex-shrink: 0; background-color: var(--accent); color: #ffffff; background-image: var(--nav-chevron); background-repeat: no-repeat; background-position: right 0.4rem center; background-size: 0.75rem; }
 #asm-filter { max-width: 18rem; }
-#asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
+#build-filter { max-width: 18rem; }
+#build-filter:hover, #asm-filter:hover, #version-filter:hover { filter: brightness(1.1); }
 /* Any version but the newest wears the warning's orange, so a reader never forgets they chose an older one. */
 #version-filter.older { background-color: var(--note-obsolete); }
 /* The popup is an OS menu, so its options need colours that do not assume the dark bar. */
-#asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
+#build-filter option, #asm-filter option, #version-filter option { background: var(--bg2); color: var(--text); }
+/* A build without this page, listed so the reader knows it exists. */
+#build-filter option:disabled { color: var(--text3); }
 /* A site offering one version says so here instead. The same face as the select it stands in for,
    without the chevron or the hover, since there is nothing to open. */
 #version-current { display: inline-flex; align-items: center; border-radius: 4px; padding: 0 0.65rem; font-size: 0.82rem; font-weight: 500; flex-shrink: 0; background-color: var(--accent); color: #ffffff; }
@@ -2267,6 +2270,15 @@ const JS = `
   if (assemblySelect) {
     assemblySelect.addEventListener('change', function () {
       if (assemblySelect.value) location.href = keepParams(assemblySelect.value);
+    });
+  }
+
+  // ---- Build selector ----
+  // Each option is this page in that build; the member being read comes along.
+  var buildSelect = document.getElementById('build-filter');
+  if (buildSelect) {
+    buildSelect.addEventListener('change', function () {
+      if (buildSelect.value) location.href = keepParams(buildSelect.value) + location.hash;
     });
   }
 
